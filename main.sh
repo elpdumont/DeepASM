@@ -138,7 +138,7 @@ bq query \
     ),
     FIFTH_CPG AS (
     SELECT snp_id AS snp_id_five, 
-            cpg_pos AS five_cpg_pos, cpg_effect AS five_cpg_effect, 
+            cpg_pos AS five_cpg_pos, cpg_frac_methyl AS five_cpg_frac_methyl,
             cpg_fisher_pvalue AS five_cpg_fisher_pvalue,
             cpg_ref_cov AS five_cpg_ref_cov, cpg_ref_meth AS five_cpg_ref_meth,
             cpg_alt_cov AS five_cpg_alt_cov, cpg_alt_meth AS five_cpg_alt_meth
