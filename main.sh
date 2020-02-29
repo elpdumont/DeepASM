@@ -50,7 +50,7 @@ bq query \
     --replace=true \
     "
     WITH ASM_SNP AS (
-        SELECT * 
+        SELECT IF(asm_snp=True, 1, 0) as asm_snp_value, *
         FROM ${DATASET_ID}.${SAMPLE}_asm_snp
         ),
     CPG_DETAILS AS (
@@ -58,12 +58,12 @@ bq query \
         FROM ${DATASET_ID}.${SAMPLE}_snp_cpg_details
     ),
     TOGETHER AS (
-        SELECT * 
+        SELECT * EXCEPT(asm_snp)
         FROM ASM_SNP 
         INNER JOIN CPG_DETAILS 
         ON snp_id = snp_id_tmp
     )
-    SELECT * EXCEPT (snp_id_tmp) FROM TOGETHER 
+    SELECT asm_snp_value AS asm_snp, * EXCEPT (snp_id_tmp, asm_snp_value) FROM TOGETHER 
     "
 
 
@@ -78,7 +78,7 @@ bq query \
         SELECT * FROM ${DATASET_ID}.${SAMPLE}_asm_cpg_array
         WHERE nb_cpg = 6
     )
-    SELECT snp_id, snp_pos, chr, asm_snp, nb_ref_reads, nb_alt_reads, 
+    SELECT asm_snp, snp_id, snp_pos, chr, nb_ref_reads, nb_alt_reads, 
             asm_region_effect, wilcoxon_corr_pvalue, nb_cpg, nb_sig_cpg, cpg_index,
             pos AS cpg_pos, frac_methyl AS cpg_frac_methyl, effect AS cpg_effect, 
             fisher_pvalue AS cpg_fisher_pvalue, ref_cov AS cpg_ref_cov, 
@@ -96,7 +96,7 @@ bq query \
         SELECT * FROM ${DATASET_ID}.${SAMPLE}_extract_flatten
     ),
     FIRST_CPG AS (
-    SELECT snp_id, snp_pos, chr, asm_snp, nb_ref_reads, nb_alt_reads, 
+    SELECT asm_snp, snp_id, snp_pos, chr, nb_ref_reads, nb_alt_reads, 
             asm_region_effect, wilcoxon_corr_pvalue, nb_cpg, nb_sig_cpg,
             cpg_pos AS one_cpg_pos, cpg_frac_methyl AS one_cpg_frac_methyl,
             cpg_effect AS one_cpg_effect, 
