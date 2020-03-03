@@ -26,6 +26,8 @@ bq query \
                     STRUCT(
                         pos,
                         ROUND((alt_meth+ref_meth)/(ref_cov+alt_cov),3) AS frac_methyl,
+                        ref_cov + alt_cov AS cov,
+                        ref_meth + alt_meth as meth,
                         ROUND(alt_meth/alt_cov-ref_meth/ref_cov,3) AS effect,
                         fisher_pvalue,
                         ref_cov,
@@ -80,8 +82,8 @@ bq query \
     )
     SELECT asm_snp, snp_id, snp_pos, chr, nb_ref_reads, nb_alt_reads, 
             asm_region_effect, wilcoxon_corr_pvalue, nb_cpg, nb_sig_cpg, cpg_index,
-            pos AS cpg_pos, frac_methyl AS cpg_frac_methyl, effect AS cpg_effect, 
-            fisher_pvalue AS cpg_fisher_pvalue, ref_cov AS cpg_ref_cov, 
+            pos AS cpg_pos, frac_methyl AS cpg_frac_methyl, cov AS cpg_cov, meth AS cpg_meth, 
+            effect AS cpg_effect, fisher_pvalue AS cpg_fisher_pvalue, ref_cov AS cpg_ref_cov, 
             ref_meth AS cpg_ref_meth, alt_cov AS cpg_alt_cov, alt_meth AS cpg_alt_meth
     FROM SIX_CPG, UNNEST (cpg) WITH OFFSET AS cpg_index
     ORDER BY snp_id
@@ -99,7 +101,7 @@ bq query \
     SELECT asm_snp, snp_id, snp_pos, chr, nb_ref_reads, nb_alt_reads, 
             asm_region_effect, wilcoxon_corr_pvalue, nb_cpg, nb_sig_cpg,
             cpg_pos AS one_cpg_pos, cpg_frac_methyl AS one_cpg_frac_methyl,
-            cpg_effect AS one_cpg_effect, 
+            cpg_cov AS one_cpg_cov, cpg_meth AS one_cpg_meth, cpg_effect AS one_cpg_effect, 
             cpg_fisher_pvalue AS one_cpg_fisher_pvalue,
             cpg_ref_cov AS one_cpg_ref_cov, cpg_ref_meth AS one_cpg_ref_meth,
             cpg_alt_cov AS one_cpg_alt_cov, cpg_alt_meth AS one_cpg_alt_meth
@@ -109,7 +111,7 @@ bq query \
     SECOND_CPG AS (
     SELECT snp_id AS snp_id_two, 
             cpg_pos AS two_cpg_pos, cpg_frac_methyl AS two_cpg_frac_methyl, 
-            cpg_effect AS two_cpg_effect, 
+            cpg_cov AS two_cpg_cov, cpg_meth AS two_cpg_meth, cpg_effect AS two_cpg_effect, 
             cpg_fisher_pvalue AS two_cpg_fisher_pvalue,
             cpg_ref_cov AS two_cpg_ref_cov, cpg_ref_meth AS two_cpg_ref_meth,
             cpg_alt_cov AS two_cpg_alt_cov, cpg_alt_meth AS two_cpg_alt_meth
@@ -119,7 +121,7 @@ bq query \
     THIRD_CPG AS (
     SELECT snp_id AS snp_id_three, 
             cpg_pos AS three_cpg_pos, cpg_frac_methyl AS three_cpg_frac_methyl,
-            cpg_effect AS three_cpg_effect, 
+            cpg_cov AS three_cpg_cov, cpg_meth AS three_cpg_meth, cpg_effect AS three_cpg_effect, 
             cpg_fisher_pvalue AS three_cpg_fisher_pvalue,
             cpg_ref_cov AS three_cpg_ref_cov, cpg_ref_meth AS three_cpg_ref_meth,
             cpg_alt_cov AS three_cpg_alt_cov, cpg_alt_meth AS three_cpg_alt_meth
@@ -129,7 +131,7 @@ bq query \
     FOURTH_CPG AS (
     SELECT snp_id AS snp_id_four, 
             cpg_pos AS four_cpg_pos, cpg_frac_methyl AS four_cpg_frac_methyl,
-            cpg_effect AS four_cpg_effect, 
+            cpg_cov AS four_cpg_cov, cpg_meth AS four_cpg_meth, cpg_effect AS four_cpg_effect, 
             cpg_fisher_pvalue AS four_cpg_fisher_pvalue,
             cpg_ref_cov AS four_cpg_ref_cov, cpg_ref_meth AS four_cpg_ref_meth,
             cpg_alt_cov AS four_cpg_alt_cov, cpg_alt_meth AS four_cpg_alt_meth
@@ -148,7 +150,7 @@ bq query \
     SIXTH_CPG AS (
     SELECT snp_id AS snp_id_six, 
             cpg_pos AS six_cpg_pos, cpg_frac_methyl AS six_cpg_frac_methyl,
-            cpg_effect AS six_cpg_effect, 
+            cpg_cov AS six_cpg_cov, cpg_meth AS six_cpg_meth, cpg_effect AS six_cpg_effect, 
             cpg_fisher_pvalue AS six_cpg_fisher_pvalue,
             cpg_ref_cov AS six_cpg_ref_cov, cpg_ref_meth AS six_cpg_ref_meth,
             cpg_alt_cov AS six_cpg_alt_cov, cpg_alt_meth AS six_cpg_alt_meth
