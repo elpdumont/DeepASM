@@ -175,3 +175,57 @@ bq query \
     SELECT * EXCEPT(snp_id_two, snp_id_three, snp_id_four, snp_id_five) 
     FROM ONE_TWO_THREE_FOUR_FIVE_SIX
     "
+
+
+
+
+
+#-------------------------------
+# USE THE METHYLATION DATA ACROSS READS.
+#-------------------------------
+
+
+
+# Make a table with all snp_ids and their reads (fractional methylation and number of reads)
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_ID}.${SAMPLE}_snp_reads \
+    --replace=true \
+    'SELECT snp_id, snp_pos, chr, alt_reads, ref_reads, ref, alt
+    FROM hackensack-tyco.cloudasm_gm12878.gm12878_asm_region_pvalue
+    '
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_ID}.${SAMPLE}_asm_reads \
+    --replace=true \
+    "
+    WITH 
+    SNP_READS AS (
+        SELECT * 
+        FROM ${DATASET_ID}.${SAMPLE}_snp_reads
+    ),
+    ASM_RESULTS AS (
+        SELECT IF(asm_snp=True, 1, 0) as asm_snp_value, snp_id AS snp_id_results
+        FROM ${DATASET_ID}.${SAMPLE}_asm_snp
+    ),
+    JOINED_ARRAY AS (
+        SELECT * 
+        FROM SNP_READS INNER JOIN ASM_RESULTS 
+        ON snp_id = snp_id_results
+    )
+    SELECT asm_snp_value AS asm_snp, 
+    snp_id, snp_pos, chr, ref_reads, alt_reads, ref, alt, 
+    (SELECT ARRAY 
+        (SELECT methyl_perc FROM UNNEST(REF) 
+                UNION ALL SELECT methyl_perc FROM UNNEST(ALT)
+            )
+        ) AS methyl_frac
+    FROM JOINED_ARRAY
+    "
+
+
+
+    (SELECT ROUND(AVG(methyl_perc),3) FROM UNNEST(ref)) AS av_ref, 
+    (SELECT ROUND(AVG(methyl_perc),3) FROM UNNEST(alt)) AS av_alt,
