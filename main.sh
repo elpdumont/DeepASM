@@ -221,11 +221,38 @@ bq query \
         (SELECT methyl_perc FROM UNNEST(REF) 
                 UNION ALL SELECT methyl_perc FROM UNNEST(ALT)
             )
-        ) AS methyl_frac
+        ) AS read_fm
     FROM JOINED_ARRAY
     "
 
+# Built a table with reads array and cpg arrays
 
-
-    (SELECT ROUND(AVG(methyl_perc),3) FROM UNNEST(ref)) AS av_ref, 
-    (SELECT ROUND(AVG(methyl_perc),3) FROM UNNEST(alt)) AS av_alt,
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_ID}.${SAMPLE}_asm_reads_cpg_arrays \
+    --replace=true \
+    "
+    WITH
+    ASM_READS AS (
+        SELECT *
+        FROM ${DATASET_ID}.${SAMPLE}_asm_reads
+    ),
+    ASM_CPG AS (
+        SELECT snp_id AS snp_id_cpg, nb_ref_reads + nb_alt_reads AS nb_reads, nb_cpg, 
+            (
+                (SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
+             ) AS region_length,
+            cpg
+        FROM ${DATASET_ID}.${SAMPLE}_asm_cpg_array
+    ),
+    ASM_READS_CPG_RAW AS (
+        SELECT * FROM ASM_READS 
+        INNER JOIN ASM_CPG 
+        ON snp_id = snp_id_cpg
+    )
+    SELECT asm_snp, '${SAMPLE}' AS sample, chr, nb_reads, nb_cpg, region_length, read_fm, 
+           (SELECT ARRAY 
+                (SELECT frac_methyl FROM UNNEST(cpg))) AS cpg_fm,  
+           snp_id
+    FROM ASM_READS_CPG_RAW
+    "
