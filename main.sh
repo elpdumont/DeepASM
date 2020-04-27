@@ -1,63 +1,92 @@
-# Import from Big Query
+#-----------------------------------------------
+# Variables
 
-DATASET_ID="DeepASM_gm12878"
-SAMPLE="gm12878"
+# Where scripts are located
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM"
 
-# Starting point: SAMPLE_context_filtered and SAMPLE_vcf_read
+# BQ dataset where the output of CloudASM is located
+DATASET_IN="cloudasm_encode_2019"
 
-# Note: later we will not need VCF. We use the VCF to group reads by SNP for now.
+# BQ dataset where the data will be generated
+DATASET_OUT="deepasm_encode"
+
+# Cloud Storage location of the logs
+LOG="gs://cloudasm-encode/logging/deepasm"
+
+# Docker file required to run the scripts
+DOCKER_GCP="google/cloud-sdk:255.0.0"
+
+# GCP global variables
+PROJECT_ID="hackensack-tyco"
+REGION_ID="us-central1"
+ZONE_ID="us-central1-b"
 
 
-# Extract the number of methylation states per ref and alt for each CpG.
+#-----------------------------------------------
 
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_ID}.${SAMPLE}_snp_cpg_details \
-    --replace=true \
-    "
-    WITH 
-    -- SNPs with their respective arrays of CpGs (each coming with their fisher p-value)
-        SNP_CPG_ARRAY AS (
-            SELECT
-                snp_id,
-                ANY_VALUE(snp_pos) AS snp_pos,
-                ANY_VALUE(chr) AS chr,
-                ARRAY_AGG(
-                    STRUCT(
-                        pos,
-                        ROUND((alt_meth+ref_meth)/(ref_cov+alt_cov),3) AS frac_methyl,
-                        ref_cov + alt_cov AS cov,
-                        ref_meth + alt_meth as meth,
-                        ROUND(alt_meth/alt_cov-ref_meth/ref_cov,3) AS effect,
-                        fisher_pvalue,
-                        ref_cov,
-                        ref_meth,
-                        alt_cov,
-                        alt_meth
-                    )
-                    ORDER BY pos
-                ) AS cpg
-            FROM ${DATASET_ID}.${SAMPLE}_cpg_asm
-            GROUP BY snp_id
-        )
-        SELECT * FROM SNP_CPG_ARRAY
-    "
+# Prepare TSV file with just the samples (used for most jobs)
+echo -e "--env SAMPLE" > all_samples.tsv
 
+while read SAMPLE ; do
+    echo -e "${SAMPLE}" >> all_samples.tsv
+done < sample_id.txt
+
+
+#-----------------------------------------------
+
+# Make a file of CpG coverage and 
+# fractional methylation for all samples
+
+# Delete the existing file in the dataset
+bq rm -f -t ${PROJECT_ID}:${DATASET_OUT}.cpgs
+
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_IN="${DATASET_IN}" \
+  --env DATASET_OUT="${DATASET_OUT}" \
+  --script ${SCRIPTS}/cpg.sh \
+  --tasks all_samples.tsv \
+  --wait
+
+#-----------------------------------------------
+
+# Make a file of regions evaluated for ASM for all samples
+
+# Delete existing file
+bq rm -f -t ${PROJECT_ID}:${DATASET_OUT}.asm
+
+# Append all samples through a while loop so that we do not exceed the rate
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_IN="${DATASET_IN}" \
+  --env DATASET_OUT="${DATASET_OUT}" \
+  --script ${SCRIPTS}/asm_region.sh \
+  --tasks all_samples.tsv 12 \
+  --wait
+
+
+#-----------------------------------------------
 
 # Combine with asm_snp table.
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_ID}.${SAMPLE}_asm_cpg_array \
+    --destination_table ${DATASET_OUT}.asm_cpg_array \
     --replace=true \
     "
     WITH ASM_SNP AS (
         SELECT IF(asm_snp=True, 1, 0) as asm_snp_value, *
-        FROM ${DATASET_ID}.${SAMPLE}_asm_snp
+        FROM ${DATASET_OUT}.asm
         ),
     CPG_DETAILS AS (
         SELECT snp_id AS snp_id_tmp, cpg
-        FROM ${DATASET_ID}.${SAMPLE}_snp_cpg_details
+        FROM ${DATASET_OUT}.cpgs
     ),
     TOGETHER AS (
         SELECT * EXCEPT(asm_snp)
