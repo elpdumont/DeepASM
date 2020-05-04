@@ -6,8 +6,13 @@ bq query \
     --destination_table ${DATASET_OUT}.cpgs \
     --append_table \
     "
+    WITH 
+        ADD_SAMPLE AS (
+            SELECT '${SAMPLE}' AS sample, * 
+            FROM ${DATASET_IN}.${SAMPLE}_cpg_asm
+        )
     SELECT
-        '${SAMPLE}' AS sample,
+        sample,
         snp_id,
         ANY_VALUE(snp_pos) AS snp_pos,
         ANY_VALUE(chr) AS chr,
@@ -19,8 +24,8 @@ bq query \
             )
             ORDER BY pos
         ) AS cpg
-    FROM ${DATASET_IN}.${SAMPLE}_cpg_asm
-    GROUP BY snp_id
+    FROM ADD_SAMPLE
+    GROUP BY snp_id, sample
     "
 
 
