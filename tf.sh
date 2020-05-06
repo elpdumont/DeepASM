@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.asm_read_cpg_tf_${CHR} \
@@ -20,11 +19,11 @@ bq query \
             score AS tf_score
         FROM ${DATASET_OUT}.encode_ChiP_V2
         WHERE chr = '${CHR}'
-    ),
-    COMBINED AS (
-        SELECT * FROM ASM 
-        LEFT JOIN TF
-        ON (chr_start <= region_sup AND chr_end >= region_inf) AND chr = chr_tf
-        )
-    SELECT * EXCEPT(chr_start, chr_end, chr_tf) FROM COMBINED
+    )
+    SELECT * EXCEPT(chr_start, chr_end, chr_tf)
+    FROM ASM 
+    LEFT JOIN TF
+    ON chr_start <= region_sup - 250 
+        AND chr_end >= region_inf + 250
+        AND chr = chr_tf
     "

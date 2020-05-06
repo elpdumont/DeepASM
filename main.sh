@@ -257,11 +257,11 @@ bq query \
     "
 
 
-#----------------------------------
-# Incorporate additional tracks
 
-#################
+###################################################
 # DNASE track
+##################################################
+
 
 # URL to download from
 # https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=830774571_pra4VNR81N6YjQ3NUyzCQSqI7hiT&clade=mammal&org=Human&db=hg19&hgta_group=regulation&hgta_track=wgEncodeRegDnaseClustered&hgta_table=0&hgta_regionType=genome&position=chr21%3A23%2C031%2C598-43%2C031%2C597&hgta_outputType=wigData&hgta_outFileName=dnase.txt
@@ -284,29 +284,71 @@ bq --location=US load \
 
 
 # Combined DNAse data with ASM
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_OUT="${DATASET_OUT}" \
+  --script ${SCRIPTS}/dnase.sh \
+  --tasks all_chr.tsv \
+  --wait
+        
+
+# Concatenate the files
+bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase
+
+for CHR in `seq 1 22` X Y ; do
+    bq cp --append_table \
+        ${DATASET_OUT}.asm_read_cpg_dnase_${CHR} \
+        ${DATASET_OUT}.asm_read_cpg_dnase
+done
+
+for CHR in `seq 1 22` X Y ; do
+    bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase_${CHR}
+done
+
+
+
+# Gather all DNASE scores under a structure for a given (sample, snp_id) combination
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_dnase \
+    --destination_table ${DATASET_OUT}.asm_read_cpg_dnase_struct \
     --replace=true \
     "
     WITH 
-    ASM AS (
-        SELECT * FROM ${DATASET_OUT}.asm_read_cpg_arrays
-    ),
-    DNASE AS (
-        SELECT 
-            chr AS chr_dnase, 
-            chr_start, 
-            chr_end, 
-            score AS score_dnase
-        FROM ${DATASET_OUT}.dnase
-    ),
-    COMBINED AS (
-        SELECT * FROM ASM 
-        LEFT JOIN DNASE
-        ON (chr_start <= region_sup AND chr_end >= region_inf) AND chr = chr_dnase
+        DNASE_AGG AS (
+            SELECT 
+                sample AS sample_dnase, 
+                snp_id AS snp_id_dnase, 
+                ARRAY_AGG(STRUCT(score_dnase)) AS dnase
+            FROM ${DATASET_OUT}.asm_read_cpg_dnase
+            GROUP BY sample, snp_id
+        ),
+        OTHER_INFO AS (
+            SELECT * 
+            FROM ${DATASET_OUT}.asm_read_cpg_arrays
+        ),
+        COMBINED AS (
+            SELECT * FROM OTHER_INFO LEFT JOIN DNASE_AGG
+            ON sample_dnase = sample AND snp_id_dnase = snp_id
         )
-    SELECT * EXCEPT(chr_start, chr_end, chr_dnase, score_dnase), IF(score_dnase IS NULL, 0, score_dnase) AS dnase_score FROM COMBINED
+        SELECT 
+            asm_snp, 
+            sample, 
+            snp_id, 
+            chr, 
+            nb_reads, 
+            nb_cpg, 
+            region_inf, 
+            region_sup, 
+            region_length, 
+            read_fm, 
+            cpg_fm, 
+            cpg_cov, 
+            cpg_pos, 
+            (SELECT ARRAY (SELECT score_dnase FROM UNNEST(dnase) WHERE score_dnase IS NOT NULL)) AS dnase_scores
+        FROM COMBINED
     "
 
 
@@ -334,9 +376,11 @@ bq --location=US load \
 
 # Not enough data to be of interest
 
-########################################################
-# Txn Fac ChIP V2
+###################################################
+# TF BINDING FROM CHIP-SEQ DATA
+##################################################
 
+# Link of the public dataset
 # https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=830774571_pra4VNR81N6YjQ3NUyzCQSqI7hiT&clade=mammal&org=Human&db=hg19&hgta_group=regulation&hgta_track=wgEncodeRegTfbsClusteredV2&hgta_table=0&hgta_regionType=genome&position=chr21%3A23%2C031%2C598-43%2C031%2C597&hgta_outputType=primaryTable&hgta_outFileName=encode_ChiP_V2.txt
 
 
@@ -346,6 +390,7 @@ sed -i 's|chr||g' encode_ChiP_V2.txt
 # Upload to bucket
 gsutil cp encode_ChiP_V2.txt gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt
 
+# Transfer to BigQuery
 bq --location=US load \
     --replace=true \
     --source_format=CSV \
@@ -355,9 +400,7 @@ bq --location=US load \
     gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt \
     bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:STRING,score:INT64,strand:STRING,thick_start:INT64,thick_end:INT64,reserved:INT64,block_count:INT64,block_size:INT64,chrom_start:INT64,exp_count:INT64,exp_id:STRING,exp_score:STRING
 
-# Combined previous ASM data with ChiP-seq data
-
-
+# Combined previous ASM data with ChiP-seq data (within +/- 250 bp of first and last CpG)
 dsub \
   --project $PROJECT_ID \
   --zones $ZONE_ID \
@@ -373,23 +416,72 @@ dsub \
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf 
 
 for CHR in `seq 1 22` X Y ; do
-    bq cp --append_table ${DATASET_OUT}.asm_read_cpg_tf_${CHR} ${DATASET_OUT}.asm_read_cpg_tf
+    bq cp --append_table \
+        ${DATASET_OUT}.asm_read_cpg_tf_${CHR} \
+        ${DATASET_OUT}.asm_read_cpg_tf
 done
 
 for CHR in `seq 1 22` X Y ; do
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf_${CHR}
 done
 
+# Gather all Chip-Seq under a structure for a given (sample, snp_id) combination
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_OUT}.asm_read_cpg_tf_struct \
+    --replace=true \
+    "
+    WITH 
+        TF_AGG AS (
+            SELECT 
+                sample AS sample_tf, 
+                snp_id AS snp_id_tf, 
+                ARRAY_AGG(STRUCT(tf_name)) AS tf
+            FROM ${DATASET_OUT}.asm_read_cpg_tf
+            GROUP BY sample, snp_id
+        ),
+        OTHER_INFO AS (
+            SELECT * 
+            FROM ${DATASET_OUT}.asm_read_cpg_arrays
+        ),
+        COMBINED AS (
+            SELECT * FROM OTHER_INFO LEFT JOIN TF_AGG
+            ON sample_tf = sample AND snp_id_tf = snp_id
+        )
+        SELECT 
+            asm_snp, 
+            sample, 
+            snp_id, 
+            chr, 
+            nb_reads, 
+            nb_cpg, 
+            region_inf, 
+            region_sup, 
+            region_length, 
+            read_fm, 
+            cpg_fm, 
+            cpg_cov, 
+            cpg_pos, 
+            (SELECT ARRAY (SELECT tf_name FROM UNNEST(tf) WHERE tf_name IS NOT NULL)) AS tf
+        FROM COMBINED
+    "
 
-########################################################
-# Binding motifs kherad_tf_sorted.bed
 
+
+###################################################
+# TF BINDING MOTIFS
+##################################################
+
+# Motifs provided by Catherine Do.
+
+# Clean the database of motifs
 mv kherad_tf_sorted.bed kherad_tf_sorted.txt
-
 sed -i 's|chr||g' kherad_tf_sorted.txt
 
+# Upload database to bucket
 gsutil cp kherad_tf_sorted.txt gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt
 
+# Transfer bucket -> BigQuery
 bq --location=US load \
     --replace=true \
     --source_format=CSV \
@@ -399,44 +491,10 @@ bq --location=US load \
     gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt \
     chr:STRING,motif_start:INT64,motif_end:INT64,motif:STRING
 
-# Combined CTCF motifs with ASM
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_ctcf \
-    --replace=true \
-    "
-    WITH 
-    ASM AS (
-        SELECT * FROM ${DATASET_OUT}.asm_read_cpg_arrays
-    ),
-    CTCF AS (
-        SELECT 
-            chr AS chr_motif, 
-            motif_start, 
-            motif_end, 
-            motif
-        FROM ${DATASET_OUT}.kherad_tf_sorted
-        WHERE motif LIKE '%CTCF%' AND motif NOT LIKE '%disc%'
-    ),
-    COMBINED AS (
-        SELECT * FROM ASM 
-        LEFT JOIN CTCF
-        ON (motif_start <= region_sup AND motif_end >= region_inf) AND chr = chr_motif
-        )
-    SELECT * EXCEPT(motif_start, motif_end, chr_motif) FROM COMBINED
-    "
-
-
-# Samples with their percentage of ASM
-# Query in BigQuery
-
-
-###################################################
-# Motifs known to correlate with ASM
-
+# Motifs known to correlate with ASM (from bioRiv publication)
 gsutil cp asm_motifs.txt gs://${CLOUDASM_BUCKET}/asm_motifs.txt
 
+# Upload known ASM motifs to BigQuery
 bq --location=US load \
     --replace=true \
     --source_format=CSV \
@@ -446,11 +504,7 @@ bq --location=US load \
     gs://${CLOUDASM_BUCKET}/asm_motifs.txt \
     asm_motif:STRING
 
-
-###################################
-
-# Keep motifs that are known to correlate with ASM
-
+# Keep the motifs known to correlate with ASM
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.kherad_tf_sorted_asm_motifs \
@@ -471,7 +525,6 @@ bq query \
 
 
 # Combined ASM motifs with ASM hits
-
 dsub \
   --project $PROJECT_ID \
   --zones $ZONE_ID \
@@ -483,7 +536,7 @@ dsub \
   --wait
         
 
-# Concatenate the files
+# Concatenate the files (one per chromosome)
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs
 
 for CHR in `seq 1 22` X Y ; do
@@ -493,3 +546,87 @@ done
 for CHR in `seq 1 22` X Y ; do
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs_${CHR}
 done
+
+
+# Gather all motifs under a structure for a given (sample, snp_id) combination
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_OUT}.asm_read_cpg_motifs_struct \
+    --replace=true \
+    "
+    WITH 
+        MOTIFS_AGG AS (
+            SELECT sample AS sample_motif, snp_id AS snp_id_motif, ARRAY_AGG(STRUCT(motif)) AS tf
+            FROM ${DATASET_OUT}.asm_read_cpg_motifs
+            GROUP BY sample, snp_id
+        ),
+        OTHER_INFO AS (
+            SELECT * 
+            FROM ${DATASET_OUT}.asm_read_cpg_arrays
+        ),
+        COMBINED AS (
+            SELECT * FROM OTHER_INFO LEFT JOIN MOTIFS_AGG
+            ON sample_motif = sample AND snp_id_motif = snp_id
+        )
+        SELECT 
+            asm_snp, 
+            sample, 
+            snp_id, 
+            chr, 
+            nb_reads, 
+            nb_cpg, 
+            region_inf, 
+            region_sup, 
+            region_length, 
+            read_fm, 
+            cpg_fm, 
+            cpg_cov, 
+            cpg_pos, 
+            (SELECT ARRAY (SELECT motif FROM UNNEST(tf) WHERE motif IS NOT NULL)) AS motifs
+        FROM COMBINED
+    "
+
+
+
+###################################################
+# Create a file to export to Notebook
+##################################################
+
+
+# Create a column with a variable to indicate if a motif was found
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_OUT}.asm_for_bq \
+    --replace=true \
+    "
+    WITH 
+    MOTIFS AS (
+        SELECT * EXCEPT(motifs), 
+        (IF(ARRAY_LENGTH(motifs) = 0, 0, 1)) AS motifs_bool 
+    FROM ${DATASET_OUT}.asm_read_cpg_motifs_struct
+    ),
+    CHIPSEQ AS (
+        SELECT 
+            sample AS sample_chip, 
+            snp_id AS snp_id_chip,
+            ARRAY_LENGTH(tf) AS nb_tf
+        FROM ${DATASET_OUT}.asm_read_cpg_tf_struct
+    ),
+    DNASE AS (
+        SELECT
+            sample AS sample_dnase, 
+            snp_id AS snp_id_dnase,
+            (IF(ARRAY_LENGTH(dnase_scores) = 0, 0, 1)) AS dnase_bool 
+        FROM ${DATASET_OUT}.asm_read_cpg_dnase_struct
+    ),
+    MOTIFS_CHIPSEQ AS (
+    SELECT * EXCEPT(sample_chip, snp_id_chip) 
+    FROM MOTIFS 
+    INNER JOIN CHIPSEQ
+    ON sample = sample_chip AND snp_id = snp_id_chip
+    )
+    SELECT * EXCEPT(sample_dnase, snp_id_dnase) 
+    FROM MOTIFS_CHIPSEQ
+    INNER JOIN DNASE
+    ON sample = sample_dnase AND snp_id = snp_id_dnase
+    "
