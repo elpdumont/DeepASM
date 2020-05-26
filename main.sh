@@ -702,7 +702,112 @@ for CHR in `seq 1 22` X Y ; do
 done
 
 
+# Find reads overlapping the CpG regions.
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --script ${SCRIPTS}/reads_cpg_regions.sh \
+  --tasks all_chr.tsv \
+  --wait
+
+
+
+# Concatenate all chromosomes in one single file.
+
+bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions
+
+for CHR in `seq 1 22` X Y ; do
+    bq cp --append_table \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR} \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions
+    bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR}
+done
+
+
+# Need to calculate fractional methylation of reads, 
+#fractional methylation of CpGs, coverage of each CpG, all CpG positions. 
+# Then, need to aggregate with other signals.
+
+# We first create a table by intersecting context files 
+# and the reads overlapping CpG regions
+
 bq query \
     --use_legacy_sql=false \
-    --destination_table hg19.hg19_CpG_regions_${CHR} \
-     --replace=true \
+    --destination_table deepasm_prediction_gm12878.gm12878_cpg_reads \
+    --replace=true \
+    "
+    WITH 
+        CONTEXT AS (
+            SELECT * 
+            FROM cloudasm_gm12878.gm12878_context_filtered
+        ),
+        READS_CPG_REGIONS AS (
+            SELECT * EXCEPT(read_id, chr, read_start, read_end), read_id AS read_id_identified 
+            FROM deepasm_prediction_gm12878.gm12878_reads_CpG_regions
+        )
+        SELECT
+            chr, 
+            pos,
+            meth,
+            cov,
+            read_id,
+            region_inf,
+            region_sup,
+            region_length,
+            nb_CpGs
+        FROM CONTEXT
+        INNER JOIN READS_CPG_REGIONS 
+        ON read_id = read_id_identified
+    "
+
+
+# We create a table of CpG information per CpG region
+# We request that each CpG is covered at least 10x
+# We request that there are at least 3 CpGs in each region
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table deepasm_prediction_gm12878.gm12878_cpg_fm \
+    --replace=true \
+    "
+    WITH 
+        DATASETS_JOINED AS (
+            SELECT * 
+            FROM deepasm_prediction_gm12878.gm12878_cpg_reads
+        ),
+        CPG_FRAC_METHYL AS (
+        -- Creates a list of all CpG sites with their respective fractional
+        -- methylation and their CpG region
+            SELECT 
+                chr, 
+                pos, 
+                SUM(cov) AS cov,
+                ROUND(SUM(meth)/SUM(cov),3) AS fm,
+                region_inf,
+                region_sup,
+                region_length,
+                nb_CpGs
+            FROM DATASETS_JOINED
+            GROUP BY chr, pos, region_inf, region_sup, region_length, nb_CpGs
+        ),
+        GROUP_CPG_INFO_BY_REGION AS (
+        SELECT
+            region_inf,
+            region_sup,
+            chr,
+            region_length,
+            nb_CpGs AS nb_cpg_hg19,
+            COUNT(*) AS nb_cpg_found,
+            ARRAY_AGG(
+                STRUCT(fm, cov, pos)
+                ) AS cpg
+        FROM CPG_FRAC_METHYL
+        WHERE cov >= 10
+        GROUP BY region_inf, region_sup, chr, region_length, nb_CpGs
+        )
+        SELECT * FROM GROUP_CPG_INFO_BY_REGION
+        WHERE nb_cpg_found >= 3
+        "
+
