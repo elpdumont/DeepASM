@@ -642,52 +642,19 @@ bq query \
 
 # Create region IDs, and count the number of CpGs in these regions
 # The maximum distance we've observed is 252 base pairs.
-CPG_DISTANCE="300"
+CPG_DISTANCE="154" # It is the 50% percentile of measured distances between CpGs in all regions evaluated by CloudASM
 MIN_CPG="3"
 
-
-for CHR in `seq 1 22` X Y ; do
-    echo "********************************"
-    echo "**** Chromosome is " ${CHR} "****"
-    echo "********************************"
-    bq query \
-        --use_legacy_sql=false \
-        --destination_table hg19.hg19_CpG_regions_${CHR} \
-        --replace=true \
-        "
-        WITH 
-        hg19_CpG AS (
-            SELECT chr, inf 
-            FROM hg19.hg19_CpG_pos
-            WHERE chr = '${CHR}'
-        ),
-        CpG_windows AS (
-            SELECT chr, inf AS CpG_pos, inf + ${CPG_DISTANCE} AS CpG_next
-            FROM hg19_CpG
-            ORDER by chr, CpG_pos
-        ),
-        CpG_regions AS (
-        SELECT chr, CpG_pos, CpG_next,
-            COUNTIF(newRange) OVER(ORDER BY chr, CpG_pos) AS region_id
-        FROM (
-            SELECT *, 
-            CpG_pos >= MAX(CpG_next) OVER(ORDER BY CpG_pos ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS newRange
-            FROM CpG_windows
-            )
-        ),
-        combined AS (
-            SELECT
-                ANY_VALUE(chr) AS chr_region,
-                min(CpG_pos)-1 AS region_inf, 
-                max(CpG_pos)+1 AS region_sup,
-                max(CpG_pos) - min(CpG_pos) + 2 AS region_length,
-                COUNT(*) AS nb_CpGs
-            FROM CpG_regions 
-            GROUP BY region_id
-        )
-        SELECT * FROM combined WHERE nb_CpGs >= ${MIN_CPG}
-        "
-done
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env CPG_DISTANCE="${CPG_DISTANCE}" \
+  --env MIN_CPG="${MIN_CPG}" \
+  --script ${SCRIPTS}/hg19_cpg_regions.sh \
+  --tasks all_chr.tsv \
+  --wait
 
 
 # Append all files into a single file of CpG regions with an distance of at most 300 bp between CpG
@@ -708,11 +675,24 @@ dsub \
   --zones $ZONE_ID \
   --image ${DOCKER_GCP} \
   --logging $LOG \
+  --env LOWER_B="200000000" \
+  --env UPPER_B="300000000" \
   --script ${SCRIPTS}/reads_cpg_regions.sh \
-  --tasks all_chr.tsv \
+  --tasks all_chr.tsv 1 \
   --wait
 
 
+# Concatenate chromosome 1 first
+bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
+bq cp --append_table \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_0_100000000 \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
+bq cp --append_table \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_100000000_200000000 \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
+bq cp --append_table \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_200000000_300000000 \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
 
 # Concatenate all chromosomes in one single file.
 
@@ -811,3 +791,123 @@ bq query \
         WHERE nb_cpg_found >= 3
         "
 
+# We create a table of read information per CpG region
+bq query \
+    --use_legacy_sql=false \
+    --destination_table deepasm_prediction_gm12878.gm12878_read_fm \
+    --replace=true \
+    "
+    WITH 
+        DATASETS_JOINED AS (
+            SELECT * 
+            FROM deepasm_prediction_gm12878.gm12878_cpg_reads
+        ),
+        READ_FRAC_METHYL AS (
+            SELECT 
+                ROUND(SUM(meth)/SUM(cov),3) AS fm,
+                region_inf,
+                region_sup,
+                region_length,
+                nb_CpGs
+            FROM DATASETS_JOINED
+            GROUP BY read_id, region_inf, region_sup, region_length, nb_CpGs
+        )
+        SELECT
+            region_inf,
+            region_sup,
+            region_length,
+            nb_CpGs,
+            ARRAY_AGG (STRUCT (fm)) AS read
+        FROM READ_FRAC_METHYL
+        GROUP BY region_inf, region_sup, region_length, nb_CpGs
+    "
+
+# We now join the 2 informations (CpG and read)
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table deepasm_prediction_gm12878.gm12878_cpg_regions \
+    --replace=true \
+    "
+    WITH 
+        CPG_INFO AS (
+            SELECT * 
+            FROM deepasm_prediction_gm12878.gm12878_cpg_fm
+        ),
+        READ_INFO AS (
+            SELECT 
+                region_inf AS region_inf_read,
+                region_sup AS region_sup_read,
+                region_length AS region_length_read,
+                nb_CpGs AS nb_CpGs_read,
+                read
+            FROM deepasm_prediction_gm12878.gm12878_read_fm
+        )
+        SELECT * EXCEPT(
+                    region_inf_read, 
+                    region_sup_read, 
+                    region_length_read, 
+                    nb_CpGs_read
+                    ) 
+        FROM CPG_INFO
+        INNER JOIN READ_INFO
+        ON 
+            region_inf =  region_inf_read 
+            AND region_sup = region_sup_read
+            AND region_length = region_length_read
+            AND nb_cpg_hg19 = nb_CpGs_read
+    "
+
+# We check which regions were evaluated by CloudASM
+# There are 461,346 regions that were evalulated by CloudASM
+# DeepASm will evaluate 1,510,941 regions
+bq query \
+    --use_legacy_sql=false \
+    --destination_table deepasm_prediction_gm12878.gm12878_cpg_regions_cloudasm \
+    --replace=true \
+    "
+    WITH 
+        CPG_REGIONS AS (
+            SELECT *
+            FROM deepasm_prediction_gm12878.gm12878_cpg_regions
+        ),
+        ASM_REGIONS AS (
+            SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
+                chr AS chr_asm, 
+                region_length AS region_length_asm,
+                region_inf AS region_inf_asm, 
+                region_sup AS region_sup_asm
+            FROM deepasm_encode.asm_for_bq
+            WHERE sample = 'gm12878'
+        ),
+        CPG_ASM_REGIONS AS (
+            SELECT * FROM CPG_REGIONS
+            INNER JOIN ASM_REGIONS
+            ON (region_sup_asm > region_inf AND region_inf_asm < region_inf)
+            OR (region_inf_asm < region_sup AND region_sup_asm > region_sup) 
+            OR (region_inf_asm > region_inf AND region_sup_asm < region_sup)
+        )
+        SELECT 
+            region_inf, 
+            region_sup,
+            chr,
+            region_length
+            nb_cpg_hg19,
+            nb_cpg_found,
+            ANY_VALUE(cpg) AS cpg,
+            ANY_VALUE(read) AS read,
+            ARRAY_AGG (
+                STRUCT (
+                    snp_id,
+                    asm_snp,
+                    nb_cpg,
+                    region_length_asm,
+                    region_inf_asm,
+                    region_sup_asm
+                    )
+                ) AS v
+        FROM CPG_ASM_REGIONS
+        GROUP BY region_inf, region_sup, chr, region_length, nb_cpg_hg19, nb_cpg_found
+    "
+
+                    
