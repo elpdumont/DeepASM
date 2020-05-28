@@ -634,40 +634,82 @@ bq query \
 
 
 ###################################################
-# Find the 1kb windows with 3 CpGs and each CpG with 10x coverage.
+# Split the reference genome into 500bp windows.
 ##################################################
 
 # Imported the dataset of CpG locations in hg19 -> Hg19_CpG_pos
 
+echo -e "chr\tlength" > chr_length.txt
+echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
+&& echo -e "4\t191154276" >> chr_length.txt && echo -e "5\t180915260" >> chr_length.txt && echo -e "6\t171115067" >> chr_length.txt \
+&& echo -e "7\t159138663" >> chr_length.txt && echo -e "8\t146364022" >> chr_length.txt && echo -e "9\t141213431" >> chr_length.txt \
+&& echo -e "10\t135534747" >> chr_length.txt && echo -e "11\t135006516" >> chr_length.txt && echo -e "12\t133851895" >> chr_length.txt \
+&& echo -e "13\t115169878" >> chr_length.txt && echo -e "14\t107349540" >> chr_length.txt && echo -e "15\t102531392" >> chr_length.txt \
+&& echo -e "16\t90354753" >> chr_length.txt && echo -e "17\t81195210" >> chr_length.txt && echo -e "18\t78077248" >> chr_length.txt \
+&& echo -e "19\t59128983" >> chr_length.txt && echo -e "20\t63025520" >> chr_length.txt && echo -e "21\t48129895" >> chr_length.txt \
+&& echo -e "22\t51304566" >> chr_length.txt && echo -e "X\t155270560 " >> chr_length.txt && echo -e "Y\t59373566" >> chr_length.txt
 
-# Create region IDs, and count the number of CpGs in these regions
-# The maximum distance we've observed is 252 base pairs.
-CPG_DISTANCE="154" # It is the 50% percentile of measured distances between CpGs in all regions evaluated by CloudASM
-MIN_CPG="3"
+# Create windows with the same interval
+INTERVAL="500"
 
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env CPG_DISTANCE="${CPG_DISTANCE}" \
-  --env MIN_CPG="${MIN_CPG}" \
-  --script ${SCRIPTS}/hg19_cpg_regions.sh \
-  --tasks all_chr.tsv \
-  --wait
+# Prepare TSV file per chromosome (used for many jobs)
+echo -e "chr\tregion_inf\tregion_sup" > chr_regions.txt
 
-
-# Append all files into a single file of CpG regions with an distance of at most 300 bp between CpG
-
-bq rm -f -t hg19.hg19_CpG_regions
-
+# Create the windows with $INTERVALS bp in it
 for CHR in `seq 1 22` X Y ; do
-    bq cp --append_table \
-        hg19.hg19_CpG_regions_${CHR} \
-        hg19.hg19_CpG_regions
-    bq rm -f -t hg19.hg19_CpG_regions_${CHR}
+    echo "Processing chromosome" ${CHR}
+    NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
+    INF="1"
+    SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
+    echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt # for jobs
+    while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
+        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
+        INF=$(( ${SUP} + 1 ))
+        SUP=$(( ${SUP} + $INCREMENT ))
+        echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt
+
+    done
 done
 
+# Upload the file to a bucket
+gsutil cp chr_regions.txt gs://cloudasm-encode/chr_regions.txt
+
+# Import the file in BigQuery
+bq --location=US load \
+               --replace=true \
+               --source_format=CSV \
+               --field_delimiter "\t" \
+               --skip_leading_rows 1 \
+                hg19.hg19_windows \
+               gs://cloudasm-encode/chr_regions.txt \
+               chr_region:STRING,region_inf:INT64,region_sup:INT64
+
+
+###################################################
+# Overlap the reads with the 500bp windows.
+##################################################
+
+# Create windows with the same interval
+INTERVAL="10000000"
+
+# Prepare TSV file per chromosome (used for many jobs)
+echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split.tsv
+
+# Create the windows with $INTERVALS bp in it
+for CHR in `seq 1 22` X Y ; do
+    echo "Processing chromosome" ${CHR}
+    NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
+    INF="1"
+    SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
+    echo -e "${CHR}\t$INF\t$SUP" >> chr_split.tsv # for jobs
+    while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
+        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
+        INF=$(( ${SUP} + 1 ))
+        SUP=$(( ${SUP} + $INCREMENT ))
+        echo -e "${CHR}\t$INF\t$SUP" >> chr_split.tsv
+
+    done
+done
 
 # Find reads overlapping the CpG regions.
 dsub \
@@ -675,35 +717,32 @@ dsub \
   --zones $ZONE_ID \
   --image ${DOCKER_GCP} \
   --logging $LOG \
-  --env LOWER_B="200000000" \
-  --env UPPER_B="300000000" \
   --script ${SCRIPTS}/reads_cpg_regions.sh \
-  --tasks all_chr.tsv 1 \
+  --tasks chr_split.tsv 291-321 \
   --wait
 
+1-50
+51-101
+102-200
+201-290
+291-321
 
-# Concatenate chromosome 1 first
-bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
-bq cp --append_table \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_0_100000000 \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
-bq cp --append_table \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_100000000_200000000 \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
-bq cp --append_table \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1_200000000_300000000 \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_1
+322
 
 # Concatenate all chromosomes in one single file.
 
 bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions
 
-for CHR in `seq 1 22` X Y ; do
+{ read
+while read CHR LOWER_B UPPER_B ; do 
+    echo "Chromosome is " ${CHR}
+    echo "deepasm_prediction_gm12878.gm12878_reads_CpG_regions_"${CHR}"_"${LOWER_B}"_"${UPPER_B}
     bq cp --append_table \
-        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR} \
+        deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR}_${LOWER_B}_${UPPER_B} \
         deepasm_prediction_gm12878.gm12878_reads_CpG_regions
-    bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR}
-done
+    #bq rm -f -t deepasm_prediction_gm12878.gm12878_reads_CpG_regions_${CHR}_${LOWER_B}_${UPPER_B}
+done 
+} < chr_split.tsv
 
 
 # Need to calculate fractional methylation of reads, 
@@ -734,9 +773,7 @@ bq query \
             cov,
             read_id,
             region_inf,
-            region_sup,
-            region_length,
-            nb_CpGs
+            region_sup
         FROM CONTEXT
         INNER JOIN READS_CPG_REGIONS 
         ON read_id = read_id_identified
@@ -766,26 +803,22 @@ bq query \
                 SUM(cov) AS cov,
                 ROUND(SUM(meth)/SUM(cov),3) AS fm,
                 region_inf,
-                region_sup,
-                region_length,
-                nb_CpGs
+                region_sup
             FROM DATASETS_JOINED
-            GROUP BY chr, pos, region_inf, region_sup, region_length, nb_CpGs
+            GROUP BY chr, pos, region_inf, region_sup
         ),
         GROUP_CPG_INFO_BY_REGION AS (
         SELECT
             region_inf,
             region_sup,
             chr,
-            region_length,
-            nb_CpGs AS nb_cpg_hg19,
             COUNT(*) AS nb_cpg_found,
             ARRAY_AGG(
                 STRUCT(fm, cov, pos)
                 ) AS cpg
         FROM CPG_FRAC_METHYL
         WHERE cov >= 10
-        GROUP BY region_inf, region_sup, chr, region_length, nb_CpGs
+        GROUP BY region_inf, region_sup, chr
         )
         SELECT * FROM GROUP_CPG_INFO_BY_REGION
         WHERE nb_cpg_found >= 3
@@ -805,21 +838,19 @@ bq query \
         READ_FRAC_METHYL AS (
             SELECT 
                 ROUND(SUM(meth)/SUM(cov),3) AS fm,
+                chr,
                 region_inf,
-                region_sup,
-                region_length,
-                nb_CpGs
+                region_sup
             FROM DATASETS_JOINED
-            GROUP BY read_id, region_inf, region_sup, region_length, nb_CpGs
+            GROUP BY read_id, chr, region_inf, region_sup
         )
         SELECT
+            chr,
             region_inf,
             region_sup,
-            region_length,
-            nb_CpGs,
             ARRAY_AGG (STRUCT (fm)) AS read
         FROM READ_FRAC_METHYL
-        GROUP BY region_inf, region_sup, region_length, nb_CpGs
+        GROUP BY chr, region_inf, region_sup
     "
 
 # We now join the 2 informations (CpG and read)
@@ -836,10 +867,9 @@ bq query \
         ),
         READ_INFO AS (
             SELECT 
+                chr AS chr_read,
                 region_inf AS region_inf_read,
                 region_sup AS region_sup_read,
-                region_length AS region_length_read,
-                nb_CpGs AS nb_CpGs_read,
                 read
             FROM deepasm_prediction_gm12878.gm12878_read_fm
         )

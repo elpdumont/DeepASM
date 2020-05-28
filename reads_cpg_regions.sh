@@ -8,15 +8,17 @@ bq query \
     WITH 
         cpg_regions AS (
             SELECT * 
-            FROM hg19.hg19_CpG_regions
-            WHERE chr_region = '${CHR}'
+            FROM hg19.hg19_windows
+            WHERE 
+                chr_region = '${CHR}'
                 AND region_sup <= ${UPPER_B}
                 AND region_inf >= ${LOWER_B}
         ),
         sam_sample AS (
             SELECT read_id, chr, read_start, read_end
             FROM cloudasm_gm12878.gm12878_recal_sam
-            WHERE chr = '${CHR}'
+            WHERE 
+                chr = '${CHR}'
                 AND read_end <= ${UPPER_B}
                 AND read_start >= ${LOWER_B}
         )
