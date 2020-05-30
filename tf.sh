@@ -17,13 +17,13 @@ bq query \
             chr_end, 
             name AS tf_name,
             score AS tf_score
-        FROM ${DATASET_OUT}.encode_ChiP_V2
+        FROM ${DATASET_EPI}.encode_ChiP_V2
         WHERE chr = '${CHR}'
     )
     SELECT * EXCEPT(chr_start, chr_end, chr_tf)
     FROM ASM 
     LEFT JOIN TF
-    ON chr_start <= region_sup - 250 
-        AND chr_end >= region_inf + 250
+    ON chr_start <= region_sup + ${EPI_REGION}
+        AND chr_end >= region_inf - ${EPI_REGION}
         AND chr = chr_tf
     "

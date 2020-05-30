@@ -18,13 +18,13 @@ bq query \
             chr_start,
             chr_end, 
             score AS score_dnase
-        FROM ${DATASET_OUT}.dnase
+        FROM ${DATASET_EPI}.dnase
         WHERE chr = '${CHR}'
     )
     SELECT * EXCEPT(chr_start, chr_end, chr_dnase)
     FROM ASM 
     LEFT JOIN DNASE
-    ON chr_start <= region_sup+250 
-    AND chr_end >= region_inf-250
+    ON chr_start <= region_sup + ${EPI_REGION}
+    AND chr_end >= region_inf - ${EPI_REGION}
     AND chr = chr_dnase
     "

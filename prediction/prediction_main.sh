@@ -269,8 +269,6 @@ bq query \
     SELECT SUM(nb_cpg) FROM UNIQUE_REGIONS
     "
 
--- 39,189,346 Too many!!
-
 # The following command should return 22,370,184 CpG (10x coverage, 3 CpG per region)
 bq query \
     --use_legacy_sql=false \
@@ -280,17 +278,20 @@ bq query \
     "
 
 
-# There are 461,346 regions that were evalulated by CloudASM
-# DeepASm will evaluate 4,644,819 regions
+# There are 2,402,312 DeepASM regions overlapping a CloudASM regions
+# DeepASm will evaluate 3,348,354 regions
+# 30% of regions were never evaluated by CloudASM
+# 1,694,594 DeepASM regions have more than one SNP
+
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_cpg_regions_cloudasm \
+    --destination_table ${DATASET_PRED}.${SAMPLE}_regions_cloudasm \
     --replace=true \
     "
     WITH 
         CPG_REGIONS AS (
             SELECT *
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions
+            FROM ${DATASET_PRED}.${SAMPLE}_regions
         ),
         ASM_REGIONS AS (
             SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
@@ -330,7 +331,8 @@ bq query \
     "
 
 
-###################################################
+#--------------------------------------------------------------------------
 # Enrich the CpG windows with additional epigenetic signals.
-##################################################
+#--------------------------------------------------------------------------
+
 

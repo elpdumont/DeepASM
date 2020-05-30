@@ -18,11 +18,3 @@ bq query \
     FROM ${DATASET_IN}.${SAMPLE}_asm_region_pvalue
     "
 
-# Previously used
-                        # ref_meth + alt_meth as meth,
-                        # ROUND(alt_meth/alt_cov-ref_meth/ref_cov,3) AS effect,
-                        # fisher_pvalue,
-                        # ref_cov,
-                        # ref_meth,
-                        # alt_cov,
-                        # alt_meth

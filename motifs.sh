@@ -18,7 +18,7 @@ bq query \
             motif_start, 
             motif_end, 
             motif
-        FROM ${DATASET_OUT}.kherad_tf_sorted_asm_motifs
+        FROM ${DATASET_EPI}.kherad_tf_sorted_asm_motifs
         WHERE chr = '${CHR}'
     ),
     COMBINED AS (

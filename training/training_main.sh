@@ -1,5 +1,6 @@
-#-----------------------------------------------
+#--------------------------------------------------------------------------
 # Variables
+#--------------------------------------------------------------------------
 
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM"
@@ -9,6 +10,12 @@ DATASET_IN="cloudasm_encode_2019"
 
 # BQ dataset where the data will be generated
 DATASET_OUT="deepasm_encode"
+
+# BQ dataset for epigenetic motifs
+DATASET_EPI="hg19"
+
+# Region within which we look for epigenetic signals
+EPI_REGION="250"
 
 # Cloud Storage location of the logs
 LOG="gs://cloudasm-encode/logging/deepasm"
@@ -24,8 +31,10 @@ PROJECT_ID="hackensack-tyco"
 REGION_ID="us-central1"
 ZONE_ID="us-central1-b"
 
+#--------------------------------------------------------------------------
+# Samples evaluated by CloudASM
+#--------------------------------------------------------------------------
 
-#-----------------------------------------------
 
 # Prepare TSV file with just the samples (used for most jobs)
 echo -e "--env SAMPLE" > all_samples.tsv
@@ -33,7 +42,6 @@ echo -e "--env SAMPLE" > all_samples.tsv
 while read SAMPLE ; do
     echo -e "${SAMPLE}" >> all_samples.tsv
 done < sample_id.txt
-
 
 
 # Prepare TSV file per chromosome (used for many jobs)
@@ -44,17 +52,14 @@ for CHR in `seq 1 22` X Y ; do
       echo -e "${CHR}" >> all_chr.tsv
 done
 
-
-
-
-#-----------------------------------------------
-
-# Make a file of CpG coverage and 
-# fractional methylation for all samples
+#--------------------------------------------------------------------------
+# CpG fractional methylation and coverage for all snp_id and all samples
+#--------------------------------------------------------------------------
 
 # Delete the existing file in the dataset
 bq rm -f -t ${PROJECT_ID}:${DATASET_OUT}.cpgs
 
+# Append all CpG informations to a single table ("cpgs")
 dsub \
   --project $PROJECT_ID \
   --zones $ZONE_ID \
@@ -66,9 +71,10 @@ dsub \
   --tasks all_samples.tsv \
   --wait
 
-#-----------------------------------------------
 
-# Make a file of regions evaluated for ASM for all samples
+#--------------------------------------------------------------------------
+# Make a table of regions evaluated for ASM for all samples
+#--------------------------------------------------------------------------
 
 # Delete existing file
 bq rm -f -t ${PROJECT_ID}:${DATASET_OUT}.asm
@@ -86,8 +92,10 @@ dsub \
   --wait
 
 
-#-----------------------------------------------
-# Create a table with ASMs and arrays of CpGs.
+#--------------------------------------------------------------------------
+# Combine CpG arrays and ASM regions together
+#--------------------------------------------------------------------------
+
 
 bq query \
     --use_legacy_sql=false \
@@ -120,10 +128,11 @@ bq query \
     "
 
 
-#-----------------------------------------------
-# Create a table of SNPs and their arrays of fractional methylation per read
+#--------------------------------------------------------------------------
+# Create a table of SNPs and their arrays of fractional methylation per genotype
+#--------------------------------------------------------------------------
 
-# Import required files created by CloudASM
+# Import required files created by CloudASM back into the CloudASM dataset.
 
 dsub \
   --project $PROJECT_ID \
@@ -144,7 +153,7 @@ dsub \
   --wait
 
 
-# The table asm_region_pvalue has the fractional methylations.
+# Concatenate all samples into a single table ("reads")
 
 # Delete existing file
 bq rm -f -t ${PROJECT_ID}:${DATASET_OUT}.reads
@@ -161,7 +170,11 @@ dsub \
   --tasks all_samples.tsv \
   --wait
 
-# Combine arrays of fractional methylation arrays to regions evaluated for ASM
+
+#--------------------------------------------------------------------------
+# Table with fractional methylation of reads (NOT by genotype)
+#--------------------------------------------------------------------------
+
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.asm_read_array \
@@ -202,8 +215,15 @@ bq query \
     FROM JOINED_ARRAY
     "
 
-# Built a table with reads array and cpg arrays for all regions evaluated for ASM
-# We also evaluate the width of the region (based on first and last CpG)
+
+#--------------------------------------------------------------------------
+# Table with ASM info, CpG array fractional methyl, and read fractional methyl
+#--------------------------------------------------------------------------
+
+# We defined the boundaries of the region as the min and max
+# of all CpG positions in the region. 
+# These boundaries are used for enrichment with DNASE
+
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.asm_read_cpg_arrays \
@@ -257,31 +277,12 @@ bq query \
     "
 
 
-
-###################################################
+#--------------------------------------------------------------------------
 # DNASE track
-##################################################
+#--------------------------------------------------------------------------
 
-
-# URL to download from
-# https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=830774571_pra4VNR81N6YjQ3NUyzCQSqI7hiT&clade=mammal&org=Human&db=hg19&hgta_group=regulation&hgta_track=wgEncodeRegDnaseClustered&hgta_table=0&hgta_regionType=genome&position=chr21%3A23%2C031%2C598-43%2C031%2C597&hgta_outputType=wigData&hgta_outFileName=dnase.txt
-
-# Do a bash command to remove "chr":
-sed -i 's|chr||g' dnase.txt
-
-# Upload to bucket
-gsutil cp dnase.txt gs://${CLOUDASM_BUCKET}/dnase.txt
-
-# Push DNASe track to BigQuery
-bq --location=US load \
-    --replace=true \
-    --source_format=CSV \
-    --field_delimiter "\t" \
-    --skip_leading_rows 1 \
-    encode_tracks.dnase \
-    gs://${CLOUDASM_BUCKET}/dnase.txt \
-    bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:INT64,score:INT64,source_count:FLOAT,source_id:STRING,source_score:STRING
-
+# We look for DNAse motifs within 250 bp of the region that 
+# was evaluated by CloudASM (boundaries are CpG)
 
 # Combined DNAse data with ASM
 dsub \
@@ -290,10 +291,11 @@ dsub \
   --image ${DOCKER_GCP} \
   --logging $LOG \
   --env DATASET_OUT="${DATASET_OUT}" \
+  --env EPI_REGION="${EPI_REGION}" \
   --script ${SCRIPTS}/dnase.sh \
   --tasks all_chr.tsv \
   --wait
-        
+
 
 # Concatenate the files
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase
@@ -307,7 +309,6 @@ done
 for CHR in `seq 1 22` X Y ; do
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase_${CHR}
 done
-
 
 
 # Gather all DNASE scores under a structure for a given (sample, snp_id) combination
@@ -351,62 +352,19 @@ bq query \
         FROM COMBINED
     "
 
-
-######################################
-# ENCODE 3 TFBS
-
-# https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=830774571_pra4VNR81N6YjQ3NUyzCQSqI7hiT&clade=mammal&org=Human&db=hg19&hgta_group=regulation&hgta_track=encTfChipPk&hgta_table=0&hgta_regionType=genome&position=chr21%3A23%2C031%2C598-43%2C031%2C597&hgta_outputType=primaryTable&hgta_outFileName=encode_3_tfbs.txt
-
-
-# Do a bash command to remove "chr":
-sed -i 's|chr||g' encode_3_tfbs.txt
-
-# Upload to bucket
-gsutil cp encode_3_tfbs.txt gs://${CLOUDASM_BUCKET}/encode_3_tfbs.txt
-
-bq --location=US load \
-    --replace=true \
-    --source_format=CSV \
-    --field_delimiter "\t" \
-    --skip_leading_rows 1 \
-    ${DATASET_OUT}.encode_3_tfbs \
-    gs://${CLOUDASM_BUCKET}/encode_3_tfbs.txt \
-    bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:STRING,score:INT64,strand:STRING,value:FLOAT,pvalue:FLOAT,qvalue:FLOAT,peak:INT64
-
-
-# Not enough data to be of interest
-
-###################################################
+#--------------------------------------------------------------------------
 # TF BINDING FROM CHIP-SEQ DATA
-##################################################
+#--------------------------------------------------------------------------
 
-# Link of the public dataset
-# https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=830774571_pra4VNR81N6YjQ3NUyzCQSqI7hiT&clade=mammal&org=Human&db=hg19&hgta_group=regulation&hgta_track=wgEncodeRegTfbsClusteredV2&hgta_table=0&hgta_regionType=genome&position=chr21%3A23%2C031%2C598-43%2C031%2C597&hgta_outputType=primaryTable&hgta_outFileName=encode_ChiP_V2.txt
+# We look for TF that have measured binding within 250 bp of the CpG window
 
-
-# Do a bash command to remove "chr":
-sed -i 's|chr||g' encode_ChiP_V2.txt
-
-# Upload to bucket
-gsutil cp encode_ChiP_V2.txt gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt
-
-# Transfer to BigQuery
-bq --location=US load \
-    --replace=true \
-    --source_format=CSV \
-    --field_delimiter "\t" \
-    --skip_leading_rows 1 \
-    ${DATASET_OUT}.encode_ChiP_V2 \
-    gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt \
-    bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:STRING,score:INT64,strand:STRING,thick_start:INT64,thick_end:INT64,reserved:INT64,block_count:INT64,block_size:INT64,chrom_start:INT64,exp_count:INT64,exp_id:STRING,exp_score:STRING
-
-# Combined previous ASM data with ChiP-seq data (within +/- 250 bp of first and last CpG)
 dsub \
   --project $PROJECT_ID \
   --zones $ZONE_ID \
   --image ${DOCKER_GCP} \
   --logging $LOG \
   --env DATASET_OUT="${DATASET_OUT}" \
+  --env EPI_REGION="${EPI_REGION}" \
   --script ${SCRIPTS}/tf.sh \
   --tasks all_chr.tsv \
   --wait
@@ -467,61 +425,6 @@ bq query \
     "
 
 
-
-###################################################
-# TF BINDING MOTIFS
-##################################################
-
-# Motifs provided by Catherine Do.
-
-# Clean the database of motifs
-mv kherad_tf_sorted.bed kherad_tf_sorted.txt
-sed -i 's|chr||g' kherad_tf_sorted.txt
-
-# Upload database to bucket
-gsutil cp kherad_tf_sorted.txt gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt
-
-# Transfer bucket -> BigQuery
-bq --location=US load \
-    --replace=true \
-    --source_format=CSV \
-    --field_delimiter "\t" \
-    --skip_leading_rows 0 \
-    ${DATASET_OUT}.kherad_tf_sorted \
-    gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt \
-    chr:STRING,motif_start:INT64,motif_end:INT64,motif:STRING
-
-# Motifs known to correlate with ASM (from bioRiv publication)
-gsutil cp asm_motifs.txt gs://${CLOUDASM_BUCKET}/asm_motifs.txt
-
-# Upload known ASM motifs to BigQuery
-bq --location=US load \
-    --replace=true \
-    --source_format=CSV \
-    --field_delimiter "\t" \
-    --skip_leading_rows 0 \
-    ${DATASET_OUT}.asm_motifs \
-    gs://${CLOUDASM_BUCKET}/asm_motifs.txt \
-    asm_motif:STRING
-
-# Keep the motifs known to correlate with ASM
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.kherad_tf_sorted_asm_motifs \
-    --replace=true \
-    "
-    WITH 
-        ASM_MOTIFS AS (
-            SELECT * 
-            FROM ${DATASET_OUT}.asm_motifs
-        ),
-        KHERAD AS (
-            SELECT * FROM ${DATASET_OUT}.kherad_tf_sorted
-        )
-        SELECT chr, motif, motif_start, motif_end FROM KHERAD
-        INNER JOIN ASM_MOTIFS
-        ON asm_motif = motif
-    "
 
 
 # Combined ASM motifs with ASM hits
