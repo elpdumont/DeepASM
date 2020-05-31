@@ -7,7 +7,13 @@ bq query \
     "
     WITH 
     ASM AS (
-        SELECT * FROM ${DATASET_OUT}.asm_read_cpg_arrays
+        SELECT
+            sample,
+            snp_id,
+            region_inf,
+            region_sup,
+            chr 
+        FROM ${DATASET_OUT}.asm_read_cpg_arrays
         WHERE chr = '${CHR}'
     ),
     TF AS (
@@ -23,7 +29,7 @@ bq query \
     SELECT * EXCEPT(chr_start, chr_end, chr_tf)
     FROM ASM 
     LEFT JOIN TF
-    ON chr_start <= region_sup + ${EPI_REGION}
-        AND chr_end >= region_inf - ${EPI_REGION}
-        AND chr = chr_tf
+    ON chr_end <= region_sup + ${EPI_REGION} AND 
+       chr_start >= region_inf - ${EPI_REGION} AND 
+       chr = chr_tf
     "

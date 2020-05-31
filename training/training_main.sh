@@ -3,7 +3,7 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM"
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/training"
 
 # BQ dataset where the output of CloudASM is located
 DATASET_IN="cloudasm_encode_2019"
@@ -291,6 +291,7 @@ dsub \
   --image ${DOCKER_GCP} \
   --logging $LOG \
   --env DATASET_OUT="${DATASET_OUT}" \
+  --env DATASET_EPI="${DATASET_EPI}" \
   --env EPI_REGION="${EPI_REGION}" \
   --script ${SCRIPTS}/dnase.sh \
   --tasks all_chr.tsv \
@@ -318,13 +319,21 @@ bq query \
     --replace=true \
     "
     WITH 
-        DNASE_AGG AS (
+        DNASE_AGG AS ( -- we group the DNASe scores together
             SELECT 
                 sample AS sample_dnase, 
-                snp_id AS snp_id_dnase, 
+                snp_id AS snp_id_dnase,
+                chr AS chr_dnase,
+                region_inf AS region_inf_dnase,
+                region_sup AS region_sup_dnase,
                 ARRAY_AGG(STRUCT(score_dnase)) AS dnase
             FROM ${DATASET_OUT}.asm_read_cpg_dnase
-            GROUP BY sample, snp_id
+            GROUP BY 
+                sample, 
+                snp_id, 
+                chr, 
+                region_inf, 
+                region_sup
         ),
         OTHER_INFO AS (
             SELECT * 
@@ -332,7 +341,12 @@ bq query \
         ),
         COMBINED AS (
             SELECT * FROM OTHER_INFO LEFT JOIN DNASE_AGG
-            ON sample_dnase = sample AND snp_id_dnase = snp_id
+            ON 
+                sample_dnase = sample AND 
+                snp_id_dnase = snp_id AND 
+                chr_dnase = chr AND 
+                region_inf = region_inf_dnase AND 
+                region_sup = region_sup_dnase
         )
         SELECT 
             asm_snp, 
@@ -348,6 +362,7 @@ bq query \
             cpg_fm, 
             cpg_cov, 
             cpg_pos, 
+            -- the command below takes care of the case if there is no dnase score in the array
             (SELECT ARRAY (SELECT score_dnase FROM UNNEST(dnase) WHERE score_dnase IS NOT NULL)) AS dnase_scores
         FROM COMBINED
     "
@@ -364,6 +379,7 @@ dsub \
   --image ${DOCKER_GCP} \
   --logging $LOG \
   --env DATASET_OUT="${DATASET_OUT}" \
+  --env DATASET_EPI="${DATASET_EPI}" \
   --env EPI_REGION="${EPI_REGION}" \
   --script ${SCRIPTS}/tf.sh \
   --tasks all_chr.tsv \
@@ -393,10 +409,18 @@ bq query \
         TF_AGG AS (
             SELECT 
                 sample AS sample_tf, 
-                snp_id AS snp_id_tf, 
+                snp_id AS snp_id_tf,
+                chr AS chr_tf,
+                region_inf AS region_inf_tf,
+                region_sup AS region_sup_tf,
                 ARRAY_AGG(STRUCT(tf_name)) AS tf
             FROM ${DATASET_OUT}.asm_read_cpg_tf
-            GROUP BY sample, snp_id
+            GROUP BY
+                sample, 
+                snp_id, 
+                chr, 
+                region_inf, 
+                region_sup
         ),
         OTHER_INFO AS (
             SELECT * 
@@ -404,7 +428,11 @@ bq query \
         ),
         COMBINED AS (
             SELECT * FROM OTHER_INFO LEFT JOIN TF_AGG
-            ON sample_tf = sample AND snp_id_tf = snp_id
+            ON sample_tf = sample AND 
+               snp_id_tf = snp_id AND
+               chr_tf = chr AND
+               region_inf_tf = region_inf AND
+               region_sup_tf = region_sup
         )
         SELECT 
             asm_snp, 
@@ -424,7 +452,9 @@ bq query \
         FROM COMBINED
     "
 
-
+#--------------------------------------------------------------------------
+# TF MOTIFS
+#--------------------------------------------------------------------------
 
 
 # Combined ASM motifs with ASM hits
@@ -434,10 +464,12 @@ dsub \
   --image ${DOCKER_GCP} \
   --logging $LOG \
   --env DATASET_OUT="${DATASET_OUT}" \
+  --env DATASET_EPI="${DATASET_EPI}" \
+  --env EPI_REGION="${EPI_REGION}" \
   --script ${SCRIPTS}/motifs.sh \
   --tasks all_chr.tsv \
   --wait
-        
+
 
 # Concatenate the files (one per chromosome)
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs

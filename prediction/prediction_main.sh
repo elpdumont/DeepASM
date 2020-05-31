@@ -125,9 +125,14 @@ bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
 { read
 while read CHR LOWER_B UPPER_B ; do 
     echo "Chromosome is " ${CHR} ". Boundaries are " ${LOWER_B} "and " ${UPPER_B}
-    # bq cp --append_table \
-    #     ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-    #     ${DATASET_PRED}.${SAMPLE}_cpg_regions
+    bq cp --append_table \
+        ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+        ${DATASET_PRED}.${SAMPLE}_cpg_regions
+done 
+} < chr_split.tsv
+
+{ read
+while read CHR LOWER_B UPPER_B ; do 
     bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B}
 done 
 } < chr_split.tsv
