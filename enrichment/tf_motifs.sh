@@ -30,7 +30,7 @@ bq query \
         SELECT * FROM ASM 
         LEFT JOIN MOTIF_DB
         ON
-            motif_end <= region_sup+ ${EPI_REGION} AND
+            motif_end <= region_sup + ${EPI_REGION} AND
             motif_start >= region_inf - ${EPI_REGION} AND
             chr = chr_motif
         )

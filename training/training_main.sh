@@ -302,12 +302,14 @@ dsub \
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq cp --append_table \
         ${DATASET_OUT}.asm_read_cpg_dnase_${CHR} \
         ${DATASET_OUT}.asm_read_cpg_dnase
 done
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase_${CHR}
 done
 
@@ -390,12 +392,14 @@ dsub \
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf 
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq cp --append_table \
         ${DATASET_OUT}.asm_read_cpg_tf_${CHR} \
         ${DATASET_OUT}.asm_read_cpg_tf
 done
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf_${CHR}
 done
 
@@ -475,10 +479,12 @@ dsub \
 bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq cp --append_table ${DATASET_OUT}.asm_read_cpg_motifs_${CHR} ${DATASET_OUT}.asm_read_cpg_motifs
 done
 
 for CHR in `seq 1 22` X Y ; do
+    echo "Chromosome is:" ${CHR}
     bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs_${CHR}
 done
 

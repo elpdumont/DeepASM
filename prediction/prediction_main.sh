@@ -318,7 +318,7 @@ bq query \
             chr,
             region_inf, 
             region_sup,
-            ANY_VALUE(nb_cpg_found),
+            ANY_VALUE(nb_cpg_found) AS nb_cpg_found,
             ANY_VALUE(cpg) AS cpg,
             ANY_VALUE(read) AS read,
             ARRAY_AGG (
