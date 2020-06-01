@@ -6,6 +6,12 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 
+# Where the scripts for enrichment are located
+ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
+
+# Desired window for enrichment analysis
+EPI_REGION="250"
+
 # BQ dataset where the output of CloudASM is located
 DATASET_PRED="deepasm_prediction_gm12878"
 
@@ -240,11 +246,14 @@ bq query \
                 read
             FROM ${DATASET_PRED}.${SAMPLE}_read_fm
         )
-        SELECT * EXCEPT(
-                    chr_read,
-                    region_inf_read, 
-                    region_sup_read
-                    ) 
+        SELECT 
+            chr,
+            region_inf,
+            region_sup,
+            CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS enrich_ref,
+            nb_cpg_found,
+            cpg,
+            read
         FROM CPG_INFO
         INNER JOIN READ_INFO
         ON 
@@ -340,4 +349,102 @@ bq query \
 # Enrich the CpG windows with additional epigenetic signals.
 #--------------------------------------------------------------------------
 
+# Prepare TSV file per chromosome (used for many jobs)
+echo -e "--env EPI_SIGNAL\t--env CHR" > all_chr.tsv
+for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    for CHR in `seq 1 22` X Y ; do
+      echo -e "${SIGNAL}\t${CHR}" >> all_chr.tsv
+    done
+done
 
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_IN="${DATASET_IN}" \
+  --env DATASET_EPI="${DATASET_EPI}" \
+  --env EPI_REGION="${EPI_REGION}" \
+  --env DATASET="${DATASET_PRED}" \
+  --env TABLE="${SAMPLE}_regions" \
+  --script ${ENRICH_SCRIPTS}/enrichment.sh \
+  --tasks all_chr.tsv \
+  --wait
+
+# Concatenate the files
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    echo "Processing the signal " ${EPI_SIGNAL}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+
+    for CHR in `seq 1 22` X Y ; do
+        echo "Chromosome is:" ${CHR}
+        bq cp --append_table \
+            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR} \
+            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+    done
+done
+
+# Delete the intermediate files if concatenation was successful
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    echo "Processing the signal " ${EPI_SIGNAL}
+    for CHR in `seq 1 22` X Y ; do
+        echo "Chromosome is:" ${CHR}
+        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR}
+    done
+done
+
+
+# Gather all DNASE scores under a structure for a given (sample, snp_id) combination
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_OUT}.asm_read_cpg_dnase_struct \
+    --replace=true \
+    "
+    WITH 
+        DNASE_AGG AS ( -- we group the DNASe scores together
+            SELECT 
+                sample AS sample_dnase, 
+                snp_id AS snp_id_dnase,
+                chr AS chr_dnase,
+                region_inf AS region_inf_dnase,
+                region_sup AS region_sup_dnase,
+                ARRAY_AGG(STRUCT(score_dnase)) AS dnase
+            FROM ${DATASET_OUT}.asm_read_cpg_dnase
+            GROUP BY 
+                sample, 
+                snp_id, 
+                chr, 
+                region_inf, 
+                region_sup
+        ),
+        OTHER_INFO AS (
+            SELECT * 
+            FROM ${DATASET_OUT}.asm_read_cpg_arrays
+        ),
+        COMBINED AS (
+            SELECT * FROM OTHER_INFO LEFT JOIN DNASE_AGG
+            ON 
+                sample_dnase = sample AND 
+                snp_id_dnase = snp_id AND 
+                chr_dnase = chr AND 
+                region_inf = region_inf_dnase AND 
+                region_sup = region_sup_dnase
+        )
+        SELECT 
+            asm_snp, 
+            sample, 
+            snp_id, 
+            chr, 
+            nb_reads, 
+            nb_cpg, 
+            region_inf, 
+            region_sup, 
+            region_length, 
+            read_fm, 
+            cpg_fm, 
+            cpg_cov, 
+            cpg_pos, 
+            -- the command below takes care of the case if there is no dnase score in the array
+            (SELECT ARRAY (SELECT score_dnase FROM UNNEST(dnase) WHERE score_dnase IS NOT NULL)) AS dnase_scores
+        FROM COMBINED
+    "

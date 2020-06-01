@@ -5,6 +5,9 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/training"
 
+# Where the scripts for enrichment are located
+ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
+
 # BQ dataset where the output of CloudASM is located
 DATASET_IN="cloudasm_encode_2019"
 

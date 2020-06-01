@@ -142,7 +142,7 @@ bq --location=US load \
 # Keep the motifs known to correlate with ASM
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_EPI}.asm_motifs_locations \
+    --destination_table ${DATASET_EPI}.tf_motifs \
     --replace=true \
     "
     WITH 
