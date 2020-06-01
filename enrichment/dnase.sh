@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.asm_read_cpg_dnase_${CHR} \

@@ -22,10 +22,23 @@ bq --location=US load \
     --source_format=CSV \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
-    ${DATASET_EPI}.dnase \
+    ${DATASET_EPI}.dnase_raw \
     gs://${CLOUDASM_BUCKET}/dnase.txt \
     bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:INT64,score:INT64,source_count:FLOAT,source_id:STRING,source_score:STRING
 
+# Clean the database
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_EPI}.dnase \
+    --replace=true \
+    "
+    SELECT 
+        chr AS signal_chr, 
+        chr_start AS signal_start, 
+        chr_end AS signal_end, 
+        score
+    FROM ${DATASET_EPI}.dnase_raw
+    "
 
 
 #--------------------------------------------------------------------------
@@ -48,9 +61,23 @@ bq --location=US load \
     --source_format=CSV \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
-    ${DATASET_EPI}.encode_ChiP_V2 \
+    ${DATASET_EPI}.encode_ChiP_V2_raw \
     gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt \
     bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:STRING,score:INT64,strand:STRING,thick_start:INT64,thick_end:INT64,reserved:INT64,block_count:INT64,block_size:INT64,chrom_start:INT64,exp_count:INT64,exp_id:STRING,exp_score:STRING
+
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_EPI}.encode_ChiP_V2 \
+    --replace=true \
+    "
+    SELECT 
+        chr AS signal_chr, 
+        chr_start AS signal_start, 
+        chr_end AS signal_end, 
+        score
+    FROM ${DATASET_EPI}.encode_ChiP_V2_raw
+    "
 
 
 #--------------------------------------------------------------------------
@@ -110,7 +137,7 @@ bq --location=US load \
     --skip_leading_rows 0 \
     ${DATASET_EPI}.kherad_tf_sorted \
     gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt \
-    chr:STRING,motif_start:INT64,motif_end:INT64,motif:STRING
+    chr:STRING,chr_start:INT64,chr_end:INT64,motif:STRING
 
 # Keep the motifs known to correlate with ASM
 bq query \
@@ -126,7 +153,12 @@ bq query \
         KHERAD AS (
             SELECT * FROM ${DATASET_EPI}.kherad_tf_sorted
         )
-        SELECT chr, motif, motif_start, motif_end FROM KHERAD
+        SELECT 
+            chr AS signal_chr, 
+            chr_start AS signal_start, 
+            chr_end AS signal_end, 
+            motif AS score 
+        FROM KHERAD
         INNER JOIN ASM_MOTIFS
         ON asm_motif = motif
     "
