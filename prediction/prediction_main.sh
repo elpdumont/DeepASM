@@ -374,13 +374,13 @@ dsub \
 # Concatenate the files
 for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     echo "Processing the signal " ${EPI_SIGNAL}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
 
     for CHR in `seq 1 22` X Y ; do
         echo "Chromosome is:" ${CHR}
         bq cp --append_table \
             ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR} \
-            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
     done
 done
 
@@ -394,57 +394,82 @@ for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
 done
 
 
-# Gather all DNASE scores under a structure for a given (sample, snp_id) combination
+
+# Gather all scores in a single array per region. This creates as many tables as there
+# are epigenetic signals for enrichment.
+
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL} \
+        --replace=true \
+        "
+        WITH 
+            EPI_AGG AS ( -- we group the DNASe scores together
+                SELECT 
+                    * EXCEPT(score, cpg, read),
+                    ARRAY_AGG(STRUCT(score)) AS epi
+                FROM ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+                GROUP BY 
+                    chr,
+                    region_inf,
+                    region_sup,
+                    enrich_ref,
+                    nb_cpg_found
+            )
+            SELECT 
+                * EXCEPT(epi),
+                -- the command below takes care of the case if there is no  score in the array
+                IF(
+                    ARRAY_LENGTH(
+                        (SELECT ARRAY (
+                            SELECT score 
+                            FROM UNNEST(epi) 
+                            WHERE score IS NOT NULL
+                            )
+                        )) > 0, 1, 0
+                ) AS ${EPI_SIGNAL}
+            FROM EPI_AGG
+        "
+done
+
+# Delete the previous tables.
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+done
+
+# Merge the original table (with the CpG and read arrays) with the epigenetic signals.
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_dnase_struct \
+    --destination_table ${DATASET_PRED}.${SAMPLE}_regions_enriched \
     --replace=true \
     "
-    WITH 
-        DNASE_AGG AS ( -- we group the DNASe scores together
-            SELECT 
-                sample AS sample_dnase, 
-                snp_id AS snp_id_dnase,
-                chr AS chr_dnase,
-                region_inf AS region_inf_dnase,
-                region_sup AS region_sup_dnase,
-                ARRAY_AGG(STRUCT(score_dnase)) AS dnase
-            FROM ${DATASET_OUT}.asm_read_cpg_dnase
-            GROUP BY 
-                sample, 
-                snp_id, 
-                chr, 
-                region_inf, 
-                region_sup
-        ),
-        OTHER_INFO AS (
-            SELECT * 
-            FROM ${DATASET_OUT}.asm_read_cpg_arrays
-        ),
-        COMBINED AS (
-            SELECT * FROM OTHER_INFO LEFT JOIN DNASE_AGG
-            ON 
-                sample_dnase = sample AND 
-                snp_id_dnase = snp_id AND 
-                chr_dnase = chr AND 
-                region_inf = region_inf_dnase AND 
-                region_sup = region_sup_dnase
-        )
-        SELECT 
-            asm_snp, 
-            sample, 
-            snp_id, 
-            chr, 
-            nb_reads, 
-            nb_cpg, 
-            region_inf, 
-            region_sup, 
-            region_length, 
-            read_fm, 
-            cpg_fm, 
-            cpg_cov, 
-            cpg_pos, 
-            -- the command below takes care of the case if there is no dnase score in the array
-            (SELECT ARRAY (SELECT score_dnase FROM UNNEST(dnase) WHERE score_dnase IS NOT NULL)) AS dnase_scores
-        FROM COMBINED
+    SELECT
+        t1.chr AS chr,
+        t1.region_inf AS region_inf,
+        t1.region_sup AS region_sup,
+        t1.nb_cpg_found AS nb_cpg_found,
+        t1.dnase AS dnase,
+        t2.encode_ChiP_V2 AS encode_ChiP_V2,
+        t3.tf_motifs AS tf_motifs,
+        t4.cpg AS cpg,
+        t4.read AS read
+    FROM ${DATASET_PRED}.${SAMPLE}_regions_dnase t1
+    JOIN ${DATASET_PRED}.${SAMPLE}_regions_encode_ChiP_V2 t2 
+    ON t1.chr = t2.chr AND 
+        t1.region_inf = t2.region_inf AND 
+        t1.region_sup = t2.region_sup
+    JOIN ${DATASET_PRED}.${SAMPLE}_regions_tf_motifs t3 
+    ON t1.chr = t3.chr AND 
+       t1.region_inf = t3.region_inf AND 
+       t1.region_sup = t3.region_sup
+    JOIN ${DATASET_PRED}.${SAMPLE}_regions t4 
+    ON t1.chr = t4.chr AND 
+       t1.region_inf = t4.region_inf AND 
+       t1.region_sup = t4.region_sup
     "
+
+# Delete the individual enrichment tables
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+done
