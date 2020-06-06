@@ -13,13 +13,10 @@ ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
 EPI_REGION="250"
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_prediction_gm12878"
-
-# Name of the sample for which ASM prediction is sought
-SAMPLE="gm12878"
+DATASET_PRED="deepasm_prediction"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_gm12878"
+DATASET_CONTEXT="cloudasm_encode_2019"
 
 # Cloud Storage location of the logs
 LOG="gs://cloudasm-encode/logging/deepasm"
@@ -31,6 +28,17 @@ DOCKER_GCP="google/cloud-sdk:255.0.0"
 PROJECT_ID="hackensack-tyco"
 REGION_ID="us-central1"
 ZONE_ID="us-central1-b"
+
+#--------------------------------------------------------------------------
+# Samples to be prepared for prediction
+#--------------------------------------------------------------------------
+
+# Prepare TSV file with just the samples (used for most jobs)
+echo -e "--env SAMPLE" > all_samples.tsv
+
+while read SAMPLE ; do
+    echo -e "${SAMPLE}" >> all_samples.tsv
+done < sample_id.txt
 
 
 #--------------------------------------------------------------------------
@@ -89,8 +97,10 @@ bq --location=US load \
 # Create CpG regions to be evaluated by DeepASM
 #--------------------------------------------------------------------------
 
-# Create genomic regions used to split jobs per chromosome and per interval
-INTERVAL="10000000"
+# Create genomic regions used to split jobs per chromosome 
+# and per interval. We picked the interval to have less than
+# 100 queries running at the same time (BQ limit)
+INTERVAL="36000000"
 
 # Prepare TSV file per chromosome (used for many jobs)
 echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split.tsv
@@ -111,37 +121,46 @@ for CHR in `seq 1 22` X Y ; do
     done
 done
 
-# Be careful to split the jobs in max 100 concomittant jobs (BQ limit) or update the limit in GCP
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env SAMPLE="${SAMPLE}" \
-  --env DATASET_PRED="${DATASET_PRED}" \
-  --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
-  --script ${SCRIPTS}/cpg_regions.sh \
-  --tasks chr_split.tsv 1-99 \
-  --wait
+# Looping over the samples. This step requires manual intervention.
+while read SAMPLE ; do
+    dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env SAMPLE="${SAMPLE}" \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
+    --script ${SCRIPTS}/cpg_regions.sh \
+    --tasks chr_split.tsv \
+    --wait
+done < sample_id.txt
 
-# Erase previous file if there is one.
-bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
 
 # Append all files into a single file.
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    echo "Chromosome is " ${CHR} ". Boundaries are " ${LOWER_B} "and " ${UPPER_B}
-    bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-        ${DATASET_PRED}.${SAMPLE}_cpg_regions
-done 
-} < chr_split.tsv
+while read SAMPLE ; do
+    echo "Processing sample " ${SAMPLE}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
+    { read
+    while read CHR LOWER_B UPPER_B ; do 
+        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
+        bq cp --append_table \
+            ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+            ${DATASET_PRED}.${SAMPLE}_cpg_regions
+    done 
+    } < chr_split.tsv
+done < sample_id.txt
 
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B}
-done 
-} < chr_split.tsv
+# Erase intermediary files.
+while read SAMPLE ; do
+    echo "Processing sample " ${SAMPLE}
+    { read
+    while read CHR LOWER_B UPPER_B ; do 
+        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
+        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B}
+    done 
+    } < chr_split.tsv
+done < sample_id.txt
 
 
 
@@ -152,150 +171,102 @@ done
 # We request that each CpG is covered at least 10x
 # We request that there are at least 3 CpGs in each region
 
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_cpg_fm \
-    --replace=true \
-    "
-    WITH 
-        DATASETS_JOINED AS (
-            SELECT * 
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions
-        ),
-        CPG_FRAC_METHYL AS (
-        -- Creates a list of all CpG sites with their respective fractional
-        -- methylation and their CpG region
-            SELECT 
-                chr, 
-                pos, 
-                SUM(cov) AS cov,
-                ROUND(SUM(meth)/SUM(cov),3) AS fm,
-                region_inf,
-                region_sup
-            FROM DATASETS_JOINED
-            GROUP BY chr, pos, region_inf, region_sup
-        ),
-        GROUP_CPG_INFO_BY_REGION AS (
-        SELECT
-            region_inf,
-            region_sup,
-            chr,
-            COUNT(*) AS nb_cpg_found,
-            ARRAY_AGG(
-                STRUCT(fm, cov, pos)
-                ) AS cpg
-        FROM CPG_FRAC_METHYL
-        WHERE cov >= 10
-        GROUP BY region_inf, region_sup, chr
-        )
-        SELECT * FROM GROUP_CPG_INFO_BY_REGION
-        WHERE nb_cpg_found >= 3
-        "
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --script ${SCRIPTS}/cpg_fm.sh \
+    --tasks all_samples.tsv \
+    --wait
+
 
 #--------------------------------------------------------------------------
 # Calculate fractional methylation of each read in each region.
 #--------------------------------------------------------------------------
 
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_read_fm \
-    --replace=true \
-    "
-    WITH 
-        DATASETS_JOINED AS (
-            SELECT * 
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions
-        ),
-        READ_FRAC_METHYL AS (
-            SELECT 
-                ROUND(SUM(meth)/SUM(cov),3) AS fm,
-                chr,
-                region_inf,
-                region_sup
-            FROM DATASETS_JOINED
-            GROUP BY read_id, chr, region_inf, region_sup
-        )
-        SELECT
-            chr,
-            region_inf,
-            region_sup,
-            ARRAY_AGG (STRUCT (fm)) AS read
-        FROM READ_FRAC_METHYL
-        GROUP BY chr, region_inf, region_sup
-    "
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --script ${SCRIPTS}/read_fm.sh \
+    --tasks all_samples.tsv \
+    --wait
 
 #--------------------------------------------------------------------------
 # Create a table of regions with fractional methylation of CpGs and reads
 #--------------------------------------------------------------------------
 
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_regions \
-    --replace=true \
-    "
-    WITH 
-        CPG_INFO AS (
-            SELECT * 
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_fm
-        ),
-        READ_INFO AS (
-            SELECT 
-                chr AS chr_read,
-                region_inf AS region_inf_read,
-                region_sup AS region_sup_read,
-                read
-            FROM ${DATASET_PRED}.${SAMPLE}_read_fm
-        )
-        SELECT 
-            chr,
-            region_inf,
-            region_sup,
-            CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS enrich_ref,
-            nb_cpg_found,
-            cpg,
-            read
-        FROM CPG_INFO
-        INNER JOIN READ_INFO
-        ON 
-            region_inf =  region_inf_read 
-            AND region_sup = region_sup_read
-            AND chr_read = chr
-    "
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --script ${SCRIPTS}/combine_read_cpg_fm.sh \
+    --tasks all_samples.tsv \
+    --wait
+
+
+#--------------------------------------------------------------------------
+# Combine all samples in a single table to be given to the model
+#--------------------------------------------------------------------------
+
+
 
 #--------------------------------------------------------------------------
 # Compare the number of CpGs and regions evaluated by DeepASM and CloudASM
 #--------------------------------------------------------------------------
 
-# Number of CpGs evaluated by CloudASM. Should return 2,159,485 CpGs
-bq query \
-    --use_legacy_sql=false \
-    "
-    WITH 
-        UNIQUE_REGIONS AS ( 
-            SELECT nb_cpg 
-            FROM cloudasm_gm12878.gm12878_asm_snp
-            GROUP BY chr, nb_ref_reads, nb_alt_reads, 
-                asm_region_effect, wilcoxon_corr_pvalue, 
-                nb_cpg, nb_sig_cpg, nb_pos_sig_cpg, 
-                nb_neg_sig_cpg, nb_consec_pos_sig_asm, 
-                nb_consec_neg_sig_asm
-        ) 
-    SELECT SUM(nb_cpg) FROM UNIQUE_REGIONS
-    "
 
-# The following command should return 22,370,184 CpG (10x coverage, 3 CpG per region)
-bq query \
-    --use_legacy_sql=false \
-    "
-    SELECT SUM(nb_cpg_found) 
-    FROM ${DATASET_PRED}.${SAMPLE}_regions
-    "
+while read SAMPLE ; do
+    echo " "
+    echo "********************"
+    echo "********************"
+    echo "Sample is " ${SAMPLE}
+    echo " "
+    echo "********************"
+    echo "Number of CpGs evaluated by CloudASM"
+    bq query \
+        --use_legacy_sql=false \
+        "
+        WITH 
+            UNIQUE_REGIONS AS ( 
+                SELECT nb_cpg 
+                FROM ${DATASET_CONTEXT}.${SAMPLE}_asm_snp
+                GROUP BY chr, nb_ref_reads, nb_alt_reads, 
+                    asm_region_effect, wilcoxon_corr_pvalue, 
+                    nb_cpg, nb_sig_cpg, nb_pos_sig_cpg, 
+                    nb_neg_sig_cpg, nb_consec_pos_sig_asm, 
+                    nb_consec_neg_sig_asm
+            ) 
+        SELECT SUM(nb_cpg) FROM UNIQUE_REGIONS
+        "
+
+    echo " "
+    echo "********************"
+    echo "Number of CpGs evaluated by DeepASM"
+
+    bq query \
+        --use_legacy_sql=false \
+        "
+        SELECT SUM(nb_cpg_found) 
+        FROM ${DATASET_PRED}.${SAMPLE}_regions
+        "
+
+done < sample_id.txt
 
 
-# There are 2,402,312 DeepASM regions overlapping a CloudASM regions
-# DeepASm will evaluate 3,348,354 regions
-# 30% of regions were never evaluated by CloudASM
-# 1,694,594 DeepASM regions have more than one SNP
+#--------------------------------------------------------------------------
+# For the GM12878 cell line, we overlap with the CloudASM results
+#--------------------------------------------------------------------------
+
+
+
 
 bq query \
     --use_legacy_sql=false \

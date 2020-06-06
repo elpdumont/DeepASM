@@ -244,7 +244,7 @@ bq query \
             nb_ref_reads + nb_alt_reads AS nb_reads, 
             nb_cpg, 
             (
-                (SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
+                (2 + SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
              ) AS region_length,
              (SELECT min(pos) FROM UNNEST(cpg)) AS region_inf,
              (SELECT max(pos) FROM UNNEST(cpg)) AS region_sup,
