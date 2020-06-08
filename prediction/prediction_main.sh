@@ -430,6 +430,7 @@ while read SAMPLE ; do
         --replace=true \
         "
         SELECT
+            -- We add the sample info:
             ${SAMPLE} AS sample,
             t1.chr AS chr,
             t1.region_inf AS region_inf,
@@ -474,13 +475,7 @@ bq rm -f -t ${DATASET_PRED}.data_for_model
 
 while read SAMPLE ; do
     echo "Processing sample " ${SAMPLE}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
-    { read
-    while read CHR LOWER_B UPPER_B ; do 
-        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
-        bq cp --append_table \
-            ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-            ${DATASET_PRED}.${SAMPLE}_cpg_regions
-    done 
-    } < chr_split.tsv
+    bq cp --append_table \
+            ${DATASET_PRED}.${SAMPLE}_regions_enriched \
+            ${DATASET_PRED}.data_for_model
 done < sample_id.txt
