@@ -12,6 +12,9 @@ ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
 # Desired window for enrichment analysis
 EPI_REGION="250"
 
+# BQ dataset where the epigenetic windows are defined
+DATASET_EPI="hg19"
+
 # BQ dataset where the output of CloudASM is located
 DATASET_PRED="deepasm_prediction"
 
@@ -212,11 +215,6 @@ dsub \
     --wait
 
 
-#--------------------------------------------------------------------------
-# Combine all samples in a single table to be given to the model
-#--------------------------------------------------------------------------
-
-
 
 #--------------------------------------------------------------------------
 # Compare the number of CpGs and regions evaluated by DeepASM and CloudASM
@@ -262,58 +260,60 @@ done < sample_id.txt
 
 
 #--------------------------------------------------------------------------
-# For the GM12878 cell line, we overlap with the CloudASM results
+# Overlap the results with the CloudASM results
 #--------------------------------------------------------------------------
 
-
-
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_regions_cloudasm \
-    --replace=true \
-    "
-    WITH 
-        CPG_REGIONS AS (
-            SELECT *
-            FROM ${DATASET_PRED}.${SAMPLE}_regions
-        ),
-        ASM_REGIONS AS (
-            SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
-                chr AS chr_asm, 
-                region_length AS region_length_asm,
-                region_inf AS region_inf_asm, 
-                region_sup AS region_sup_asm
-            FROM deepasm_encode.asm_for_bq
-            WHERE sample = '${SAMPLE}'
-        ),
-        CPG_ASM_REGIONS AS (
-            SELECT * FROM CPG_REGIONS
-            INNER JOIN ASM_REGIONS
-            ON (region_sup_asm > region_inf AND region_inf_asm < region_inf)
-            OR (region_inf_asm < region_sup AND region_sup_asm > region_sup) 
-            OR (region_inf_asm > region_inf AND region_sup_asm < region_sup)
-        )
-        SELECT 
-            chr,
-            region_inf, 
-            region_sup,
-            ANY_VALUE(nb_cpg_found) AS nb_cpg_found,
-            ANY_VALUE(cpg) AS cpg,
-            ANY_VALUE(read) AS read,
-            ARRAY_AGG (
-                STRUCT (
-                    snp_id,
-                    asm_snp,
-                    nb_cpg,
-                    region_length_asm,
-                    region_inf_asm,
-                    region_sup_asm
-                    )
-                ) AS v
-        FROM CPG_ASM_REGIONS
-        GROUP BY region_inf, region_sup, chr
-    "
+while read SAMPLE ; do
+    echo "********************"
+    echo "Sample is " ${SAMPLE}
+    echo "********************"
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_cloudasm \
+        --replace=true \
+        "
+        WITH 
+            CPG_REGIONS AS (
+                SELECT *
+                FROM ${DATASET_PRED}.${SAMPLE}_regions
+            ),
+            ASM_REGIONS AS (
+                SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
+                    chr AS chr_asm, 
+                    region_length AS region_length_asm,
+                    region_inf AS region_inf_asm, 
+                    region_sup AS region_sup_asm
+                FROM deepasm_encode.asm_for_bq
+                WHERE sample = '${SAMPLE}'
+            ),
+            CPG_ASM_REGIONS AS (
+                SELECT * FROM CPG_REGIONS
+                INNER JOIN ASM_REGIONS
+                ON (region_sup_asm > region_inf AND region_inf_asm < region_inf)
+                OR (region_inf_asm < region_sup AND region_sup_asm > region_sup) 
+                OR (region_inf_asm > region_inf AND region_sup_asm < region_sup)
+            )
+            SELECT 
+                chr,
+                region_inf, 
+                region_sup,
+                ANY_VALUE(nb_cpg_found) AS nb_cpg_found,
+                ANY_VALUE(cpg) AS cpg,
+                ANY_VALUE(read) AS read,
+                ARRAY_AGG (
+                    STRUCT (
+                        snp_id,
+                        asm_snp,
+                        nb_cpg,
+                        region_length_asm,
+                        region_inf_asm,
+                        region_sup_asm
+                        )
+                    ) AS v
+            FROM CPG_ASM_REGIONS
+            GROUP BY region_inf, region_sup, chr
+        "
+done < sample_id.txt
 
 
 #--------------------------------------------------------------------------
@@ -321,126 +321,166 @@ bq query \
 #--------------------------------------------------------------------------
 
 # Prepare TSV file per chromosome (used for many jobs)
-echo -e "--env EPI_SIGNAL\t--env CHR" > all_chr.tsv
-for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    for CHR in `seq 1 22` X Y ; do
-      echo -e "${SIGNAL}\t${CHR}" >> all_chr.tsv
+echo -e "--env TABLE\t--env EPI_SIGNAL\t--env CHR" > all_chr.tsv
+while read SAMPLE ; do
+    for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        for CHR in `seq 1 22` X Y ; do
+        echo -e "${SAMPLE}_regions\t${SIGNAL}\t${CHR}" >> all_chr.tsv
+        done
     done
-done
+done < sample_id.txt
 
+# Run the jobs. Only 100 at a time (BQ limit)
 dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_IN="${DATASET_IN}" \
-  --env DATASET_EPI="${DATASET_EPI}" \
-  --env EPI_REGION="${EPI_REGION}" \
-  --env DATASET="${DATASET_PRED}" \
-  --env TABLE="${SAMPLE}_regions" \
-  --script ${ENRICH_SCRIPTS}/enrichment.sh \
-  --tasks all_chr.tsv \
-  --wait
+--project $PROJECT_ID \
+--zones $ZONE_ID \
+--image ${DOCKER_GCP} \
+--logging $LOG \
+--env DATASET_EPI="${DATASET_EPI}" \
+--env EPI_REGION="${EPI_REGION}" \
+--env DATASET="${DATASET_PRED}" \
+--script ${ENRICH_SCRIPTS}/enrichment.sh \
+--tasks all_chr.tsv 1-99 \
+--wait
+
+
 
 # Concatenate the files
-for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    echo "Processing the signal " ${EPI_SIGNAL}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+while read SAMPLE ; do
+    for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
 
-    for CHR in `seq 1 22` X Y ; do
-        echo "Chromosome is:" ${CHR}
-        bq cp --append_table \
-            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR} \
-            ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+        for CHR in `seq 1 22` X Y ; do
+            echo "Chromosome is:" ${CHR}
+            bq cp --append_table \
+                ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR} \
+                ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+        done
     done
-done
+done < sample_id.txt
 
 # Delete the intermediate files if concatenation was successful
-for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    echo "Processing the signal " ${EPI_SIGNAL}
-    for CHR in `seq 1 22` X Y ; do
-        echo "Chromosome is:" ${CHR}
-        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR}
+while read SAMPLE ; do
+    for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+        for CHR in `seq 1 22` X Y ; do
+            echo "Chromosome is:" ${CHR}
+            bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_${CHR}
+        done
     done
-done
+done < sample_id.txt
 
 
 
 # Gather all scores in a single array per region. This creates as many tables as there
 # are epigenetic signals for enrichment.
-
-for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    bq query \
-        --use_legacy_sql=false \
-        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL} \
-        --replace=true \
-        "
-        WITH 
-            EPI_AGG AS ( -- we group the DNASe scores together
+while read SAMPLE ; do
+    for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+        bq query \
+            --use_legacy_sql=false \
+            --destination_table ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL} \
+            --replace=true \
+            "
+            WITH 
+                EPI_AGG AS ( -- we group the DNASe scores together
+                    SELECT 
+                        * EXCEPT(score, cpg, read),
+                        ARRAY_AGG(STRUCT(score)) AS epi
+                    FROM ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+                    GROUP BY 
+                        chr,
+                        region_inf,
+                        region_sup,
+                        enrich_ref,
+                        nb_cpg_found
+                )
                 SELECT 
-                    * EXCEPT(score, cpg, read),
-                    ARRAY_AGG(STRUCT(score)) AS epi
-                FROM ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
-                GROUP BY 
-                    chr,
-                    region_inf,
-                    region_sup,
-                    enrich_ref,
-                    nb_cpg_found
-            )
-            SELECT 
-                * EXCEPT(epi),
-                -- the command below takes care of the case if there is no  score in the array
-                IF(
-                    ARRAY_LENGTH(
-                        (SELECT ARRAY (
-                            SELECT score 
-                            FROM UNNEST(epi) 
-                            WHERE score IS NOT NULL
-                            )
-                        )) > 0, 1, 0
-                ) AS ${EPI_SIGNAL}
-            FROM EPI_AGG
-        "
-done
+                    * EXCEPT(epi),
+                    -- the command below takes care of the case if there is no  score in the array
+                    IF(
+                        ARRAY_LENGTH(
+                            (SELECT ARRAY (
+                                SELECT score 
+                                FROM UNNEST(epi) 
+                                WHERE score IS NOT NULL
+                                )
+                            )) > 0, 1, 0
+                    ) AS ${EPI_SIGNAL}
+                FROM EPI_AGG
+            "
+    done
+done < sample_id.txt
 
 # Delete the previous tables.
-for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
-done
+while read SAMPLE ; do
+    for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}_all
+    done
+done < sample_id.txt
 
 # Merge the original table (with the CpG and read arrays) with the epigenetic signals.
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_regions_enriched \
-    --replace=true \
-    "
-    SELECT
-        t1.chr AS chr,
-        t1.region_inf AS region_inf,
-        t1.region_sup AS region_sup,
-        t1.nb_cpg_found AS nb_cpg_found,
-        t1.dnase AS dnase,
-        t2.encode_ChiP_V2 AS encode_ChiP_V2,
-        t3.tf_motifs AS tf_motifs,
-        t4.cpg AS cpg,
-        t4.read AS read
-    FROM ${DATASET_PRED}.${SAMPLE}_regions_dnase t1
-    JOIN ${DATASET_PRED}.${SAMPLE}_regions_encode_ChiP_V2 t2 
-    ON t1.chr = t2.chr AND 
-        t1.region_inf = t2.region_inf AND 
-        t1.region_sup = t2.region_sup
-    JOIN ${DATASET_PRED}.${SAMPLE}_regions_tf_motifs t3 
-    ON t1.chr = t3.chr AND 
-       t1.region_inf = t3.region_inf AND 
-       t1.region_sup = t3.region_sup
-    JOIN ${DATASET_PRED}.${SAMPLE}_regions t4 
-    ON t1.chr = t4.chr AND 
-       t1.region_inf = t4.region_inf AND 
-       t1.region_sup = t4.region_sup
-    "
+while read SAMPLE ; do
+    echo "Processing the sample " ${SAMPLE}
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_enriched \
+        --replace=true \
+        "
+        SELECT
+            ${SAMPLE} AS sample,
+            t1.chr AS chr,
+            t1.region_inf AS region_inf,
+            t1.region_sup AS region_sup,
+            t1.nb_cpg_found AS nb_cpg_found,
+            t1.dnase AS dnase,
+            t2.encode_ChiP_V2 AS encode_ChiP_V2,
+            t3.tf_motifs AS tf_motifs,
+            t4.cpg AS cpg,
+            t4.read AS read
+        FROM ${DATASET_PRED}.${SAMPLE}_regions_dnase t1
+        JOIN ${DATASET_PRED}.${SAMPLE}_regions_encode_ChiP_V2 t2 
+        ON t1.chr = t2.chr AND 
+            t1.region_inf = t2.region_inf AND 
+            t1.region_sup = t2.region_sup
+        JOIN ${DATASET_PRED}.${SAMPLE}_regions_tf_motifs t3 
+        ON t1.chr = t3.chr AND 
+        t1.region_inf = t3.region_inf AND 
+        t1.region_sup = t3.region_sup
+        JOIN ${DATASET_PRED}.${SAMPLE}_regions t4 
+        ON t1.chr = t4.chr AND 
+        t1.region_inf = t4.region_inf AND 
+        t1.region_sup = t4.region_sup
+        "
+done < sample_id.txt
 
 # Delete the individual enrichment tables
-for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
-done
+while read SAMPLE ; do
+    for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
+    done
+done < sample_id.txt
+
+
+
+
+#--------------------------------------------------------------------------
+# Combine all samples in a single table to be given to the model
+#--------------------------------------------------------------------------
+
+bq rm -f -t ${DATASET_PRED}.data_for_model
+
+while read SAMPLE ; do
+    echo "Processing sample " ${SAMPLE}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
+    { read
+    while read CHR LOWER_B UPPER_B ; do 
+        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
+        bq cp --append_table \
+            ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+            ${DATASET_PRED}.${SAMPLE}_cpg_regions
+    done 
+    } < chr_split.tsv
+done < sample_id.txt
