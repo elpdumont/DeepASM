@@ -227,6 +227,8 @@ bq query \
 # of all CpG positions in the region. 
 # These boundaries are used for annotation with DNASE
 
+# Created an index for 
+
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_OUT}.asm_read_cpg_arrays \
@@ -265,7 +267,7 @@ bq query \
         nb_cpg, 
         region_inf,
         region_sup,
-        CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS enrich_ref,
+        CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS annotate_ref,
         region_length, 
         read_fm, 
         (SELECT ARRAY 

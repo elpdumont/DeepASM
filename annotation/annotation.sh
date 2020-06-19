@@ -20,8 +20,8 @@ bq query \
         SELECT * FROM ASM 
         LEFT JOIN EPI_DATA
         ON
-            (signal_end <= enrich_ref + ${EPI_REGION}) AND
-            (signal_start >= enrich_ref - ${EPI_REGION}) AND
+            (signal_end <= annotate_ref + ${EPI_REGION}) AND
+            (signal_start >= annotate_ref - ${EPI_REGION}) AND
             chr = signal_chr
         )
     SELECT * EXCEPT(signal_start, signal_end, signal_chr) FROM COMBINED

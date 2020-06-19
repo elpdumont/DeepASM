@@ -22,7 +22,7 @@ bq query \
             chr,
             region_inf,
             region_sup,
-            CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS enrich_ref,
+            CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS annotate_ref,
             nb_cpg_found,
             cpg,
             read
