@@ -5,8 +5,8 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/training"
 
-# Where the scripts for enrichment are located
-ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
+# Where the scripts for annotation are located
+ANNOTATE_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/annotation"
 
 # BQ dataset where the output of CloudASM is located
 DATASET_IN="cloudasm_encode_2019"
@@ -225,7 +225,7 @@ bq query \
 
 # We defined the boundaries of the region as the min and max
 # of all CpG positions in the region. 
-# These boundaries are used for enrichment with DNASE
+# These boundaries are used for annotation with DNASE
 
 bq query \
     --use_legacy_sql=false \
@@ -281,7 +281,7 @@ bq query \
 
 
 #--------------------------------------------------------------------------
-# DNASE track
+# Annotate the CpG windows with additional epigenetic signals.
 #--------------------------------------------------------------------------
 
 # We look for DNAse motifs within 250 bp of the region that 

@@ -6,10 +6,10 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 
-# Where the scripts for enrichment are located
-ENRICH_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/enrichment"
+# Where the scripts for annotation are located
+ANNOTATE_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/annotation"
 
-# Desired window for enrichment analysis
+# Desired window for annotation analysis
 EPI_REGION="250"
 
 # BQ dataset where the epigenetic windows are defined
@@ -260,64 +260,7 @@ done < sample_id.txt
 
 
 #--------------------------------------------------------------------------
-# Overlap the results with the CloudASM results
-#--------------------------------------------------------------------------
-
-while read SAMPLE ; do
-    echo "********************"
-    echo "Sample is " ${SAMPLE}
-    echo "********************"
-    bq query \
-        --use_legacy_sql=false \
-        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_cloudasm \
-        --replace=true \
-        "
-        WITH 
-            CPG_REGIONS AS (
-                SELECT *
-                FROM ${DATASET_PRED}.${SAMPLE}_regions
-            ),
-            ASM_REGIONS AS (
-                SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
-                    chr AS chr_asm, 
-                    region_length AS region_length_asm,
-                    region_inf AS region_inf_asm, 
-                    region_sup AS region_sup_asm
-                FROM deepasm_encode.asm_for_bq
-                WHERE sample = '${SAMPLE}'
-            ),
-            CPG_ASM_REGIONS AS (
-                SELECT * FROM CPG_REGIONS
-                INNER JOIN ASM_REGIONS
-                ON (region_sup_asm > region_inf AND region_inf_asm < region_inf)
-                OR (region_inf_asm < region_sup AND region_sup_asm > region_sup) 
-                OR (region_inf_asm > region_inf AND region_sup_asm < region_sup)
-            )
-            SELECT 
-                chr,
-                region_inf, 
-                region_sup,
-                ANY_VALUE(nb_cpg_found) AS nb_cpg_found,
-                ANY_VALUE(cpg) AS cpg,
-                ANY_VALUE(read) AS read,
-                ARRAY_AGG (
-                    STRUCT (
-                        snp_id,
-                        asm_snp,
-                        nb_cpg,
-                        region_length_asm,
-                        region_inf_asm,
-                        region_sup_asm
-                        )
-                    ) AS v
-            FROM CPG_ASM_REGIONS
-            GROUP BY region_inf, region_sup, chr
-        "
-done < sample_id.txt
-
-
-#--------------------------------------------------------------------------
-# Enrich the CpG windows with additional epigenetic signals.
+# Annotate the CpG windows with additional epigenetic signals.
 #--------------------------------------------------------------------------
 
 # Prepare TSV file per chromosome (used for many jobs)
@@ -339,7 +282,7 @@ dsub \
 --env DATASET_EPI="${DATASET_EPI}" \
 --env EPI_REGION="${EPI_REGION}" \
 --env DATASET="${DATASET_PRED}" \
---script ${ENRICH_SCRIPTS}/enrichment.sh \
+--script ${ANNOTATE_SCRIPTS}/annotation.sh \
 --tasks all_chr.tsv 1-99 \
 --wait
 
@@ -374,7 +317,7 @@ done < sample_id.txt
 
 
 # Gather all scores in a single array per region. This creates as many tables as there
-# are epigenetic signals for enrichment.
+# are epigenetic signals for annotation.
 while read SAMPLE ; do
     for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
         echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
@@ -457,7 +400,7 @@ while read SAMPLE ; do
         "
 done < sample_id.txt
 
-# Delete the individual enrichment tables
+# Delete the individual annotation tables
 while read SAMPLE ; do
     for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
         bq rm -f -t ${DATASET_PRED}.${SAMPLE}_regions_${EPI_SIGNAL}
@@ -479,3 +422,62 @@ while read SAMPLE ; do
             ${DATASET_PRED}.${SAMPLE}_regions_enriched \
             ${DATASET_PRED}.data_for_model
 done < sample_id.txt
+
+
+
+#--------------------------------------------------------------------------
+# Overlap the results with the CloudASM results
+#--------------------------------------------------------------------------
+
+while read SAMPLE ; do
+    echo "********************"
+    echo "Sample is " ${SAMPLE}
+    echo "********************"
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_cloudasm \
+        --replace=true \
+        "
+        WITH 
+            CPG_REGIONS AS (
+                SELECT *
+                FROM ${DATASET_PRED}.${SAMPLE}_regions
+            ),
+            ASM_REGIONS AS (
+                SELECT * EXCEPT(region_inf, region_sup, chr, region_length),
+                    chr AS chr_asm, 
+                    region_length AS region_length_asm,
+                    region_inf AS region_inf_asm, 
+                    region_sup AS region_sup_asm
+                FROM deepasm_encode.asm_for_bq
+                WHERE sample = '${SAMPLE}'
+            ),
+            CPG_ASM_REGIONS AS (
+                SELECT * FROM CPG_REGIONS
+                INNER JOIN ASM_REGIONS
+                ON (region_sup_asm > region_inf AND region_inf_asm < region_inf)
+                OR (region_inf_asm < region_sup AND region_sup_asm > region_sup) 
+                OR (region_inf_asm > region_inf AND region_sup_asm < region_sup)
+            )
+            SELECT 
+                chr,
+                region_inf, 
+                region_sup,
+                ANY_VALUE(nb_cpg_found) AS nb_cpg_found,
+                ANY_VALUE(cpg) AS cpg,
+                ANY_VALUE(read) AS read,
+                ARRAY_AGG (
+                    STRUCT (
+                        snp_id,
+                        asm_snp,
+                        nb_cpg,
+                        region_length_asm,
+                        region_inf_asm,
+                        region_sup_asm
+                        )
+                    ) AS v
+            FROM CPG_ASM_REGIONS
+            GROUP BY region_inf, region_sup, chr
+        "
+done < sample_id.txt
+
