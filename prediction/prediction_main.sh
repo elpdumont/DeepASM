@@ -336,7 +336,7 @@ while read SAMPLE ; do
                         chr,
                         region_inf,
                         region_sup,
-                        enrich_ref,
+                        annotate_ref_ref,
                         nb_cpg_found
                 )
                 SELECT 
@@ -369,7 +369,7 @@ while read SAMPLE ; do
     echo "Processing the sample " ${SAMPLE}
     bq query \
         --use_legacy_sql=false \
-        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_enriched \
+        --destination_table ${DATASET_PRED}.${SAMPLE}_regions_annotated \
         --replace=true \
         "
         SELECT
@@ -419,7 +419,7 @@ bq rm -f -t ${DATASET_PRED}.data_for_model
 while read SAMPLE ; do
     echo "Processing sample " ${SAMPLE}
     bq cp --append_table \
-            ${DATASET_PRED}.${SAMPLE}_regions_enriched \
+            ${DATASET_PRED}.${SAMPLE}_regions_annotated \
             ${DATASET_PRED}.data_for_model
 done < sample_id.txt
 

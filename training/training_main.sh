@@ -244,7 +244,7 @@ bq query \
             nb_ref_reads + nb_alt_reads AS nb_reads, 
             nb_cpg, 
             (
-                (2 + SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
+                2+ (SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
              ) AS region_length,
              (SELECT min(pos) FROM UNNEST(cpg)) AS region_inf,
              (SELECT max(pos) FROM UNNEST(cpg)) AS region_sup,
@@ -265,6 +265,7 @@ bq query \
         nb_cpg, 
         region_inf,
         region_sup,
+        CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS enrich_ref,
         region_length, 
         read_fm, 
         (SELECT ARRAY 
@@ -284,8 +285,17 @@ bq query \
 # Annotate the CpG windows with additional epigenetic signals.
 #--------------------------------------------------------------------------
 
-# We look for DNAse motifs within 250 bp of the region that 
-# was evaluated by CloudASM (boundaries are CpG)
+
+# Prepare TSV file per chromosome (used for many jobs)
+echo -e "--env TABLE\t--env EPI_SIGNAL\t--env CHR" > all_chr.tsv
+while read SAMPLE ; do
+    for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        for CHR in `seq 1 22` X Y ; do
+        echo -e "${SAMPLE}_regions\t${SIGNAL}\t${CHR}" >> all_chr.tsv
+        done
+    done
+done < sample_id.txt
+
 
 # Combined DNAse data with ASM
 dsub \
