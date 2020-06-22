@@ -245,11 +245,9 @@ bq query \
             sample AS sample_cpg, 
             nb_ref_reads + nb_alt_reads AS nb_reads, 
             nb_cpg, 
-            (
-                2+ (SELECT max(pos) FROM UNNEST(cpg)) - (SELECT min(pos) FROM UNNEST(cpg))
-             ) AS region_length,
-             (SELECT min(pos) FROM UNNEST(cpg)) AS region_inf,
-             (SELECT max(pos) FROM UNNEST(cpg)) AS region_sup,
+            (SELECT min(pos) FROM UNNEST(cpg)) AS region_inf,
+            -- We add 1 because it's a CpG...
+            (1+(SELECT max(pos)FROM UNNEST(cpg))) AS region_sup,
             cpg
         FROM ${DATASET_OUT}.asm_cpg_array
     ),
@@ -268,7 +266,6 @@ bq query \
         region_inf,
         region_sup,
         CAST(FLOOR((region_inf + region_sup)/2) AS INT64) AS annotate_ref,
-        region_length, 
         read_fm, 
         (SELECT ARRAY 
             (SELECT frac_methyl FROM UNNEST(cpg))
@@ -290,13 +287,11 @@ bq query \
 
 # Prepare TSV file per chromosome (used for many jobs)
 echo -e "--env TABLE\t--env EPI_SIGNAL\t--env CHR" > all_chr.tsv
-while read SAMPLE ; do
-    for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
-        for CHR in `seq 1 22` X Y ; do
-        echo -e "${SAMPLE}_regions\t${SIGNAL}\t${CHR}" >> all_chr.tsv
-        done
+for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    for CHR in `seq 1 22` X Y ; do
+    echo -e "asm_read_cpg_arrays\t${SIGNAL}\t${CHR}" >> all_chr.tsv
     done
-done < sample_id.txt
+done
 
 
 # Combined DNAse data with ASM
@@ -305,285 +300,138 @@ dsub \
   --zones $ZONE_ID \
   --image ${DOCKER_GCP} \
   --logging $LOG \
-  --env DATASET_OUT="${DATASET_OUT}" \
   --env DATASET_EPI="${DATASET_EPI}" \
   --env EPI_REGION="${EPI_REGION}" \
-  --script ${SCRIPTS}/dnase.sh \
+  --env DATASET="${DATASET_OUT}" \
+  --script ${ANNOTATE_SCRIPTS}/annotation.sh \
   --tasks all_chr.tsv \
   --wait
 
 
 # Concatenate the files
-bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+        echo "Processing the signal " ${EPI_SIGNAL}
+        bq rm -f -t ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_all
 
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq cp --append_table \
-        ${DATASET_OUT}.asm_read_cpg_dnase_${CHR} \
-        ${DATASET_OUT}.asm_read_cpg_dnase
+        for CHR in `seq 1 22` X Y ; do
+            echo "Chromosome is:" ${CHR}
+            bq cp --append_table \
+                ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_${CHR} \
+                ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_all
+        done
+    done
+
+# Delete the intermediate files if concatenation was successful
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+    for CHR in `seq 1 22` X Y ; do
+        echo "Chromosome is:" ${CHR}
+        bq rm -f -t ${DATASET_OUT}.asm_read_cpg_arrays_regions_${EPI_SIGNAL}_${CHR}
+    done
 done
 
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq rm -f -t ${DATASET_OUT}.asm_read_cpg_dnase_${CHR}
-done
 
-
-# Gather all DNASE scores under a structure for a given (sample, snp_id) combination
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_dnase_struct \
-    --replace=true \
-    "
-    WITH 
-        DNASE_AGG AS ( -- we group the DNASe scores together
+# Gather all scores in a single array per region. This creates as many tables as there
+# are epigenetic signals for annotation.
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    echo "Processing the signal " ${EPI_SIGNAL} 
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL} \
+        --replace=true \
+        "
+        WITH 
+            EPI_AGG AS ( -- we group the DNASe scores together
+                SELECT 
+                    * EXCEPT(score, read_fm, cpg_fm, cpg_cov, cpg_pos),
+                    ARRAY_AGG(STRUCT(score)) AS epi
+                FROM ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_all
+                GROUP BY 
+                    chr,
+                    sample,
+                    snp_id,
+                    asm_snp,
+                    nb_reads,
+                    region_inf,
+                    region_sup,
+                    annotate_ref,
+                    nb_cpg
+            )
             SELECT 
-                sample AS sample_dnase, 
-                snp_id AS snp_id_dnase,
-                chr AS chr_dnase,
-                region_inf AS region_inf_dnase,
-                region_sup AS region_sup_dnase,
-                ARRAY_AGG(STRUCT(score_dnase)) AS dnase
-            FROM ${DATASET_OUT}.asm_read_cpg_dnase
-            GROUP BY 
-                sample, 
-                snp_id, 
-                chr, 
-                region_inf, 
-                region_sup
-        ),
-        OTHER_INFO AS (
-            SELECT * 
-            FROM ${DATASET_OUT}.asm_read_cpg_arrays
-        ),
-        COMBINED AS (
-            SELECT * FROM OTHER_INFO LEFT JOIN DNASE_AGG
-            ON 
-                sample_dnase = sample AND 
-                snp_id_dnase = snp_id AND 
-                chr_dnase = chr AND 
-                region_inf = region_inf_dnase AND 
-                region_sup = region_sup_dnase
-        )
-        SELECT 
-            asm_snp, 
-            sample, 
-            snp_id, 
-            chr, 
-            nb_reads, 
-            nb_cpg, 
-            region_inf, 
-            region_sup, 
-            region_length, 
-            read_fm, 
-            cpg_fm, 
-            cpg_cov, 
-            cpg_pos, 
-            -- the command below takes care of the case if there is no dnase score in the array
-            (SELECT ARRAY (SELECT score_dnase FROM UNNEST(dnase) WHERE score_dnase IS NOT NULL)) AS dnase_scores
-        FROM COMBINED
-    "
-
-#--------------------------------------------------------------------------
-# TF BINDING FROM CHIP-SEQ DATA
-#--------------------------------------------------------------------------
-
-# We look for TF that have measured binding within 250 bp of the CpG window
-
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_OUT="${DATASET_OUT}" \
-  --env DATASET_EPI="${DATASET_EPI}" \
-  --env EPI_REGION="${EPI_REGION}" \
-  --script ${SCRIPTS}/tf.sh \
-  --tasks all_chr.tsv \
-  --wait
-        
-
-# Concatenate the files
-bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf 
-
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq cp --append_table \
-        ${DATASET_OUT}.asm_read_cpg_tf_${CHR} \
-        ${DATASET_OUT}.asm_read_cpg_tf
+                * EXCEPT(epi),
+                -- the command below takes care of the case if there is no  score in the array
+                IF(
+                    ARRAY_LENGTH(
+                        (SELECT ARRAY (
+                            SELECT score 
+                            FROM UNNEST(epi) 
+                            WHERE score IS NOT NULL
+                            )
+                        )) > 0, 1, 0
+                ) AS ${EPI_SIGNAL}
+            FROM EPI_AGG
+        "
 done
 
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq rm -f -t ${DATASET_OUT}.asm_read_cpg_tf_${CHR}
+# Delete the previous tables
+
+for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+    echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
+    bq rm -f -t ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_all
 done
 
-# Gather all Chip-Seq under a structure for a given (sample, snp_id) combination
+
+# Merge the original table (with the CpG and read arrays) with the epigenetic signals.
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_tf_struct \
+    --destination_table ${DATASET_OUT}.asm_annotated \
     --replace=true \
     "
-    WITH 
-        TF_AGG AS (
-            SELECT 
-                sample AS sample_tf, 
-                snp_id AS snp_id_tf,
-                chr AS chr_tf,
-                region_inf AS region_inf_tf,
-                region_sup AS region_sup_tf,
-                ARRAY_AGG(STRUCT(tf_name)) AS tf
-            FROM ${DATASET_OUT}.asm_read_cpg_tf
-            GROUP BY
-                sample, 
-                snp_id, 
-                chr, 
-                region_inf, 
-                region_sup
-        ),
-        OTHER_INFO AS (
-            SELECT * 
-            FROM ${DATASET_OUT}.asm_read_cpg_arrays
-        ),
-        COMBINED AS (
-            SELECT * FROM OTHER_INFO LEFT JOIN TF_AGG
-            ON sample_tf = sample AND 
-               snp_id_tf = snp_id AND
-               chr_tf = chr AND
-               region_inf_tf = region_inf AND
-               region_sup_tf = region_sup
-        )
-        SELECT 
-            asm_snp, 
-            sample, 
-            snp_id, 
-            chr, 
-            nb_reads, 
-            nb_cpg, 
-            region_inf, 
-            region_sup, 
-            region_length, 
-            read_fm, 
-            cpg_fm, 
-            cpg_cov, 
-            cpg_pos, 
-            (SELECT ARRAY (SELECT tf_name FROM UNNEST(tf) WHERE tf_name IS NOT NULL)) AS tf
-        FROM COMBINED
+    SELECT
+        t1.sample AS sample,
+        t1.chr AS chr,
+        t1.snp_id AS snp_id,
+        t1.asm_snp AS asm_snp,
+        t1.nb_reads AS nb_reads,
+        t1.region_inf AS region_inf,
+        t1.region_sup AS region_sup,
+        t1.nb_cpg AS nb_cpg,
+        t1.dnase AS dnase,
+        t2.encode_ChiP_V2 AS encode_ChiP_V2,
+        t3.tf_motifs AS tf_motifs,
+        t4.cpg_fm AS cpg_fm,
+        t4.read_fm AS read_fm,
+        t4.cpg_cov AS cpg_cov,
+        t4.cpg_pos AS cpg_pos
+    FROM ${DATASET_OUT}.asm_read_cpg_arrays_dnase t1
+    JOIN ${DATASET_OUT}.asm_read_cpg_arrays_encode_ChiP_V2 t2 
+    ON 
+        t1.chr = t2.chr AND 
+        t1.sample = t2.sample AND
+        t1.snp_id = t2.snp_id AND
+        t1.asm_snp = t2.asm_snp AND
+        t1.nb_reads = t2.nb_reads AND
+        t1.nb_cpg = t2.nb_cpg AND 
+        t1.region_inf = t2.region_inf AND 
+        t1.region_sup = t2.region_sup
+    JOIN ${DATASET_OUT}.asm_read_cpg_arrays_tf_motifs t3 
+    ON 
+        t1.chr = t3.chr AND 
+        t1.sample = t3.sample AND
+        t1.snp_id = t3.snp_id AND
+        t1.asm_snp = t3.asm_snp AND
+        t1.nb_reads = t3.nb_reads AND
+        t1.nb_cpg = t3.nb_cpg AND 
+        t1.region_inf = t3.region_inf AND 
+        t1.region_sup = t3.region_sup
+    JOIN ${DATASET_OUT}.asm_read_cpg_arrays t4 
+    ON 
+        t1.chr = t4.chr AND 
+        t1.sample = t4.sample AND
+        t1.snp_id = t4.snp_id AND
+        t1.asm_snp = t4.asm_snp AND
+        t1.nb_reads = t4.nb_reads AND
+        t1.nb_cpg = t4.nb_cpg AND 
+        t1.region_inf = t4.region_inf AND 
+        t1.region_sup = t4.region_sup
     "
-
-#--------------------------------------------------------------------------
-# TF MOTIFS
-#--------------------------------------------------------------------------
-
-
-# Combined ASM motifs with ASM hits
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_OUT="${DATASET_OUT}" \
-  --env DATASET_EPI="${DATASET_EPI}" \
-  --env EPI_REGION="${EPI_REGION}" \
-  --script ${SCRIPTS}/motifs.sh \
-  --tasks all_chr.tsv \
-  --wait
-
-
-# Concatenate the files (one per chromosome)
-bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs
-
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq cp --append_table ${DATASET_OUT}.asm_read_cpg_motifs_${CHR} ${DATASET_OUT}.asm_read_cpg_motifs
-done
-
-for CHR in `seq 1 22` X Y ; do
-    echo "Chromosome is:" ${CHR}
-    bq rm -f -t ${DATASET_OUT}.asm_read_cpg_motifs_${CHR}
-done
-
-
-# Gather all motifs under a structure for a given (sample, snp_id) combination
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_read_cpg_motifs_struct \
-    --replace=true \
-    "
-    WITH 
-        MOTIFS_AGG AS (
-            SELECT sample AS sample_motif, snp_id AS snp_id_motif, ARRAY_AGG(STRUCT(motif)) AS tf
-            FROM ${DATASET_OUT}.asm_read_cpg_motifs
-            GROUP BY sample, snp_id
-        ),
-        OTHER_INFO AS (
-            SELECT * 
-            FROM ${DATASET_OUT}.asm_read_cpg_arrays
-        ),
-        COMBINED AS (
-            SELECT * FROM OTHER_INFO LEFT JOIN MOTIFS_AGG
-            ON sample_motif = sample AND snp_id_motif = snp_id
-        )
-        SELECT 
-            asm_snp, 
-            sample, 
-            snp_id, 
-            chr, 
-            nb_reads, 
-            nb_cpg, 
-            region_inf, 
-            region_sup, 
-            region_length, 
-            read_fm, 
-            cpg_fm, 
-            cpg_cov, 
-            cpg_pos, 
-            (SELECT ARRAY (SELECT motif FROM UNNEST(tf) WHERE motif IS NOT NULL)) AS motifs
-        FROM COMBINED
-    "
-
-
-
-###################################################
-# Create a file to export to Notebook
-##################################################
-
-
-# Create a column with a variable to indicate if a motif was found
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_OUT}.asm_for_bq \
-    --replace=true \
-    "
-    WITH 
-    MOTIFS AS (
-        SELECT * EXCEPT(motifs), 
-        (IF(ARRAY_LENGTH(motifs) = 0, 0, 1)) AS motifs_bool 
-    FROM ${DATASET_OUT}.asm_read_cpg_motifs_struct
-    ),
-    CHIPSEQ AS (
-        SELECT 
-            sample AS sample_chip, 
-            snp_id AS snp_id_chip,
-            ARRAY_LENGTH(tf) AS nb_tf
-        FROM ${DATASET_OUT}.asm_read_cpg_tf_struct
-    ),
-    DNASE AS (
-        SELECT
-            sample AS sample_dnase, 
-            snp_id AS snp_id_dnase,
-            (IF(ARRAY_LENGTH(dnase_scores) = 0, 0, 1)) AS dnase_bool 
-        FROM ${DATASET_OUT}.asm_read_cpg_dnase_struct
-    ),
-    MOTIFS_CHIPSEQ AS (
-    SELECT * EXCEPT(sample_chip, snp_id_chip) 
-    FROM MOTIFS 
-    INNER JOIN CHIPSEQ
-    ON sample = sample_chip AND snp_id = snp_id_chip
-    )
-    SELECT * EXCEPT(sample_dnase, snp_id_dnase) 
-    FROM MOTIFS_CHIPSEQ
-    INNER JOIN DNASE
-    ON sample = sample_dnase AND snp_id = snp_id_dnase
-    "
-
