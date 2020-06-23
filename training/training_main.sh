@@ -243,7 +243,8 @@ bq query \
         SELECT 
             snp_id AS snp_id_cpg, 
             sample AS sample_cpg, 
-            nb_ref_reads + nb_alt_reads AS nb_reads, 
+            nb_ref_reads + nb_alt_reads AS nb_reads,
+            asm_region_effect,
             nb_cpg, 
             (SELECT min(pos) FROM UNNEST(cpg)) AS region_inf,
             -- We add 1 because it's a CpG...
@@ -260,6 +261,7 @@ bq query \
         asm_snp, 
         sample, 
         snp_id, 
+        asm_region_effect,
         chr, 
         nb_reads, 
         nb_cpg, 
@@ -326,7 +328,7 @@ for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     echo "Processing the signal " ${EPI_SIGNAL} "for sample " ${SAMPLE}
     for CHR in `seq 1 22` X Y ; do
         echo "Chromosome is:" ${CHR}
-        bq rm -f -t ${DATASET_OUT}.asm_read_cpg_arrays_regions_${EPI_SIGNAL}_${CHR}
+        bq rm -f -t ${DATASET_OUT}.asm_read_cpg_arrays_${EPI_SIGNAL}_${CHR}
     done
 done
 
@@ -392,6 +394,7 @@ bq query \
         t1.chr AS chr,
         t1.snp_id AS snp_id,
         t1.asm_snp AS asm_snp,
+        t1.asm_region_effect AS asm_region_effect,
         t1.nb_reads AS nb_reads,
         t1.region_inf AS region_inf,
         t1.region_sup AS region_sup,
