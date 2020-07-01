@@ -8,7 +8,7 @@ bq query \
     WITH 
         CPG_REGIONS AS (
             SELECT * 
-            FROM ${DATASET_PRED}.regions
+            FROM ${DATASET_PRED}.regions_${GENOMIC_INTERVAL}bp
             WHERE 
                 chr_region = '${CHR}'
                 AND region_sup <= ${UPPER_B}

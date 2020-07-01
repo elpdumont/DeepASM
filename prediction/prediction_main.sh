@@ -9,14 +9,17 @@ SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 # Where the scripts for annotation are located
 ANNOTATE_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/annotation"
 
-# Desired window for annotation analysis
-EPI_REGION="250"
+# Size of genomic regions:
+GENOMIC_INTERVAL="250"
+
+# Desired window for annotation analysis (needs to be half of INTERVAL)
+EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_prediction"
+DATASET_PRED="deepasm_june2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
 DATASET_CONTEXT="cloudasm_encode_2019"
@@ -60,21 +63,19 @@ echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.
 && echo -e "19\t59128983" >> chr_length.txt && echo -e "20\t63025520" >> chr_length.txt && echo -e "21\t48129895" >> chr_length.txt \
 && echo -e "22\t51304566" >> chr_length.txt && echo -e "X\t155270560 " >> chr_length.txt && echo -e "Y\t59373566" >> chr_length.txt
 
-# Create genomic regions with the same interval:
-INTERVAL="500"
 
 # Prepare TSV file per chromosome (used for many jobs)
 echo -e "chr\tregion_inf\tregion_sup" > chr_regions.txt
 
-# Create the windows with $INTERVALS base pairs in it
+# Create the windows with $GENOMIC_INTERVALS base pairs in it
 for CHR in `seq 1 22` X Y ; do
     echo "Processing chromosome" ${CHR}
     NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
     INF="1"
-    SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
+    SUP=$(( $NUCLEOTIDES_IN_CHR<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR: $GENOMIC_INTERVAL ))
     echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt # for jobs
     while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
+        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $GENOMIC_INTERVAL ))
         INF=$(( ${SUP} + 1 ))
         SUP=$(( ${SUP} + $INCREMENT ))
         echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt
@@ -83,7 +84,7 @@ for CHR in `seq 1 22` X Y ; do
 done
 
 # Upload the file to a bucket
-gsutil cp chr_regions.txt gs://cloudasm-encode/chr_regions.txt
+gsutil cp chr_regions.txt gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt
 
 # Import the file in BigQuery
 bq --location=US load \
@@ -91,8 +92,8 @@ bq --location=US load \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                ${DATASET_PRED}.regions \
-               gs://cloudasm-encode/chr_regions.txt \
+                ${DATASET_PRED}.regions_${GENOMIC_INTERVAL}bp \
+               gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt \
                chr_region:STRING,region_inf:INT64,region_sup:INT64
 
 
@@ -101,43 +102,41 @@ bq --location=US load \
 #--------------------------------------------------------------------------
 
 # Create genomic regions used to split jobs per chromosome 
-# and per interval. We picked the interval to have less than
-# 100 queries running at the same time (BQ limit)
-INTERVAL="36000000"
+INTERVAL="40000000"
 
 # Prepare TSV file per chromosome (used for many jobs)
-echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split.tsv
+echo -e "SAMPLE\tCHR\tLOWER_B\tUPPER_B" > chr_split.tsv
 
 # Create the windows with $INTERVALS bp in it
-for CHR in `seq 1 22` X Y ; do
-    echo "Processing chromosome" ${CHR}
-    NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
-    INF="1"
-    SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
-    echo -e "${CHR}\t$INF\t$SUP" >> chr_split.tsv # for jobs
-    while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
-        INF=$(( ${SUP} + 1 ))
-        SUP=$(( ${SUP} + $INCREMENT ))
-        echo -e "${CHR}\t$INF\t$SUP" >> chr_split.tsv
+while read SAMPLE ; do 
+    for CHR in `seq 1 22` X Y ; do
+        echo "Processing chromosome" ${CHR} " for sample" ${SAMPLE}
+        NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
+        INF="1"
+        SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
+        echo -e "${SAMPLE}\t${CHR}\t$INF\t$SUP" >> chr_split.tsv # for jobs
+        while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
+            INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
+            INF=$(( ${SUP} + 1 ))
+            SUP=$(( ${SUP} + $INCREMENT ))
+            echo -e "${SAMPLE}\t${CHR}\t$INF\t$SUP" >> chr_split.tsv
 
+        done
     done
-done
+done < sample_id.txt
 
 # Looping over the samples. This step requires manual intervention.
-while read SAMPLE ; do
-    dsub \
-    --project $PROJECT_ID \
-    --zones $ZONE_ID \
-    --image ${DOCKER_GCP} \
-    --logging $LOG \
-    --env SAMPLE="${SAMPLE}" \
-    --env DATASET_PRED="${DATASET_PRED}" \
-    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
-    --script ${SCRIPTS}/cpg_regions.sh \
-    --tasks chr_split.tsv \
-    --wait
-done < sample_id.txt
+dsub \
+--project $PROJECT_ID \
+--zones $ZONE_ID \
+--image ${DOCKER_GCP} \
+--logging $LOG \
+--env DATASET_PRED="${DATASET_PRED}" \
+--env DATASET_CONTEXT="${DATASET_CONTEXT}" \
+--env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+--script ${SCRIPTS}/cpg_regions.sh \
+--tasks chr_split.tsv 1 \
+--wait
 
 
 # Append all files into a single file.
