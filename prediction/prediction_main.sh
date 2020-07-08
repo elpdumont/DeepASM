@@ -135,34 +135,37 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 1 \
+--tasks chr_split.tsv 1-99 \
 --wait
 
+# 2-100, 101-199, 200-298, 202, 299-397, 398-495, 496-593, 594-692, 693-791, 792-890
+# 891-989, 980-1068
 
-# Append all files into a single file.
+# Delete previous tables
 while read SAMPLE ; do
-    echo "Processing sample " ${SAMPLE}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions
-    { read
-    while read CHR LOWER_B UPPER_B ; do 
-        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
-        bq cp --append_table \
-            ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-            ${DATASET_PRED}.${SAMPLE}_cpg_regions
-    done 
-    } < chr_split.tsv
+    echo "Deleting the table for sample " ${SAMPLE}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp
 done < sample_id.txt
+
+# Append to a new table for each sample
+{ read
+while IFS=$'\t' read SAMPLE CHR LOWER_B UPPER_B ; do 
+    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
+    bq cp --append_table \
+        ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+        ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp
+done 
+} < chr_split.tsv
+
+
 
 # Erase intermediary files.
-while read SAMPLE ; do
-    echo "Processing sample " ${SAMPLE}
-    { read
-    while read CHR LOWER_B UPPER_B ; do 
-        echo "Chromosome is " ${CHR} "--" ${LOWER_B} "---" ${UPPER_B}
-        bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B}
-    done 
-    } < chr_split.tsv
-done < sample_id.txt
+{ read
+while read SAMPLE CHR LOWER_B UPPER_B ; do 
+    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B}
+done 
+} < chr_split.tsv
 
 
 
