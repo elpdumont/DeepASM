@@ -46,9 +46,8 @@ while read SAMPLE ; do
     echo -e "${SAMPLE}" >> all_samples.tsv
 done < sample_id.txt
 
-
 #--------------------------------------------------------------------------
-# Split the human genome into 500bp windows.
+# Split the human genome into windows with the same number of basepairs.
 #--------------------------------------------------------------------------
 
 # We enter all the chromosome lengths in base pairs for humans
@@ -92,17 +91,77 @@ bq --location=US load \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                ${DATASET_PRED}.regions_${GENOMIC_INTERVAL}bp \
+                ${DATASET_EPI}.regions_${GENOMIC_INTERVAL}bp \
                gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt \
                chr_region:STRING,region_inf:INT64,region_sup:INT64
 
+
+#--------------------------------------------------------------------------
+# Keep regions that have CpGs (we use hg19 reference genome)
+#--------------------------------------------------------------------------
+
+# Create genomic regions used to split jobs per chromosome 
+INTERVAL="100000000"
+
+# Prepare TSV file per chromosome (used for many jobs)
+echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split_hg19.tsv
+
+for CHR in `seq 1 22` X Y ; do
+        echo "Processing chromosome" ${CHR}
+        NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
+        INF="1"
+        SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
+        echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv # for jobs
+        while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
+            INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
+            INF=$(( ${SUP} + 1 ))
+            SUP=$(( ${SUP} + $INCREMENT ))
+            echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv
+
+        done
+    done
+
+# Launch parallel jobs to establish hg19 regions with CpGs
+dsub \
+--project $PROJECT_ID \
+--zones $ZONE_ID \
+--image ${DOCKER_GCP} \
+--logging $LOG \
+--env DATASET_EPI="${DATASET_EPI}" \
+--env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+--script ${SCRIPTS}/cpg_regions_hg19.sh \
+--tasks chr_split_hg19.tsv \
+--wait
+
+# Concatenate in a single table all hg19 regions with CpGs
+bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
+
+{ read
+while read CHR LOWER_B UPPER_B ; do 
+    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
+    bq cp --append_table \
+        ${DATASET_EPI}.cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+        ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
+done 
+} < chr_split_hg19.tsv
+
+# Delete intermediary tables
+{ read
+while read CHR LOWER_B UPPER_B ; do 
+    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
+    bq rm -f -t ${DATASET_EPI}.cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} 
+done 
+} < chr_split_hg19.tsv
+
+# Results:
+# 3.7M regions (nb of CpGs >=3), 8.9M (nb of CpGs > 0) vs 12.4M (CpG or not)
 
 #--------------------------------------------------------------------------
 # Create CpG regions to be evaluated by DeepASM
 #--------------------------------------------------------------------------
 
 # Create genomic regions used to split jobs per chromosome 
-INTERVAL="40000000"
+INTERVAL="120000000"
 
 # Prepare TSV file per chromosome (used for many jobs)
 echo -e "SAMPLE\tCHR\tLOWER_B\tUPPER_B" > chr_split.tsv
