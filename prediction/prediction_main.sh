@@ -191,14 +191,17 @@ dsub \
 --image ${DOCKER_GCP} \
 --logging $LOG \
 --env DATASET_PRED="${DATASET_PRED}" \
+--env DATASET_EPI="${DATASET_EPI}" \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 1-99 \
+--tasks chr_split.tsv 397-469 \
 --wait
 
-# 2-100, 101-199, 200-298, 202, 299-397, 398-495, 496-593, 594-692, 693-791, 792-890
-# 891-989, 980-1068
+# 2-99, 100-198, 199-297, 298-396, 397-469
+
+# A549 with CpG: 1,422,273,296 BEFORE and 890,725,754 after (60% of CpGs)
+# CD14 with CpGs: 899,966,902
 
 # Delete previous tables
 while read SAMPLE ; do
