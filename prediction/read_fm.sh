@@ -2,13 +2,13 @@
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_read_fm \
+    --destination_table ${DATASET_PRED}.${SAMPLE}_read_fm_${GENOMIC_INTERVAL}bp \
     --replace=true \
     "
     WITH 
         DATASETS_JOINED AS (
             SELECT * 
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions
+            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp
         ),
         READ_FRAC_METHYL AS (
             SELECT 

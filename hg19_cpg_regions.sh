@@ -2,13 +2,13 @@
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_EPI}.cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
+    --destination_table ${DATASET_EPI}.hg19_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
     --replace=true \
     "
     WITH 
         GENOMIC_REGIONS AS (
             SELECT * 
-            FROM ${DATASET_EPI}.regions_${GENOMIC_INTERVAL}bp
+            FROM ${DATASET_EPI}.hg19_regions_${GENOMIC_INTERVAL}bp
             WHERE 
                 chr_region = '${CHR}'
                 AND region_sup <= ${UPPER_B}
@@ -29,12 +29,13 @@ bq query \
         ),
         REGION_CPG_COUNT AS (
             SELECT 
-                chr_region, 
+                chr_region AS chr, 
                 region_inf, 
                 region_sup, 
+                annotate_ref,
                 COUNT(*) AS region_nb_cpg 
             FROM REGION_CPG
-            GROUP BY chr_region, region_inf, region_sup
+            GROUP BY chr_region, region_inf, region_sup, annotate_ref
         )
         SELECT * 
         FROM REGION_CPG_COUNT

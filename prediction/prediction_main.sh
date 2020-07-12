@@ -6,15 +6,6 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 
-# Where the scripts for annotation are located
-ANNOTATE_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/annotation"
-
-# Size of genomic regions:
-GENOMIC_INTERVAL="250"
-
-# Desired window for annotation analysis (needs to be half of INTERVAL)
-EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
-
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
@@ -46,122 +37,13 @@ while read SAMPLE ; do
     echo -e "${SAMPLE}" >> all_samples.tsv
 done < sample_id.txt
 
-#--------------------------------------------------------------------------
-# Split the human genome into windows with the same number of basepairs.
-#--------------------------------------------------------------------------
-
-# We enter all the chromosome lengths in base pairs for humans
-
-echo -e "chr\tlength" > chr_length.txt
-echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
-&& echo -e "4\t191154276" >> chr_length.txt && echo -e "5\t180915260" >> chr_length.txt && echo -e "6\t171115067" >> chr_length.txt \
-&& echo -e "7\t159138663" >> chr_length.txt && echo -e "8\t146364022" >> chr_length.txt && echo -e "9\t141213431" >> chr_length.txt \
-&& echo -e "10\t135534747" >> chr_length.txt && echo -e "11\t135006516" >> chr_length.txt && echo -e "12\t133851895" >> chr_length.txt \
-&& echo -e "13\t115169878" >> chr_length.txt && echo -e "14\t107349540" >> chr_length.txt && echo -e "15\t102531392" >> chr_length.txt \
-&& echo -e "16\t90354753" >> chr_length.txt && echo -e "17\t81195210" >> chr_length.txt && echo -e "18\t78077248" >> chr_length.txt \
-&& echo -e "19\t59128983" >> chr_length.txt && echo -e "20\t63025520" >> chr_length.txt && echo -e "21\t48129895" >> chr_length.txt \
-&& echo -e "22\t51304566" >> chr_length.txt && echo -e "X\t155270560 " >> chr_length.txt && echo -e "Y\t59373566" >> chr_length.txt
-
-
-# Prepare TSV file per chromosome (used for many jobs)
-echo -e "chr\tregion_inf\tregion_sup" > chr_regions.txt
-
-# Create the windows with $GENOMIC_INTERVALS base pairs in it
-for CHR in `seq 1 22` X Y ; do
-    echo "Processing chromosome" ${CHR}
-    NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
-    INF="1"
-    SUP=$(( $NUCLEOTIDES_IN_CHR<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR: $GENOMIC_INTERVAL ))
-    echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt # for jobs
-    while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $GENOMIC_INTERVAL ))
-        INF=$(( ${SUP} + 1 ))
-        SUP=$(( ${SUP} + $INCREMENT ))
-        echo -e "${CHR}\t$INF\t$SUP" >> chr_regions.txt
-
-    done
-done
-
-# Upload the file to a bucket
-gsutil cp chr_regions.txt gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt
-
-# Import the file in BigQuery
-bq --location=US load \
-               --replace=true \
-               --source_format=CSV \
-               --field_delimiter "\t" \
-               --skip_leading_rows 1 \
-                ${DATASET_EPI}.regions_${GENOMIC_INTERVAL}bp \
-               gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt \
-               chr_region:STRING,region_inf:INT64,region_sup:INT64
-
-
-#--------------------------------------------------------------------------
-# Keep regions that have CpGs (we use hg19 reference genome)
-#--------------------------------------------------------------------------
-
-# Create genomic regions used to split jobs per chromosome 
-INTERVAL="100000000"
-
-# Prepare TSV file per chromosome (used for many jobs)
-echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split_hg19.tsv
-
-for CHR in `seq 1 22` X Y ; do
-        echo "Processing chromosome" ${CHR}
-        NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
-        INF="1"
-        SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
-        echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv # for jobs
-        while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-            INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
-            INF=$(( ${SUP} + 1 ))
-            SUP=$(( ${SUP} + $INCREMENT ))
-            echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv
-
-        done
-    done
-
-# Launch parallel jobs to establish hg19 regions with CpGs
-dsub \
---project $PROJECT_ID \
---zones $ZONE_ID \
---image ${DOCKER_GCP} \
---logging $LOG \
---env DATASET_EPI="${DATASET_EPI}" \
---env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
---script ${SCRIPTS}/cpg_regions_hg19.sh \
---tasks chr_split_hg19.tsv \
---wait
-
-# Concatenate in a single table all hg19 regions with CpGs
-bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
-
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
-    bq cp --append_table \
-        ${DATASET_EPI}.cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-        ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
-done 
-} < chr_split_hg19.tsv
-
-# Delete intermediary tables
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
-    bq rm -f -t ${DATASET_EPI}.cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} 
-done 
-} < chr_split_hg19.tsv
-
-# Results:
-# 3.7M regions (nb of CpGs >=3), 8.9M (nb of CpGs > 0) vs 12.4M (CpG or not)
 
 #--------------------------------------------------------------------------
 # Create CpG regions to be evaluated by DeepASM
 #--------------------------------------------------------------------------
 
 # Create genomic regions used to split jobs per chromosome 
-INTERVAL="120000000"
+INTERVAL="100000000"
 
 # Prepare TSV file per chromosome (used for many jobs)
 echo -e "SAMPLE\tCHR\tLOWER_B\tUPPER_B" > chr_split.tsv
@@ -195,13 +77,13 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 397-469 \
+--tasks chr_split.tsv \
 --wait
 
 # 2-99, 100-198, 199-297, 298-396, 397-469
 
 # A549 with CpG: 1,422,273,296 BEFORE and 890,725,754 after (60% of CpGs)
-# CD14 with CpGs: 899,966,902
+# CD14 with CpGs: 899,966,902 and 772,651, 864 after. (85% of all CpGs.)
 
 # Delete previous tables
 while read SAMPLE ; do
@@ -244,6 +126,7 @@ dsub \
     --image ${DOCKER_GCP} \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --script ${SCRIPTS}/cpg_fm.sh \
     --tasks all_samples.tsv \
     --wait
@@ -259,6 +142,7 @@ dsub \
     --image ${DOCKER_GCP} \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --script ${SCRIPTS}/read_fm.sh \
     --tasks all_samples.tsv \
     --wait
@@ -274,6 +158,7 @@ dsub \
     --image ${DOCKER_GCP} \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --script ${SCRIPTS}/combine_read_cpg_fm.sh \
     --tasks all_samples.tsv \
     --wait
@@ -317,7 +202,7 @@ while read SAMPLE ; do
         --use_legacy_sql=false \
         "
         SELECT SUM(nb_cpg_found) 
-        FROM ${DATASET_PRED}.${SAMPLE}_regions
+        FROM ${DATASET_PRED}.${SAMPLE}_regions_${GENOMIC_INTERVAL}bp
         "
 
 done < sample_id.txt
