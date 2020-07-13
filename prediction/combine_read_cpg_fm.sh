@@ -24,6 +24,9 @@ bq query \
             region_sup,
             region_nb_cpg,
             nb_cpg_found,
+            dnase, 
+            encode_ChiP_V2, 
+            tf_motifs,
             cpg,
             read
         FROM CPG_INFO

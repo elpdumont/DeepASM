@@ -15,15 +15,23 @@ bq query \
                 ROUND(SUM(meth)/SUM(cov),3) AS fm,
                 chr,
                 region_inf,
-                region_sup
+                region_sup,
+                region_nb_cpg, 
+                dnase,
+                encode_ChiP_V2,
+                tf_motifs
             FROM DATASETS_JOINED
-            GROUP BY read_id, chr, region_inf, region_sup
+            GROUP BY read_id, chr, region_inf, region_sup, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
         )
         SELECT
             chr,
             region_inf,
             region_sup,
+            region_nb_cpg, 
+            dnase,
+            encode_ChiP_V2,
+            tf_motifs,
             ARRAY_AGG (STRUCT (fm)) AS read
         FROM READ_FRAC_METHYL
-        GROUP BY chr, region_inf, region_sup
+        GROUP BY chr, region_inf, region_sup, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
     "

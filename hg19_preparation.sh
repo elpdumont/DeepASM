@@ -140,7 +140,7 @@ done
 
 # Results:
 # 3.7M regions (nb of CpGs >=3), 8.9M (nb of CpGs > 0) vs 12.4M (CpG or not)
-
+# 28.2M CpGs in hg19, 20.8M CpGs (74%) in 250bp windows with at least 3 CpGs.  
 
 #--------------------------------------------------------------------------
 # DNASE track

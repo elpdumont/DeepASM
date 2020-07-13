@@ -20,23 +20,29 @@ bq query \
                 ROUND(SUM(meth)/SUM(cov),3) AS fm,
                 region_inf,
                 region_sup,
-                region_nb_cpg
+                region_nb_cpg, 
+                dnase,
+                encode_ChiP_V2,
+                tf_motifs
             FROM DATASETS_JOINED
-            GROUP BY chr, pos, region_inf, region_sup, region_nb_cpg
+            GROUP BY chr, pos, region_inf, region_sup, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
         ),
         GROUP_CPG_INFO_BY_REGION AS (
         SELECT
+            chr,
             region_inf,
             region_sup,
-            chr,
             region_nb_cpg,
+            dnase,
+            encode_ChiP_V2,
+            tf_motifs,
             COUNT(*) AS nb_cpg_found,
             ARRAY_AGG(
                 STRUCT(fm, cov, pos)
                 ) AS cpg
         FROM CPG_FRAC_METHYL
         WHERE cov >= 10
-        GROUP BY region_inf, region_sup, chr, region_nb_cpg
+        GROUP BY region_inf, region_sup, chr, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
         )
         SELECT * FROM GROUP_CPG_INFO_BY_REGION
         WHERE nb_cpg_found >= 3

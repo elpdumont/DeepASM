@@ -7,10 +7,17 @@ bq query \
     "
     WITH 
         CPG_REGIONS AS (
-            SELECT * 
-            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
+            SELECT 
+                chr AS chr_region, 
+                region_inf, 
+                region_sup, 
+                region_nb_cpg,
+                dnase,
+                encode_ChiP_V2,
+                tf_motifs
+            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
             WHERE 
-                chr_region = '${CHR}'
+                chr = '${CHR}'
                 AND region_sup <= ${UPPER_B}
                 AND region_inf >= ${LOWER_B}
         ),
@@ -22,7 +29,19 @@ bq query \
                 AND pos <= ${UPPER_B}
                 AND pos >= ${LOWER_B}
         )
-        SELECT * EXCEPT(chr_region) FROM CPG_REGIONS
+        SELECT 
+            chr,
+            region_inf,
+            region_sup,
+            region_nb_cpg,
+            dnase,
+            encode_ChiP_V2,
+            tf_motifs,
+            pos,
+            meth, 
+            cov, 
+            read_id
+        FROM CPG_REGIONS
         INNER JOIN CONTEXT
         ON pos >= region_inf AND pos < region_sup
     "
