@@ -346,7 +346,7 @@ dsub \
     --env EPI_REGION="${EPI_REGION}" \
     --env DATASET="${DATASET_EPI}" \
     --script ${SCRIPTS}/annotation.sh \
-    --tasks chr_split_epi.tsv 101-193 \
+    --tasks chr_split_epi.tsv \
     --wait
 
 # Delete previous files in case

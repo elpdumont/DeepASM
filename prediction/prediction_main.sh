@@ -166,4 +166,68 @@ dsub \
 # Evaluate ASM in every region overlapping a SNP
 #--------------------------------------------------------------------------
 
+# Create a table of regions with CpGs where ASM was calculated (Fisher's test)
+# This creates a row for each (snp id, region) combination with at least 3 CpGs 
+# All CpGs have 10x coverage and were evaluated for ASM
+
+echo -e "--env SAMPLE\t--env CHR" > all_chr.tsv
+
+# Create a file of job parameters for finding SNPs and their reads.
+while read SAMPLE ; do
+    for CHR in `seq 1 22` X Y ; do
+        echo -e "${SAMPLE}\t${CHR}" >> all_chr.tsv
+    done
+done < sample_id.txt
+
+# Launch the jobs in parallele (100 at most at the same time)
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env DATASET_EPI="${DATASET_EPI}" \
+    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --script ${SCRIPTS}/cpg_regions_asm.sh \
+    --tasks all_chr.tsv \
+    --wait
+
+# 100-199, 200 - 289
+
+# Delete previous tables
+while read SAMPLE ; do
+    echo "Deleting the table for sample " ${SAMPLE}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
+done < sample_id.txt
+
+# Append to a new table for each sample
+{ read
+while read SAMPLE CHR ; do 
+    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
+    bq cp --append_table \
+        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp_${CHR} \
+        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
+done 
+} < all_chr.tsv
+
+# Erase intermediary files.
+{ read
+while read SAMPLE CHR ; do 
+    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp_${CHR}
+done 
+} < all_chr.tsv
+
+# Check that all tables have 24 chromosomes
+while read SAMPLE ; do
+    echo "******************************"
+    echo "Sample is" ${SAMPLE}    
+    echo "-----------------------------------"
+    bq query \
+        --use_legacy_sql=false \
+        "
+        SELECT COUNT (DISTINCT chr) FROM
+
+done < sample_id.txt
 
