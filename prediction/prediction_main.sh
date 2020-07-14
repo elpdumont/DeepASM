@@ -30,6 +30,18 @@ REGION_ID="us-central1"
 ZONE_ID="us-central1-b"
 
 #--------------------------------------------------------------------------
+# ASM Variables
+#--------------------------------------------------------------------------
+
+# Minimum number of CpGs we require near a SNP for it to be considered for an ASM region
+CPG_PER_ASM_REGION="3"
+
+# p-value cut-off used in all tests for significance
+P_VALUE="0.05"
+
+
+
+#--------------------------------------------------------------------------
 # Samples to be prepared for prediction
 #--------------------------------------------------------------------------
 
@@ -189,16 +201,18 @@ dsub \
     --env DATASET_EPI="${DATASET_EPI}" \
     --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
     --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --env CPG_PER_ASM_REGION="${CPG_PER_ASM_REGION}" \
+    --env P_VALUE="${P_VALUE}" \
     --script ${SCRIPTS}/cpg_regions_asm.sh \
-    --tasks all_chr.tsv \
+    --tasks all_chr.tsv 10 \
     --wait
 
-# 100-199, 200 - 289
+# 1-99, 100-199, 200 - 289
 
 # Delete previous tables
 while read SAMPLE ; do
     echo "Deleting the table for sample " ${SAMPLE}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm
 done < sample_id.txt
 
 # Append to a new table for each sample
@@ -206,8 +220,8 @@ done < sample_id.txt
 while read SAMPLE CHR ; do 
     echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
     bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp_${CHR} \
-        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
+        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR} \
+        ${DATASET_PRED}.${SAMPLE}_cpg_asm
 done 
 } < all_chr.tsv
 
@@ -215,19 +229,12 @@ done
 { read
 while read SAMPLE CHR ; do 
     echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp_${CHR}
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR}
 done 
 } < all_chr.tsv
 
-# Check that all tables have 24 chromosomes
-while read SAMPLE ; do
-    echo "******************************"
-    echo "Sample is" ${SAMPLE}    
-    echo "-----------------------------------"
-    bq query \
-        --use_legacy_sql=false \
-        "
-        SELECT COUNT (DISTINCT chr) FROM
 
-done < sample_id.txt
 
+for CHR in `seq 1 22` X Y ; do
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR}
+done
