@@ -20,7 +20,7 @@ bq query \
                 snp_id AS snp_id_cpg,
                 allele,
                 read_id 
-            FROM ${DATASET_CLOUDASM}.${SAMPLE}_cpg_read_genotype
+            FROM ${DATASET_CONTEXT}.${SAMPLE}_cpg_read_genotype
         ),
         -- Import all CpGs that are at least 5x covered on each allele and for which we have a fisher p-value
         WELL_COVERED_CPG_ARRAY AS (
@@ -63,13 +63,13 @@ bq query \
         -- Keep the combination of CpG, read_id, allele for which CpGs are at least 5x covered on each allele
             SELECT DISTINCT
                 chr_cpg,
+                region_inf,
+                region_sup,
                 pos_cpg,
                 meth,
                 cov,
                 allele,
                 read_id,
-                region_inf,
-                region_sup,
                 snp_id_asm_region AS snp_id,
                 snp_pos,
                 asm_region_inf,
@@ -106,82 +106,59 @@ bq query \
                 snp_id,
                 snp_pos,
                 chr_cpg,
-                ANY_VALUE(asm_region_inf) AS asm_region_inf,
-                ANY_VALUE(asm_region_sup) AS asm_region_sup,
+                region_inf,
+                region_sup,
                 read_id,
                 allele,
                 ROUND(SAFE_DIVIDE(SUM(meth),SUM(cov)),5) AS methyl_perc,
-                ANY_VALUE(nb_cpg) AS nb_cpg,
-                ANY_VALUE(nb_sig_cpg) AS nb_sig_cpg,
-                ANY_VALUE(pos_sig_cpg) AS pos_sig_cpg,
-                ANY_VALUE(neg_sig_cpg) AS neg_sig_cpg
             FROM QUALIFYING_CPG_WILCOX
-            GROUP BY snp_id, snp_pos, read_id, allele, chr_cpg
+            GROUP BY snp_id, snp_pos, read_id, allele, chr_cpg, region_inf, region_sup
         ),
         SNP_METHYL_ARRAY_REF_WILCOX AS (
             SELECT
                 snp_id,
-                ANY_VALUE(snp_pos) AS snp_pos,
-                ANY_VALUE(chr_cpg) AS chr,
-                ANY_VALUE(asm_region_inf) AS asm_region_inf,
-                ANY_VALUE(asm_region_sup) AS asm_region_sup,
-                ARRAY_AGG(STRUCT(methyl_perc)) AS ref,
-                ANY_VALUE(nb_cpg) AS nb_cpg,
-                ANY_VALUE(nb_sig_cpg) AS nb_sig_cpg,
-                ANY_VALUE(pos_sig_cpg) AS pos_sig_cpg,
-                ANY_VALUE(neg_sig_cpg) AS neg_sig_cpg
+                snp_pos,
+                chr_cpg AS chr,
+                region_inf,
+                region_sup,
+                ARRAY_AGG(STRUCT(methyl_perc)) AS ref
             FROM METHYL_PER_READ_WILCOX
             WHERE allele = 'REF'
-            GROUP BY snp_id
+            GROUP BY snp_id, snp_pos, chr_cpg, region_inf, region_sup
         ),
         SNP_METHYL_ARRAY_ALT_WILCOX AS (
             SELECT
                 snp_id AS snp_id_alt,
+                snp_pos AS snp_pos_alt,
+                chr_cpg AS chr_alt,
+                region_inf AS region_inf_alt,
+                region_sup AS region_sup_alt,
                 ARRAY_AGG(STRUCT(methyl_perc)) AS alt
             FROM METHYL_PER_READ_WILCOX
             WHERE allele = 'ALT'
-            GROUP BY snp_id
+            GROUP BY snp_id_alt, snp_pos_alt, chr_alt, region_inf_alt, region_sup_alt
         ),
         SNP_METHYL_JOIN_WILCOX AS (
             SELECT * FROM SNP_METHYL_ARRAY_REF_WILCOX
             INNER JOIN SNP_METHYL_ARRAY_ALT_WILCOX
-            ON snp_id = snp_id_alt
-        ),
-        SNP_METHYL_EFFECT AS (
-            SELECT
-                snp_id AS snp_id_effect,
-                ROUND(((SELECT AVG(methyl_perc) FROM UNNEST(alt)) - (SELECT AVG(methyl_perc) FROM UNNEST(ref))),3) AS effect
-            FROM SNP_METHYL_JOIN_WILCOX
+            ON snp_id = snp_id_alt AND
+               snp_pos = snp_pos_alt AND
+               chr = chr_alt AND
+               region_inf = region_inf_alt AND
+               region_sup = region_sup_alt
         )
-        SELECT 
+        SELECT
             snp_id,
             snp_pos,
             chr,
-            asm_region_inf,
-            asm_region_sup,
-            effect AS asm_region_effect,
+            region_inf,
+            region_sup,
+            ROUND(((SELECT AVG(methyl_perc) FROM UNNEST(alt)) - (SELECT AVG(methyl_perc) FROM UNNEST(ref))),3) AS asm_region_effect,
             ARRAY_LENGTH(ref) AS ref_reads, 
             ARRAY_LENGTH(alt) AS alt_reads,
             ref, 
-            alt,
-            nb_cpg,
-            nb_sig_cpg,
-            pos_sig_cpg,
-            neg_sig_cpg
-        FROM SNP_METHYL_EFFECT
-        INNER JOIN SNP_METHYL_JOIN_WILCOX
-        ON snp_id = snp_id_effect
-        "
+            alt
+        FROM SNP_METHYL_JOIN_WILCOX
+    "
 
 
-# Delete intermediary files
-bq rm -f -t ${DATASET_ID}.${SAMPLE}_snp_cpg_array
-bq rm -f -t ${DATASET_ID}.${SAMPLE}_cpg_for_asm_region_effect
-bq rm -f -t ${DATASET_ID}.${SAMPLE}_cpg_for_wilcox
-
-# Export file to JSON format in the bucket
-# (nested arrays are not supported in)
-bq extract \
-    --destination_format NEWLINE_DELIMITED_JSON \
-    ${DATASET_ID}.${SAMPLE}_snp_for_asm_region \
-    gs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json

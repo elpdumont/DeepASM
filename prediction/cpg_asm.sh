@@ -14,6 +14,7 @@ bq query \
                 chr AS chr_region, 
                 region_inf, 
                 region_sup, 
+                region_nb_cpg
             FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
             WHERE chr = '${CHR}'
         ),
@@ -27,6 +28,7 @@ bq query \
                 chr,
                 region_inf,
                 region_sup,
+                region_nb_cpg,
                 pos, 
                 snp_id, 
                 snp_pos,
@@ -37,13 +39,14 @@ bq query \
                 fisher_pvalue
             FROM CPG_REGIONS
             INNER JOIN CONTEXT_ASM
-            ON pos >= region_inf AND pos < region_sup
+            ON pos >= region_inf AND pos <= region_sup
         ),
         GROUP_BY_SNPID AS (
             SELECT
                 chr,
                 region_inf,
                 region_sup,
+                region_nb_cpg,
                 snp_id,
                 snp_pos,
                 COUNT(*) AS nb_cpg,
@@ -60,7 +63,7 @@ bq query \
                         ORDER BY pos
                     ) AS cpg_asm
             FROM REGION_CPG_JOINED
-            GROUP BY chr, snp_id, snp_pos, region_inf, region_sup
+            GROUP BY chr, snp_id, snp_pos, region_inf, region_sup, region_nb_cpg
         ),
         GROUP_BY_SNPID_MIN_CPG AS (
         SELECT * 
@@ -71,6 +74,7 @@ bq query \
             chr AS chr_asm_region,
             region_inf,
             region_sup,
+            region_nb_cpg,
             snp_id AS snp_id_asm_region, 
             snp_pos,
             nb_cpg,

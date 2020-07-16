@@ -6,6 +6,9 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 
+# Where CloudASM scripts 
+CLOUDASM_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/CloudASM-encode-for-deepasm"
+
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
@@ -18,11 +21,17 @@ DATASET_PRED="deepasm_june2020"
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
 DATASET_CONTEXT="cloudasm_encode_2019"
 
+# Bucket where to put the txt files for Python analysis
+OUTPUT_B="deepasm"
+
 # Cloud Storage location of the logs
 LOG="gs://cloudasm-encode/logging/deepasm"
 
 # Docker file required to run the scripts
 DOCKER_GCP="google/cloud-sdk:255.0.0"
+
+# Light-weight python Docker image with statistical packages.
+DOCKER_PYTHON="gcr.io/hackensack-tyco/python"
 
 # GCP global variables
 PROJECT_ID="hackensack-tyco"
@@ -39,7 +48,17 @@ CPG_PER_ASM_REGION="3"
 # p-value cut-off used in all tests for significance
 P_VALUE="0.05"
 
+# Benjamin-Hochberg threshold
+BH_THRESHOLD="0.05"
 
+# Effect size required at the ASM region level.
+ASM_REGION_EFFECT="0.2"
+
+# In an ASM region, minimum bumber of CpGs with significant ASM in the same direction
+CPG_SAME_DIRECTION_ASM="3"
+
+# Number of consecutive CpGs with significant ASM in the same direction (among all well-covered CpGs)
+CONSECUTIVE_CPG="2" 
 
 #--------------------------------------------------------------------------
 # Samples to be prepared for prediction
@@ -203,7 +222,7 @@ dsub \
     --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --env CPG_PER_ASM_REGION="${CPG_PER_ASM_REGION}" \
     --env P_VALUE="${P_VALUE}" \
-    --script ${SCRIPTS}/cpg_regions_asm.sh \
+    --script ${SCRIPTS}/cpg_asm.sh \
     --tasks all_chr.tsv 10 \
     --wait
 
@@ -234,7 +253,73 @@ done
 } < all_chr.tsv
 
 
+#### Create a dataset of (region, snp_ip) and arrays of fractional methylation of reads
 
-for CHR in `seq 1 22` X Y ; do
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR}
-done
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
+    --script ${SCRIPTS}/read_asm.sh \
+    --tasks all_samples.tsv \
+    --wait
+
+##### Merge the 2 datasets of CpG array and read array
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env OUTPUT_B="${OUTPUT_B}" \
+    --script ${SCRIPTS}/cpg_read_asm.sh \
+    --tasks all_samples.tsv \
+    --wait
+
+
+###### Calculate Wilcoxon p-value for regions
+
+# Prepare TSV file
+echo -e "--input ASM_REGION\t--output ASM_REGION_PVALUE" > asm_regions.tsv
+
+while read SAMPLE ; do
+    echo -e "gs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json\tgs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json" >> asm_regions.tsv
+done < sample_id.txt
+
+
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --disk-size 100 \
+  --machine-type n1-highmem-4 \
+  --image ${DOCKER_PYTHON} \
+  --logging $LOG \
+  --env P_VALUE="${P_VALUE}" \
+  --env BH_THRESHOLD="${BH_THRESHOLD}" \
+  --script ${CLOUDASM_SCRIPTS}/asm_region.py \
+  --tasks asm_regions.tsv \
+  --wait
+
+
+###### Identify ASM
+
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_ID="${DATASET_PRED}" \
+  --env OUTPUT_B="${OUTPUT_B}" \
+  --env ASM_REGION_EFFECT="${ASM_REGION_EFFECT}" \
+  --env CPG_SAME_DIRECTION_ASM="${CPG_SAME_DIRECTION_ASM}" \
+  --env P_VALUE="${P_VALUE}" \
+  --env CONSECUTIVE_CPG="${CONSECUTIVE_CPG}" \
+  --script ${CLOUDASM_SCRIPTS}/summary.sh \
+  --tasks all_samples.tsv 1 \
+  --wait
+
+
+
