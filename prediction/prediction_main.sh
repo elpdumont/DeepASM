@@ -353,6 +353,40 @@ while read SAMPLE ; do
 done < sample_id.txt
 
 
+######## Format for using in the DeepASM notebook
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
+    --replace=true \
+    "
+    WITH RENAME AS (
+        SELECT asm_snp AS asm_snp_tmp, * EXCEPT(asm_snp)
+        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
+    )
+    SELECT 
+        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
+        * EXCEPT(asm_snp_tmp, read, cpg),
+        (SELECT ARRAY 
+            (SELECT fm FROM UNNEST(read) 
+            )
+        ) AS read_fm,
+        (SELECT ARRAY 
+            (SELECT fm FROM UNNEST(cpg) 
+            )
+        ) AS cpg_fm,
+        (SELECT ARRAY 
+            (SELECT cov FROM UNNEST(cpg) 
+            )
+        ) AS cpg_cov,
+        (SELECT ARRAY 
+            (SELECT pos FROM UNNEST(cpg) ORDER BY pos
+            ) 
+        ) AS cpg_pos 
+    FROM RENAME
+    "
+
+
 #--------------------------------------------------------------------------
 # Key numbers about the number of regions evaluated
 #--------------------------------------------------------------------------
@@ -428,16 +462,3 @@ bq query --use_legacy_sql=false \
     "
 
 
-# Number of distinct regions evaluated across all ENCODE samples
-# 3,521,554
-
-bq query \
-    --use_legacy_sql=false \
-    "
-    WITH DISTINCT_REGIONS AS (
-        SELECT DISTINCT chr, region_inf, region_sup
-        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
-    )
-    SELECT COUNT(*) FROM DISTINCT_REGIONS
-    "
-            
