@@ -223,7 +223,7 @@ dsub \
     --env CPG_PER_ASM_REGION="${CPG_PER_ASM_REGION}" \
     --env P_VALUE="${P_VALUE}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv 10 \
+    --tasks all_chr.tsv 200-289 \
     --wait
 
 # 1-99, 100-199, 200 - 289
@@ -263,7 +263,7 @@ dsub \
     --env DATASET_PRED="${DATASET_PRED}" \
     --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
     --script ${SCRIPTS}/read_asm.sh \
-    --tasks all_samples.tsv \
+    --tasks all_samples.tsv 12 \
     --wait
 
 ##### Merge the 2 datasets of CpG array and read array
@@ -317,9 +317,127 @@ dsub \
   --env CPG_SAME_DIRECTION_ASM="${CPG_SAME_DIRECTION_ASM}" \
   --env P_VALUE="${P_VALUE}" \
   --env CONSECUTIVE_CPG="${CONSECUTIVE_CPG}" \
-  --script ${CLOUDASM_SCRIPTS}/summary.sh \
-  --tasks all_samples.tsv 1 \
+  --script ${SCRIPTS}/summary_asm.sh \
+  --tasks all_samples.tsv \
   --wait
 
 
+#--------------------------------------------------------------------------
+# Prepare files for DeepASM
+#--------------------------------------------------------------------------
 
+
+######## Aggregate ASM information with cpg and read FM, and annotation.
+
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_PRED="${DATASET_PRED}" \
+  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+  --script ${SCRIPTS}/asm_annotation.sh \
+  --tasks all_samples.tsv 2-12 \
+  --wait
+
+
+######## Concatenate all files per sample
+
+bq rm -f -t ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+
+while read SAMPLE ; do 
+    echo "Sample:" ${SAMPLE}
+    bq cp --append_table \
+        ${DATASET_PRED}.${SAMPLE}_cpg_read_asm_${GENOMIC_INTERVAL}bp \
+        ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+done < sample_id.txt
+
+
+#--------------------------------------------------------------------------
+# Key numbers about the number of regions evaluated
+#--------------------------------------------------------------------------
+
+# Number of distinct regions in the ref genome (with 3 CpGs)
+# 3,790,920
+
+bq query --use_legacy_sql=false \
+    "
+    WITH DISTINCT_REGIONS AS (
+        SELECT DISTINCT chr, region_inf, region_sup
+        FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
+    )
+    SELECT COUNT(*) FROM DISTINCT_REGIONS
+    "
+
+# Number of distinct regions evaluated by CLOUDASM across all ENCODE samples
+# 1,419,549 (37% of all regions)
+
+bq query --use_legacy_sql=false \
+    "
+    WITH DISTINCT_REGIONS AS (
+        SELECT DISTINCT chr, region_inf, region_sup
+        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+        WHERE asm_snp IS NOT NULL
+    )
+    SELECT COUNT(*) FROM DISTINCT_REGIONS
+    "
+
+# Number of distinct regions evaluated by CLOUDASM and DEEPASM by sample
+# CloudASM evaluated about 10% of all regions with potential ASM
+bq query --use_legacy_sql=false \
+    "
+    WITH DISTINCT_REGIONS AS (
+        SELECT sample, chr, region_inf, region_sup, asm_snp
+        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+    ),
+    NO_SNP_DS AS (
+        SELECT sample, asm_snp, COUNT(*) AS no_snp 
+        FROM DISTINCT_REGIONS
+        WHERE asm_snp IS NULL
+        GROUP BY sample, asm_snp
+    ),
+    ASM_DS AS (
+        SELECT sample, asm_snp, COUNT(*) AS asm
+        FROM DISTINCT_REGIONS
+        WHERE asm_snp = true
+        GROUP BY sample, asm_snp
+    ),
+    NO_ASM_DS AS (
+        SELECT sample, asm_snp, COUNT(*) AS no_asm
+        FROM DISTINCT_REGIONS
+        WHERE asm_snp = false
+        GROUP BY sample, asm_snp
+    ),
+    ALL_JOIN AS (
+        SELECT
+            t1.sample,
+            t1.no_snp,
+            t2.asm,
+            t3.no_asm
+        FROM NO_SNP_DS t1
+        INNER JOIN ASM_DS t2
+        ON t1.sample = t2.sample
+        INNER JOIN NO_ASM_DS t3
+        ON t1.sample = t3.sample
+    )
+    SELECT 
+        *, 
+        ROUND(100*asm/(asm+no_asm),3) AS asm_perc, 
+        ROUND(100*(asm+no_asm)/(asm+no_asm+no_snp)) AS cloudasm_cov 
+    FROM ALL_JOIN
+    "
+
+
+# Number of distinct regions evaluated across all ENCODE samples
+# 3,521,554
+
+bq query \
+    --use_legacy_sql=false \
+    "
+    WITH DISTINCT_REGIONS AS (
+        SELECT DISTINCT chr, region_inf, region_sup
+        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+    )
+    SELECT COUNT(*) FROM DISTINCT_REGIONS
+    "
+            
