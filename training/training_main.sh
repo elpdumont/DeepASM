@@ -9,7 +9,7 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/training"
 
 # Where CloudASM scripts 
 CLOUDASM_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/CloudASM-encode-for-deepasm"

@@ -6,9 +6,6 @@
 # Where scripts are located
 SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
 
-# Where CloudASM scripts 
-CLOUDASM_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/CloudASM-encode-for-deepasm"
-
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
@@ -16,10 +13,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_june2020"
+DATASET_PRED="tcells_2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019"
+DATASET_CONTEXT="tcells_2020"
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
