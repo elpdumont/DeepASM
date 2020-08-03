@@ -9,7 +9,7 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/training"
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/asm_annotation"
 
 # Where CloudASM scripts 
 CLOUDASM_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/CloudASM-encode-for-deepasm"
@@ -210,7 +210,7 @@ dsub \
   --logging $LOG \
   --env DATASET_PRED="${DATASET_PRED}" \
   --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-  --script ${SCRIPTS}/asm_annotation.sh \
+  --script ${SCRIPTS}/summary.sh \
   --tasks all_samples.tsv \
   --wait
 

@@ -4,7 +4,7 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/prediction"
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/sample_preparation"
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
