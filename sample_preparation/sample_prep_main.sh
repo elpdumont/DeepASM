@@ -13,10 +13,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020"
+DATASET_PRED="tcells_2020" # For ENCODE: "deepasm_june2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020"
+DATASET_CONTEXT="tcells_2020" # For ENCODE: "cloudasm_encode_2019"
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -51,6 +51,17 @@ done < sample_id.txt
 #--------------------------------------------------------------------------
 # Create CpG regions to be evaluated by DeepASM
 #--------------------------------------------------------------------------
+
+# Number of nucleotides in each chromosome
+echo -e "chr\tlength" > chr_length.txt
+echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
+&& echo -e "4\t191154276" >> chr_length.txt && echo -e "5\t180915260" >> chr_length.txt && echo -e "6\t171115067" >> chr_length.txt \
+&& echo -e "7\t159138663" >> chr_length.txt && echo -e "8\t146364022" >> chr_length.txt && echo -e "9\t141213431" >> chr_length.txt \
+&& echo -e "10\t135534747" >> chr_length.txt && echo -e "11\t135006516" >> chr_length.txt && echo -e "12\t133851895" >> chr_length.txt \
+&& echo -e "13\t115169878" >> chr_length.txt && echo -e "14\t107349540" >> chr_length.txt && echo -e "15\t102531392" >> chr_length.txt \
+&& echo -e "16\t90354753" >> chr_length.txt && echo -e "17\t81195210" >> chr_length.txt && echo -e "18\t78077248" >> chr_length.txt \
+&& echo -e "19\t59128983" >> chr_length.txt && echo -e "20\t63025520" >> chr_length.txt && echo -e "21\t48129895" >> chr_length.txt \
+&& echo -e "22\t51304566" >> chr_length.txt && echo -e "X\t155270560 " >> chr_length.txt && echo -e "Y\t59373566" >> chr_length.txt
 
 # Create genomic regions used to split jobs per chromosome 
 INTERVAL="82000000"
@@ -90,7 +101,6 @@ dsub \
 --tasks chr_split.tsv \
 --wait
 
-# 1-99, 100-198, 199-297, 298-396, 397-496, 497-577
 
 # Delete previous tables
 while read SAMPLE ; do
@@ -174,26 +184,40 @@ dsub \
 #--------------------------------------------------------------------------
 
 # If running the ENCODE samples for training and validating the model,
-# move on the to the training/training_man.sh script and do not 
+# move on the to the asm_annotation/asm_main.sh script and do not 
 # execute the commands below.
+
+
+######## Add sample name as a column
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --script ${SCRIPTS}/summary.sh \
+    --tasks all_samples.tsv \
+    --wait
 
 
 ######## Concatenate all files per sample
 
-bq rm -f -t ${DATASET_PRED}.tcells_${GENOMIC_INTERVAL}bp
+bq rm -f -t ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp
 
 while read SAMPLE ; do 
     echo "Sample:" ${SAMPLE}
     bq cp --append_table \
         ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp \
-        ${DATASET_PRED}.tcells_${GENOMIC_INTERVAL}bp
+        ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp
 done < sample_id.txt
 
 ######## Extract the different arrays from structures.
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.tcells_${GENOMIC_INTERVAL}bp_for_notebook \
+    --destination_table ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp_for_notebook \
     --replace=true \
     "
     SELECT 
@@ -215,7 +239,7 @@ bq query \
             (SELECT pos FROM UNNEST(cpg) ORDER BY pos
             ) 
         ) AS cpg_pos 
-    FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
+    FROM ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp
     "
 
 
