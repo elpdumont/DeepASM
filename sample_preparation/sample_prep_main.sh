@@ -209,7 +209,7 @@ bq rm -f -t ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp
 while read SAMPLE ; do 
     echo "Sample:" ${SAMPLE}
     bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp \
+        ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp_name \
         ${DATASET_PRED}.${DATASET_PRED}_${GENOMIC_INTERVAL}bp
 done < sample_id.txt
 
@@ -221,7 +221,7 @@ bq query \
     --replace=true \
     "
     SELECT 
-        '${SAMPLE}' AS sample,
+        -100 AS asm_snp, 
         * EXCEPT(read, cpg),
         (SELECT ARRAY 
             (SELECT fm FROM UNNEST(read) 
