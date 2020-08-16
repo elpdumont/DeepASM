@@ -41,7 +41,7 @@ bq query \
                 ARRAY(
                     (SELECT pos FROM UNNEST(cpg_asm))
                     ) AS pos_array
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_asm
+            FROM ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
         ),
         WELL_COVERED_CPG AS (
             SELECT chr_asm_region,

@@ -28,7 +28,7 @@ bq query \
         t1.cpg_asm As cpg,
         t2.ref,
         t2.alt
-    FROM ${DATASET_PRED}.${SAMPLE}_cpg_asm t1
+    FROM ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp t1
     JOIN ${DATASET_PRED}.${SAMPLE}_reads_asm t2 
     ON 
         t1.chr_asm_region = t2.chr AND 

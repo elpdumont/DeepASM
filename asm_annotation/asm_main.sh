@@ -3,6 +3,11 @@
 # Here, the instructions to annotate the windows with ASM information
 # for the ENCODE samples
 
+# Requires the following files from CloudASM:
+# - ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
+# - ${DATASET_CONTEXT}.${SAMPLE}_cpg_read_genotype
+
+
 
 #--------------------------------------------------------------------------
 # Variables
@@ -21,10 +26,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_june2020"
+DATASET_PRED="tcells_2020" # "deepasm_june2020" 
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019"
+DATASET_CONTEXT="tcells_2020" # "cloudasm_encode_2019"
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -105,7 +110,7 @@ dsub \
 # Delete previous tables
 while read SAMPLE ; do
     echo "Deleting the table for sample " ${SAMPLE}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm
+    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
 done < sample_id.txt
 
 # Append to a new table for each sample
@@ -114,7 +119,7 @@ while read SAMPLE CHR ; do
     echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
     bq cp --append_table \
         ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR} \
-        ${DATASET_PRED}.${SAMPLE}_cpg_asm
+        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
 done 
 } < all_chr.tsv
 
@@ -136,6 +141,7 @@ dsub \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
     --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --script ${SCRIPTS}/read_asm.sh \
     --tasks all_samples.tsv \
     --wait
@@ -149,6 +155,7 @@ dsub \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
     --env OUTPUT_B="${OUTPUT_B}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --script ${SCRIPTS}/cpg_read_asm.sh \
     --tasks all_samples.tsv \
     --wait
@@ -210,7 +217,7 @@ dsub \
   --logging $LOG \
   --env DATASET_PRED="${DATASET_PRED}" \
   --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-  --script ${SCRIPTS}/summary.sh \
+  --script ${SCRIPTS}/asm_notebook.sh \
   --tasks all_samples.tsv \
   --wait
 
@@ -333,4 +340,46 @@ bq query --use_legacy_sql=false \
         ROUND(100*asm/(asm+no_asm),3) AS asm_perc, 
         ROUND(100*(asm+no_asm)/(asm+no_asm+no_snp)) AS cloudasm_cov 
     FROM ALL_JOIN
+    "
+
+
+
+#--------------------------------------------------------------------------
+# Comparison with ASM found by mQTL (only for T-cells)
+#--------------------------------------------------------------------------
+
+# Table of ASM found by mQTL in T-cells:
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4863666/bin/mmc2.xlsx
+
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_PRED}.tcells_mQTL_CloudASM \
+    --replace=true \
+    "
+    SELECT
+        t1.sample,
+        t1.asm_snp,
+        t2.rank,
+        t2.probe_coor,
+        t2.strongest_snp,
+        t2.dist_cpg_snp,
+        t1.chr,
+        t1.region_inf,
+        t1.region_sup,
+        t1.region_nb_cpg,
+        t1.nb_cpg_found,
+        t1.dnase,
+        t1.encode_ChiP_V2,
+        t1.tf_motifs,
+        t1.read_fm,
+        t1.cpg_fm,
+        t1.cpg_cov,
+        t1.cpg_pos
+    FROM ${DATASET_PRED}.all_samples_250bp_for_notebook t1
+    INNER JOIN ${DATASET_PRED}.tcells_mQTL t2
+    ON 
+        t1.region_inf <= t2.probe_coor AND 
+        t1.region_sup >= t2. probe_coor AND
+        t1.chr = t2.chr
     "

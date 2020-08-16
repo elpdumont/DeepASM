@@ -180,7 +180,7 @@ dsub \
 
 
 #--------------------------------------------------------------------------
-# Format the table for prediction by DeepASM
+# Format the table for prediction by DeepASM (do not run if you run the asm annotation)
 #--------------------------------------------------------------------------
 
 # If running the ENCODE samples for training and validating the model,
