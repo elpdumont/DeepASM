@@ -383,3 +383,28 @@ bq query \
         t1.region_sup >= t2. probe_coor AND
         t1.chr = t2.chr
     "
+
+
+#--------------------------------------------------------------------------
+# Export ASM predictions to BigQuery
+#--------------------------------------------------------------------------
+
+# ENCODE table.
+bq --location=US load \
+               --replace=true \
+               --autodetect \
+               --source_format=CSV \
+               --skip_leading_rows 1 \
+               deepasm_june2020.all_encode_with_pred \
+               gs://deepasm/csv_encode_with_asm_prob.csv 
+
+
+# T-cells
+bq --location=US load \
+               --replace=true \
+               --autodetect \
+               --source_format=CSV \
+               --skip_leading_rows 1 \
+               tcells_2020.all_tcells_with_pred \
+               gs://deepasm/csv_encode_with_asm_prob.csv 
+
