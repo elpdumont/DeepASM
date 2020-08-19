@@ -9,6 +9,7 @@ bq query \
     "
     SELECT
         '${SAMPLE}' AS sample,
+        '${SAMPLE_STATUS}' AS sample_category,
         t1.chr,
         t1.region_inf,
         t1.region_sup,

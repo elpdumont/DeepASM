@@ -26,10 +26,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020" # "deepasm_june2020" 
+DATASET_PRED="deepasm_june2020" # tcells_2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020" # "cloudasm_encode_2019"
+DATASET_CONTEXT="cloudasm_encode_2019" # "tcells_2020" # 
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -210,6 +210,23 @@ dsub \
 
 ######## Aggregate ASM information with cpg and read FM, and annotation.
 
+######## Add information about the sample (whether it was transformed or not)
+
+# Prepare TSV file
+echo -e "--env SAMPLE\t--env SAMPLE_STATUS" > sample_status.tsv
+echo -e "A549\tmodified" >> sample_status.tsv
+echo -e "CD14\tnot_modified" >> sample_status.tsv
+echo -e "CD34\tnot_modified" >> sample_status.tsv
+echo -e "HeLa_S3\tmodified" >> sample_status.tsv
+echo -e "HepG2\tmodified" >> sample_status.tsv
+echo -e "fibroblast\tmodified" >> sample_status.tsv
+echo -e "mammary_epithelial\tnot_modified" >> sample_status.tsv
+echo -e "right_lobe_liver\tnot_modified" >> sample_status.tsv
+echo -e "sk_n_sh\tmodified" >> sample_status.tsv
+echo -e "spleen_female_adult\tnot_modified" >> sample_status.tsv
+echo -e "t_cell_male_adult\tnot_modified" >> sample_status.tsv
+echo -e "gm12878\tmodified" >> sample_status.tsv
+
 dsub \
   --project $PROJECT_ID \
   --zones $ZONE_ID \
@@ -218,7 +235,7 @@ dsub \
   --env DATASET_PRED="${DATASET_PRED}" \
   --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
   --script ${SCRIPTS}/asm_notebook.sh \
-  --tasks all_samples.tsv \
+  --tasks sample_status.tsv \
   --wait
 
 
@@ -345,47 +362,6 @@ bq query --use_legacy_sql=false \
 
 
 #--------------------------------------------------------------------------
-# Comparison with ASM found by mQTL (only for T-cells)
-#--------------------------------------------------------------------------
-
-# Table of ASM found by mQTL in T-cells:
-# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4863666/bin/mmc2.xlsx
-
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.tcells_mQTL_CloudASM \
-    --replace=true \
-    "
-    SELECT
-        t1.sample,
-        t1.asm_snp,
-        t2.rank,
-        t2.probe_coor,
-        t2.strongest_snp,
-        t2.dist_cpg_snp,
-        t1.chr,
-        t1.region_inf,
-        t1.region_sup,
-        t1.region_nb_cpg,
-        t1.nb_cpg_found,
-        t1.dnase,
-        t1.encode_ChiP_V2,
-        t1.tf_motifs,
-        t1.read_fm,
-        t1.cpg_fm,
-        t1.cpg_cov,
-        t1.cpg_pos
-    FROM ${DATASET_PRED}.all_samples_250bp_for_notebook t1
-    INNER JOIN ${DATASET_PRED}.tcells_mQTL t2
-    ON 
-        t1.region_inf <= t2.probe_coor AND 
-        t1.region_sup >= t2. probe_coor AND
-        t1.chr = t2.chr
-    "
-
-
-#--------------------------------------------------------------------------
 # Export ASM predictions to BigQuery
 #--------------------------------------------------------------------------
 
@@ -399,12 +375,239 @@ bq --location=US load \
                gs://deepasm/csv_encode_with_asm_prob.csv 
 
 
-# T-cells
-bq --location=US load \
-               --replace=true \
-               --autodetect \
-               --source_format=CSV \
-               --skip_leading_rows 1 \
-               tcells_2020.all_tcells_with_pred \
-               gs://deepasm/csv_encode_with_asm_prob.csv 
+bq rm -f -t tcells_2020.all_tcells_with_pred
+
+while read SAMPLE ; do 
+    echo "Processing sample" ${SAMPLE}
+    bq --location=US load \
+                --replace=false \
+                --source_format=CSV \
+                --skip_leading_rows 1 \
+                tcells_2020.all_tcells_with_pred \
+                gs://deepasm/csv_${SAMPLE}_with_asm_prob.csv \
+                asm_probability:FLOAT64,asm_snp:INTEGER,sample:STRING,chr:STRING,region_inf:INT64,region_sup:INT64,snp_id:STRING,snp_pos:FLOAT64,region_nb_cpg:INT64,nb_cpg_found:INT64,dnase:INT64,encode_ChiP_V2:INT64,tf_motifs:INT64,read_fm:STRING,cpg_fm:STRING,cpg_cov:STRING,cpg_pos:STRING
+
+
+done < sample_id.txt
+
+
+
+
+#--------------------------------------------------------------------------
+# Comparison with ASM found by DeepASM and CloudASM in the ENCODE t-cell
+#--------------------------------------------------------------------------
+
+# Universe: 365,034
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM deepasm_june2020.all_encode_with_pred
+    WHERE sample = 't_cell_male_adult'
+    "
+
+# False negative: 48,728
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM deepasm_june2020.all_encode_with_pred
+    WHERE asm_probability > 0.5 AND asm_snp = 0 AND sample = 't_cell_male_adult'
+    "
+
+# True positive: 146
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM deepasm_june2020.all_encode_with_pred
+    WHERE asm_probability > 0.5 AND asm_snp = 1 AND sample = 't_cell_male_adult'
+    "
+
+# True negative: 315,129
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM deepasm_june2020.all_encode_with_pred
+    WHERE asm_probability < 0.5 AND asm_snp = 0 AND sample = 't_cell_male_adult'
+    "
+
+# False negative: 1031
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM deepasm_june2020.all_encode_with_pred
+    WHERE asm_probability < 0.5 AND asm_snp = 1 AND sample = 't_cell_male_adult'
+    "
+
+# Accuracy: (80+202,316)/212,186 = 95%
+# Precision: 80/(80+7407) = 1%
+# Sensibility: 
+# VPN = TN/(T)
+# Recall:
+# AUC: 
+
+#--------------------------------------------------------------------------
+# Comparison with ASM found by DeepASM and CloudASM in the 3 T-cells
+#--------------------------------------------------------------------------
+
+# Universe: 212,186
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.all_tcells_with_pred
+    WHERE asm_snp > -1
+    "
+
+# False negative: 7,407
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.all_tcells_with_pred
+    WHERE asm_probability > 0.5 AND asm_snp = 0
+    "
+
+# True positive: 80
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.all_tcells_with_pred
+    WHERE asm_probability > 0.5 AND asm_snp = 1
+    "
+
+# True negative: 202,316
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.all_tcells_with_pred
+    WHERE asm_probability < 0.5 AND asm_snp = 0
+    "
+
+# False negative: 2,383
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.all_tcells_with_pred
+    WHERE asm_probability < 0.5 AND asm_snp = 1
+    "
+
+# Accuracy: (80+202,316)/212,186 = 95%
+# Precision: 80/(80+7407) = 1%
+# Sensibility: 
+# VPN = TN/(T)
+# Recall:
+# AUC: 
+
+
+#--------------------------------------------------------------------------
+# Comparison with ASM found by mQTL (only for T-cells)
+#--------------------------------------------------------------------------
+
+# Table of ASM found by mQTL in T-cells:
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4863666/bin/mmc2.xlsx
+
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_PRED}.tcells_mQTL_DeepASM \
+    --replace=true \
+    "
+    WITH LONG_TABLE AS(
+        SELECT
+            t2.rank,
+            t2.r_square,
+            t2.probe_coor,
+            t2.strongest_snp,
+            t2.dist_cpg_snp,
+            t2.chr,
+            t1.asm_probability,
+            t1.asm_snp,
+            t1.sample,
+            t1.region_inf,
+            t1.region_sup        
+        FROM ${DATASET_PRED}.all_tcells_with_pred t1
+        RIGHT JOIN ${DATASET_PRED}.tcells_mQTL t2
+        ON 
+            t1.region_inf <= t2.probe_coor AND 
+            t1.region_sup >= t2. probe_coor AND
+            t1.chr = t2.chr
+    )
+    SELECT
+        rank,
+        r_square,
+        probe_coor,
+        strongest_snp,
+        dist_cpg_snp,
+        ANY_VALUE(region_inf) AS region_inf,
+        ANY_VALUE(region_sup) AS region_sup,
+        MAX(asm_probability) AS max_asm_probability,
+        MAX(asm_snp) AS cloudasm_asm,
+    FROM LONG_TABLE
+    GROUP BY rank, probe_coor, strongest_snp, dist_cpg_snp, r_square
+    "
+
+# Total number of CpGs evaluated by mQTL and found to have ASM at the single CpG level
+# 1,440
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    "
+
+# Number of regions evaluated by DeepASM 
+# 1,269
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE max_asm_probability IS NOT NULL
+    "
+
+# Number of regions evaluated by CloudASM within DeepASM regions
+# 526 
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm > -1 AND max_asm_probability IS NOT NULL
+    "
+
+# Number of regions evaluated by DeepASM only
+# 743
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE max_asm_probability IS NOT NULL AND cloudasm_asm = -1
+    "
+
+
+# Within these 743, regions with ASM found by DeepASM
+# 64 (8.6%)
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm = -1 AND max_asm_probability > 0.5
+    "
+
+# Number of regions with ASM found by DeepASM within regions evaluated by CloudASM
+# 64/526 (12%)
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm > -1 AND max_asm_probability > 0.5
+    "
+
+# Number of ASM = 1 found by CloudASM 
+# 169 (32% of )
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm = 1 
+    "
+
+
+
+
+
 
