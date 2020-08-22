@@ -259,12 +259,13 @@ bq query \
     --replace=true \
     "
     WITH RENAME AS (
-        SELECT asm_snp AS asm_snp_tmp, * EXCEPT(asm_snp)
+        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, * EXCEPT(asm_snp, sample_category)
         FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
     )
     SELECT 
         IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
-        * EXCEPT(asm_snp_tmp, read, cpg),
+        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
+        * EXCEPT(asm_snp_tmp, read, cpg, sample_c),
         (SELECT ARRAY 
             (SELECT fm FROM UNNEST(read) 
             )
@@ -372,9 +373,10 @@ bq --location=US load \
                --source_format=CSV \
                --skip_leading_rows 1 \
                deepasm_june2020.all_encode_with_pred \
-               gs://deepasm/csv_encode_with_asm_prob.csv 
+               gs://deepasm/encode_asm_prob.csv 
 
 
+# T-cells
 bq rm -f -t tcells_2020.all_tcells_with_pred
 
 while read SAMPLE ; do 
@@ -386,63 +388,94 @@ while read SAMPLE ; do
                 tcells_2020.all_tcells_with_pred \
                 gs://deepasm/csv_${SAMPLE}_with_asm_prob.csv \
                 asm_probability:FLOAT64,asm_snp:INTEGER,sample:STRING,chr:STRING,region_inf:INT64,region_sup:INT64,snp_id:STRING,snp_pos:FLOAT64,region_nb_cpg:INT64,nb_cpg_found:INT64,dnase:INT64,encode_ChiP_V2:INT64,tf_motifs:INT64,read_fm:STRING,cpg_fm:STRING,cpg_cov:STRING,cpg_pos:STRING
-
-
 done < sample_id.txt
 
 
-
-
 #--------------------------------------------------------------------------
-# Comparison with ASM found by DeepASM and CloudASM in the ENCODE t-cell
+# Model evaluation
 #--------------------------------------------------------------------------
 
-# Universe: 365,034
-bq query --use_legacy_sql=false \
+DATASET_ID="deepasm_june2020"
+TABLE="deepasm_june2020.all_encode_with_pred"
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_ID}.model_summary \
+    --replace=true \
     "
-    SELECT COUNT(*)
-    FROM deepasm_june2020.all_encode_with_pred
-    WHERE sample = 't_cell_male_adult'
+    WITH 
+        FALSE_POSITIVE AS (
+            SELECT 
+                sample, 
+                COUNT(*) AS fp
+            FROM ${TABLE}
+            WHERE asm_probability > 0.5 AND asm_snp = 0
+            GROUP BY sample
+        ),
+        FALSE_NEGATIVE AS (
+            SELECT 
+                sample, 
+                COUNT(*) AS fn
+            FROM ${TABLE}
+            WHERE asm_probability < 0.5 AND asm_snp = 1
+            GROUP BY sample
+        ),
+        TRUE_NEGATIVE AS (
+            SELECT 
+                sample, 
+                COUNT(*) AS tn
+            FROM ${TABLE}
+            WHERE asm_probability < 0.5 AND asm_snp = 0
+            GROUP BY sample
+        ),
+        TRUE_POSITIVE AS (
+            SELECT 
+                sample, 
+                COUNT(*) AS tp
+            FROM ${TABLE}
+            WHERE asm_probability > 0.5 AND asm_snp = 1
+            GROUP BY sample
+        ),
+        ASM_PER AS (
+            SELECT 
+                sample, 
+                COUNT(*) AS total_asm
+            FROM ${TABLE}
+            WHERE asm_snp = 1
+            GROUP BY sample
+        ),
+        TOTAL AS (
+            SELECT
+                sample,
+                global_cpg_fm,
+                sample_category,
+                COUNT(*) AS total
+            FROM ${TABLE}
+            GROUP BY sample, global_cpg_fm, sample_category
+        )
+        SELECT 
+            t1.sample, 
+            t1.sample_category,
+            t1.global_cpg_fm,
+            ROUND(100*t7.total_asm/t6.total,3) AS asm_perc,
+            t2.fp,
+            t3.fn,
+            t4.tn,
+            t5.tp,
+            t6.total,
+            ROUND((t5.tp/(t5.tp + t3.fn)),3) AS sensitivity_recall,
+            ROUND((t4.tn/(t2.fp + t4.tn)),3) AS specificity,
+            ROUND(((t4.tn+t5.tp)/(t2.fp + t3.fn + t4.tn + t5.tp)),3) AS accuracy
+        FROM TOTAL t1 
+        INNER JOIN FALSE_POSITIVE t2 ON t1.sample = t2.sample
+        INNER JOIN FALSE_NEGATIVE t3 ON t1.sample = t3.sample
+        INNER JOIN TRUE_NEGATIVE t4 ON t1.sample = t4.sample
+        INNER JOIN TRUE_POSITIVE t5 ON t1.sample = t5.sample
+        INNER JOIN TOTAL t6 ON t1.sample = t6.sample
+        INNER JOIN ASM_PER t7 ON t1.sample = t7.sample
     "
 
-# False negative: 48,728
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM deepasm_june2020.all_encode_with_pred
-    WHERE asm_probability > 0.5 AND asm_snp = 0 AND sample = 't_cell_male_adult'
-    "
 
-# True positive: 146
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM deepasm_june2020.all_encode_with_pred
-    WHERE asm_probability > 0.5 AND asm_snp = 1 AND sample = 't_cell_male_adult'
-    "
-
-# True negative: 315,129
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM deepasm_june2020.all_encode_with_pred
-    WHERE asm_probability < 0.5 AND asm_snp = 0 AND sample = 't_cell_male_adult'
-    "
-
-# False negative: 1031
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM deepasm_june2020.all_encode_with_pred
-    WHERE asm_probability < 0.5 AND asm_snp = 1 AND sample = 't_cell_male_adult'
-    "
-
-# Accuracy: (80+202,316)/212,186 = 95%
-# Precision: 80/(80+7407) = 1%
-# Sensibility: 
-# VPN = TN/(T)
-# Recall:
-# AUC: 
 
 #--------------------------------------------------------------------------
 # Comparison with ASM found by DeepASM and CloudASM in the 3 T-cells

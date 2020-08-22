@@ -7,6 +7,29 @@ bq query \
     --destination_table ${DATASET_PRED}.${SAMPLE}_cpg_read_asm_${GENOMIC_INTERVAL}bp \
     --replace=true \
     "
+    WITH 
+    TOTAL_CPG AS (
+        SELECT 
+            *,
+            (
+                SELECT SUM(nb_cpg_found) 
+                FROM ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp
+            ) AS tot_nb_cpg,
+            (
+                SELECT SUM(fm) 
+                FROM UNNEST(cpg)
+            ) AS tot_region_cpg_fm, 
+        FROM ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp
+    ),
+    TOTAL_FRAC_METHYL AS (
+        SELECT
+            *,
+            (
+            SELECT SUM(tot_region_cpg_fm) 
+            FROM TOTAL_CPG
+        ) AS tot_cpg_fm,
+        FROM TOTAL_CPG
+    )
     SELECT
         '${SAMPLE}' AS sample,
         '${SAMPLE_STATUS}' AS sample_category,
@@ -21,9 +44,10 @@ bq query \
         t1.dnase,
         t1.encode_ChiP_V2,
         t1.tf_motifs,
+        ROUND(tot_cpg_fm/tot_nb_cpg,3) AS global_cpg_fm,
         t1.cpg,
         t1.read
-    FROM ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp t1
+    FROM TOTAL_FRAC_METHYL t1
     LEFT JOIN ${DATASET_PRED}.${SAMPLE}_asm_snp t2
     ON 
         t1.chr = t2.chr AND
