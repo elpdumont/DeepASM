@@ -478,58 +478,6 @@ bq query \
 
 
 #--------------------------------------------------------------------------
-# Comparison with ASM found by DeepASM and CloudASM in the 3 T-cells
-#--------------------------------------------------------------------------
-
-# Universe: 212,186
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.all_tcells_with_pred
-    WHERE asm_snp > -1
-    "
-
-# False negative: 7,407
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.all_tcells_with_pred
-    WHERE asm_probability > 0.5 AND asm_snp = 0
-    "
-
-# True positive: 80
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.all_tcells_with_pred
-    WHERE asm_probability > 0.5 AND asm_snp = 1
-    "
-
-# True negative: 202,316
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.all_tcells_with_pred
-    WHERE asm_probability < 0.5 AND asm_snp = 0
-    "
-
-# False negative: 2,383
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.all_tcells_with_pred
-    WHERE asm_probability < 0.5 AND asm_snp = 1
-    "
-
-# Accuracy: (80+202,316)/212,186 = 95%
-# Precision: 80/(80+7407) = 1%
-# Sensibility: 
-# VPN = TN/(T)
-# Recall:
-# AUC: 
-
-
-#--------------------------------------------------------------------------
 # Comparison with ASM found by mQTL (only for T-cells)
 #--------------------------------------------------------------------------
 
