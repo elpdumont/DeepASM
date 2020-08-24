@@ -26,10 +26,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_june2020" # tcells_2020"
-
+DATASET_PRED="tcells_2020" # "deepasm_june2020"
+ 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019" # "tcells_2020" # 
+DATASET_CONTEXT="tcells_2020" # "cloudasm_encode_2019" 
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -212,7 +212,7 @@ dsub \
 
 ######## Add information about the sample (whether it was transformed or not)
 
-# Prepare TSV file
+# Prepare TSV file for ENCODE samples
 echo -e "--env SAMPLE\t--env SAMPLE_STATUS" > sample_status.tsv
 echo -e "A549\tmodified" >> sample_status.tsv
 echo -e "CD14\tnot_modified" >> sample_status.tsv
@@ -226,6 +226,12 @@ echo -e "sk_n_sh\tmodified" >> sample_status.tsv
 echo -e "spleen_female_adult\tnot_modified" >> sample_status.tsv
 echo -e "t_cell_male_adult\tnot_modified" >> sample_status.tsv
 echo -e "gm12878\tmodified" >> sample_status.tsv
+
+# Prepare TSV file for t-cells samples
+echo -e "--env SAMPLE\t--env SAMPLE_STATUS" > sample_status.tsv
+echo -e "tb10206R\tnot_modified" >> sample_status.tsv
+echo -e "tb6878R\tnot_modified" >> sample_status.tsv
+echo -e "tb6883R\tnot_modified" >> sample_status.tsv
 
 dsub \
   --project $PROJECT_ID \
@@ -376,31 +382,57 @@ bq --location=US load \
                gs://deepasm/encode_asm_prob.csv 
 
 
-# T-cells
-bq rm -f -t tcells_2020.all_tcells_with_pred
+
 
 while read SAMPLE ; do 
     echo "Processing sample" ${SAMPLE}
     bq --location=US load \
                 --replace=false \
+                --autodetect \
                 --source_format=CSV \
                 --skip_leading_rows 1 \
-                tcells_2020.all_tcells_with_pred \
-                gs://deepasm/csv_${SAMPLE}_with_asm_prob.csv \
-                asm_probability:FLOAT64,asm_snp:INTEGER,sample:STRING,chr:STRING,region_inf:INT64,region_sup:INT64,snp_id:STRING,snp_pos:FLOAT64,region_nb_cpg:INT64,nb_cpg_found:INT64,dnase:INT64,encode_ChiP_V2:INT64,tf_motifs:INT64,read_fm:STRING,cpg_fm:STRING,cpg_cov:STRING,cpg_pos:STRING
+                tcells_2020.all_tcells_with_pred_encode_model \
+                gs://deepasm/${SAMPLE}_asm_prob_encode_model.csv 
 done < sample_id.txt
+
+#                asm_probability:FLOAT64,asm_snp:INTEGER,sample:STRING,chr:STRING,region_inf:INT64,region_sup:INT64,snp_id:STRING,snp_pos:FLOAT64,region_nb_cpg:INT64,nb_cpg_found:INT64,dnase:INT64,encode_ChiP_V2:INT64,tf_motifs:INT64,read_fm:STRING,cpg_fm:STRING,cpg_cov:STRING,cpg_pos:STRING
+
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    tcells_2020.tb10206R_chr15_cloudasm_regions_encode_model \
+    gs://deepasm/tb10206R_chr15_cloudasm_regions_encode_model.csv 
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    tcells_2020.tb10206R_allchr_cloudasm_regions_encode_model \
+    gs://deepasm/tb10206R_allchr_cloudasm_regions_encode_model.csv 
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    tcells_2020.tb10206R_allchr_cloudasm_regions_encode_model_2 \
+    gs://deepasm/tb10206R_allchr_cloudasm_regions_encode_model_2.csv 
 
 
 #--------------------------------------------------------------------------
 # Model evaluation
 #--------------------------------------------------------------------------
 
-DATASET_ID="deepasm_june2020"
-TABLE="deepasm_june2020.all_encode_with_pred"
+DATASET_ID="tcells_2020" # "deepasm_june2020"
+TABLE="tcells_2020.tb10206R_allchr_cloudasm_regions_encode_model" # "deepasm_june2020.all_encode_with_pred"
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_ID}.model_summary \
+    --destination_table ${DATASET_ID}.tb10206R_model_summary \
     --replace=true \
     "
     WITH 
@@ -451,6 +483,7 @@ bq query \
                 sample_category,
                 COUNT(*) AS total
             FROM ${TABLE}
+            WHERE asm_snp > -1
             GROUP BY sample, global_cpg_fm, sample_category
         )
         SELECT 

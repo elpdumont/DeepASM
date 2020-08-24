@@ -5,7 +5,7 @@
 # Variables
 #--------------------------------------------------------------------------
 
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM"
+SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/hg19_preparation"
 
 # Dataset where the ref genome and the epigenetic signals will be located
 DATASET_EPI="hg19"
@@ -19,6 +19,9 @@ EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
 # Cloud Storage location of the logs
 LOG="gs://cloudasm-encode/logging/deepasm"
 
+# Storage bucket for hg19-related files.
+BUCKET="cloudasm-encode"
+
 # Docker file required to run the scripts
 DOCKER_GCP="google/cloud-sdk:255.0.0"
 
@@ -26,6 +29,23 @@ DOCKER_GCP="google/cloud-sdk:255.0.0"
 PROJECT_ID="hackensack-tyco"
 REGION_ID="us-central1"
 ZONE_ID="us-central1-b"
+
+
+#--------------------------------------------------------------------------
+# Upload a file of the CpG positions in the reference genome
+#--------------------------------------------------------------------------
+
+# Provided by Tycko lab @ gs://ref_genomes/grc37/hg19_CpG_pos.bed
+
+# Transfer the CpG positions to the dataset
+bq --location=US load \
+               --replace=true \
+               --source_format=CSV \
+               --field_delimiter "\t" \
+               --skip_leading_rows 1 \
+                ${DATASET_EPI}.hg19_CpG_pos \
+               gs://ref_genomes/grc37/hg19_CpG_pos.bed \
+               chr_region:STRING,region_inf:INT64,region_sup:INT64
 
 
 #--------------------------------------------------------------------------
@@ -67,7 +87,7 @@ for CHR in `seq 1 22` X Y ; do
 done
 
 # Upload the file to a bucket
-gsutil cp chr_regions.txt gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt
+gsutil cp chr_regions.txt gs://${BUCKET}/chr_regions_${GENOMIC_INTERVAL}bp.txt
 
 # Import the file in BigQuery
 bq --location=US load \
@@ -76,7 +96,7 @@ bq --location=US load \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
                 ${DATASET_EPI}.hg19_regions_${GENOMIC_INTERVAL}bp \
-               gs://cloudasm-encode/chr_regions_${GENOMIC_INTERVAL}bp.txt \
+               gs://${BUCKET}/chr_regions_${GENOMIC_INTERVAL}bp.txt \
                chr_region:STRING,region_inf:INT64,region_sup:INT64,annotate_ref:INT64
 
 
@@ -138,9 +158,55 @@ done
 } < chr_split_hg19.tsv
 
 
-# Results:
+#--------------------------------------------------------------------------
+# Number of CpGs in the 250bp windows.
+#--------------------------------------------------------------------------
+
 # 3.7M regions (nb of CpGs >=3), 8.9M (nb of CpGs > 0) vs 12.4M (CpG or not)
 # 28.2M CpGs in hg19, 20.8M CpGs (74%) in 250bp windows with at least 3 CpGs.  
+
+
+#--------------------------------------------------------------------------
+# Remove ENCODE's blacklisted regions 
+#--------------------------------------------------------------------------
+
+# Link to the bedgraph of the regions:
+
+# https://www.encodeproject.org/files/ENCFF001TDO/@@download/ENCFF001TDO.bed.gz
+
+# Unzip the file
+gunzip ENCFF001TDO.bed.gz
+
+# Do a bash command to remove "chr":
+sed -i 's|chr||g' ENCFF001TDO.bed
+
+# Upload to bucket
+gsutil cp ENCFF001TDO.bed gs://${BUCKET}/encode_blacklist.txt
+
+# Transfer to BigQuery
+bq --location=US load \
+    --replace=true \
+    --source_format=CSV \
+    --field_delimiter "\t" \
+    --skip_leading_rows 1 \
+    ${DATASET_EPI}.encode_blacklist \
+    gs://${BUCKET}/encode_blacklist.txt \
+    chr:STRING,chr_start:INT64,chr_end:INT64,reason:STRING,name1:STRING,name2:STRING
+
+# Remove the genomic regions overlapping with ENCODE's blacklist
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean \
+    --replace=true \
+    "
+    SELECT 
+        chr AS signal_chr, 
+        chr_start AS signal_start, 
+        chr_end AS signal_end, 
+        score
+    FROM ${DATASET_EPI}.dnase_raw
+    "
+
 
 #--------------------------------------------------------------------------
 # DNASE track
@@ -154,7 +220,7 @@ done
 sed -i 's|chr||g' dnase.txt
 
 # Upload to bucket
-gsutil cp dnase.txt gs://${CLOUDASM_BUCKET}/dnase.txt
+gsutil cp dnase.txt gs://${BUCKET}/dnase.txt
 
 # Push DNASe track to BigQuery
 bq --location=US load \
@@ -163,7 +229,7 @@ bq --location=US load \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
     ${DATASET_EPI}.dnase_raw \
-    gs://${CLOUDASM_BUCKET}/dnase.txt \
+    gs://${BUCKET}/dnase.txt \
     bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:INT64,score:INT64,source_count:FLOAT,source_id:STRING,source_score:STRING
 
 # Clean the database
@@ -193,7 +259,7 @@ bq query \
 sed -i 's|chr||g' encode_ChiP_V2.txt
 
 # Upload to bucket
-gsutil cp encode_ChiP_V2.txt gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt
+gsutil cp encode_ChiP_V2.txt gs://${BUCKET}/encode_ChiP_V2.txt
 
 # Transfer to BigQuery
 bq --location=US load \
@@ -202,7 +268,7 @@ bq --location=US load \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
     ${DATASET_EPI}.encode_ChiP_V2_raw \
-    gs://${CLOUDASM_BUCKET}/encode_ChiP_V2.txt \
+    gs://${BUCKET}/encode_ChiP_V2.txt \
     bin:INT64,chr:STRING,chr_start:INT64,chr_end:INT64,name:STRING,score:INT64,strand:STRING,thick_start:INT64,thick_end:INT64,reserved:INT64,block_count:INT64,block_size:INT64,chrom_start:INT64,exp_count:INT64,exp_id:STRING,exp_score:STRING
 
 
@@ -231,7 +297,7 @@ bq query \
 # Save the XLS file into a txt file.
 
 # Motifs known to correlate with ASM (from bioRiv publication)
-gsutil cp asm_motifs.txt gs://${CLOUDASM_BUCKET}/asm_motifs.txt
+gsutil cp asm_motifs.txt gs://${BUCKET}/asm_motifs.txt
 
 
 # Upload known ASM motifs to BigQuery
@@ -241,7 +307,7 @@ bq --location=US load \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
     ${DATASET_EPI}.asm_motifs_raw \
-    gs://${CLOUDASM_BUCKET}/asm_motifs.txt \
+    gs://${BUCKET}/asm_motifs.txt \
     motif:STRING,n_tot:INT64,n_asm:INT64,n_no_asm:INT64,odds_ratio:FLOAT,p_value:FLOAT,fdr:FLOAT
 
 # We keep the motifs where the OR > 1
@@ -267,7 +333,7 @@ mv kherad_tf_sorted.bed kherad_tf_sorted.txt
 sed -i 's|chr||g' kherad_tf_sorted.txt
 
 # Upload database to bucket
-gsutil cp kherad_tf_sorted.txt gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt
+gsutil cp kherad_tf_sorted.txt gs://${BUCKET}/kherad_tf_sorted.txt
 
 # Transfer bucket -> BigQuery
 bq --location=US load \
@@ -276,7 +342,7 @@ bq --location=US load \
     --field_delimiter "\t" \
     --skip_leading_rows 0 \
     ${DATASET_EPI}.kherad_tf_sorted \
-    gs://${CLOUDASM_BUCKET}/kherad_tf_sorted.txt \
+    gs://${BUCKET}/kherad_tf_sorted.txt \
     chr:STRING,chr_start:INT64,chr_end:INT64,motif:STRING
 
 # Keep the motifs known to correlate with ASM
