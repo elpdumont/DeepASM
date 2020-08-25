@@ -15,7 +15,7 @@ bq query \
                 dnase,
                 encode_ChiP_V2,
                 tf_motifs
-            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
+            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean_annotated
             WHERE 
                 chr = '${CHR}'
                 AND region_sup <= ${UPPER_B}

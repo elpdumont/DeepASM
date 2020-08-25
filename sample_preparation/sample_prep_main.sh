@@ -13,10 +13,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020" # For ENCODE: "deepasm_june2020"
+DATASET_PRED="deepasm_june2020" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020" # For ENCODE: "cloudasm_encode_2019"
+DATASET_CONTEXT="cloudasm_encode_2019" # For T-cells: "tcells_2020" # For ENCODE: "cloudasm_encode_2019"
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
