@@ -440,10 +440,11 @@ dsub \
     --tasks chr_split_epi.tsv \
     --wait
 
+
 # Delete previous files in case
 for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     echo "epi signal: " ${EPI_SIGNAL}
-    bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_250bp_${EPI_SIGNAL}_all
+    bq rm -f -t ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL}_all
 done
 
 # Concatenate files
@@ -466,10 +467,8 @@ done
 } < chr_split_epi.tsv
 
 
-
 # Gather all scores in a single array per region. This creates as many tables as there
 # are epigenetic signals for annotation.
-SAMPLE="hg19_cpg_regions_250bp"
 for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     echo "Processing the signal " ${EPI_SIGNAL}
     bq query \
