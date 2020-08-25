@@ -196,17 +196,42 @@ bq --location=US load \
 # Remove the genomic regions overlapping with ENCODE's blacklist
 bq query \
     --use_legacy_sql=false \
+    --destination_table ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_black_regions \
+    --replace=true \
+    "
+    SELECT DISTINCT
+        t1.chr AS chr,
+        t2.chr AS chr_black,
+        t1.region_inf,
+        t1.region_sup,
+        t1.annotate_ref,
+        t1.region_nb_cpg
+    FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp t1
+    INNER JOIN ${DATASET_EPI}.encode_blacklist t2
+    ON t1.chr = t2.chr AND 
+       ((chr_start >= t1.region_inf AND chr_start <= t1.region_sup) OR
+        (chr_end >= t1.region_inf AND chr_end <= t1.region_sup))
+    "
+
+bq query \
+    --use_legacy_sql=false \
     --destination_table ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean \
     --replace=true \
     "
-    SELECT 
-        chr AS signal_chr, 
-        chr_start AS signal_start, 
-        chr_end AS signal_end, 
-        score
-    FROM ${DATASET_EPI}.dnase_raw
+    WITH ALL_DATA AS (
+        SELECT 
+            t1.chr AS chr,
+            t2.chr AS chr_black,
+            t1.region_inf,
+            t1.region_sup,
+            t1.annotate_ref,
+            t1.region_nb_cpg
+        FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp t1
+        LEFT JOIN ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_black_regions t2
+        ON t1.region_inf = t2.region_inf AND t1.region_sup = t2.region_sup AND t1.chr = t2.chr
+        )
+    SELECT chr, region_inf, region_sup, annotate_ref, region_nb_cpg FROM ALL_DATA WHERE chr_black IS NULL
     "
-
 
 #--------------------------------------------------------------------------
 # DNASE track
@@ -377,7 +402,7 @@ bq query \
 # To use this script, you need to use a table where the chr is 'chr' and 
 # the middle of the region as 'annotate_ref'
 
-SAMPLE="hg19_cpg_regions_250bp"
+SAMPLE="hg19_cpg_regions_250bp_clean"
 
 # Create genomic regions used to split jobs per chromosome 
 INTERVAL="60000000"
