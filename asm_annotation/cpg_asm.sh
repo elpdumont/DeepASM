@@ -15,13 +15,13 @@ bq query \
                 region_inf, 
                 region_sup, 
                 region_nb_cpg
-            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
+            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean_annotated
             WHERE chr = '${CHR}'
         ),
         CONTEXT_ASM AS (
             SELECT *
             FROM ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
-            WHERE chr = '${CHR}'
+            WHERE chr = '${CHR}' AND (ref_cov + alt_cov < ${MAX_CPG_COV})
         ),
         REGION_CPG_JOINED AS(
             SELECT 

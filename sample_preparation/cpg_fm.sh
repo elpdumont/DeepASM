@@ -6,10 +6,6 @@ bq query \
     --replace=true \
     "
     WITH 
-        DATASETS_JOINED AS (
-            SELECT * 
-            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp
-        ),
         CPG_FRAC_METHYL AS (
         -- Creates a list of all CpG sites with their respective fractional
         -- methylation and their CpG region
@@ -24,10 +20,9 @@ bq query \
                 dnase,
                 encode_ChiP_V2,
                 tf_motifs
-            FROM DATASETS_JOINED
+            FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp_clean
             GROUP BY chr, pos, region_inf, region_sup, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
-        ),
-        GROUP_CPG_INFO_BY_REGION AS (
+        )
         SELECT
             chr,
             region_inf,
@@ -41,9 +36,5 @@ bq query \
                 STRUCT(fm, cov, pos)
                 ) AS cpg
         FROM CPG_FRAC_METHYL
-        WHERE cov >= 10
         GROUP BY region_inf, region_sup, chr, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
-        )
-        SELECT * FROM GROUP_CPG_INFO_BY_REGION
-        WHERE nb_cpg_found >= 3
         "

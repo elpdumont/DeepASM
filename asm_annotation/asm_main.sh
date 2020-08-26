@@ -26,10 +26,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020" # "deepasm_june2020"
+DATASET_PRED="deepasm_june2020" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
  
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020" # "cloudasm_encode_2019" 
+DATASET_CONTEXT="cloudasm_encode_2019" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -55,6 +55,9 @@ ZONE_ID="us-central1-b"
 
 # Minimum number of CpGs we require near a SNP for it to be considered for an ASM region
 CPG_PER_ASM_REGION="3"
+
+# Max CpG coverage (to get rid off abherent regions with dozens of thousands of reads overlap.)
+MAX_CPG_COV="200"
 
 # p-value cut-off used in all tests for significance
 P_VALUE="0.05"
@@ -101,8 +104,9 @@ dsub \
     --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
     --env CPG_PER_ASM_REGION="${CPG_PER_ASM_REGION}" \
     --env P_VALUE="${P_VALUE}" \
+    --env MAX_CPG_COV="${MAX_CPG_COV}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv \
+    --tasks all_chr.tsv 20 \
     --wait
 
 # 1-99, 100-199, 200 - 289
@@ -303,7 +307,7 @@ bq query --use_legacy_sql=false \
     "
     WITH DISTINCT_REGIONS AS (
         SELECT DISTINCT chr, region_inf, region_sup
-        FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_annotated
+        FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean_annotated
     )
     SELECT COUNT(*) FROM DISTINCT_REGIONS
     "

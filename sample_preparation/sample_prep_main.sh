@@ -12,6 +12,15 @@ DATASET_EPI="hg19"
 # Size of genomic regions:
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
+# Min CpG coverage
+MIN_CPG_COV="10"
+
+# Max CpG coverage (to get rid off abherent regions with dozens of thousands of reads overlap.)
+MAX_CPG_COV="200"
+
+# Min number of CpGs mapped per genomic region
+MIN_NB_CPG="3"
+
 # BQ dataset where the output of CloudASM is located
 DATASET_PRED="deepasm_june2020" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
 
@@ -98,8 +107,16 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv \
+--tasks chr_split.tsv 496-577 \
 --wait
+
+# For ENCODE
+# 1-99.   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-121649-59' --users 'emmanuel' --status '*'
+# 100-198   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-144156-62' --users 'emmanuel' --status '*'
+# 199-297   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-181153-59' --users 'emmanuel' --status '*'
+# 298-396   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-212440-04' --users 'emmanuel' --status '*'
+# 397-495   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-222608-91' --users 'emmanuel' --status '*'
+# 496-577   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200826-080156-50' --users 'emmanuel' --status '*'
 
 
 # Delete previous tables
@@ -118,8 +135,6 @@ while IFS=$'\t' read SAMPLE CHR LOWER_B UPPER_B ; do
 done 
 } < chr_split.tsv
 
-
-
 # Erase intermediary files.
 { read
 while read SAMPLE CHR LOWER_B UPPER_B ; do 
@@ -128,6 +143,26 @@ while read SAMPLE CHR LOWER_B UPPER_B ; do
 done 
 } < chr_split.tsv
 
+
+
+#--------------------------------------------------------------------------
+# Keep the "good" CpGs
+#--------------------------------------------------------------------------
+
+# We create a table where CpGs satisfying both MAX_CPG_COV and MIN_CPG_COV
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --env MIN_CPG_COV="${MIN_CPG_COV}" \
+    --env MAX_CPG_COV="${MAX_CPG_COV}" \
+    --script ${SCRIPTS}/clean_cpg.sh \
+    --tasks all_samples.tsv \
+    --wait
 
 
 #--------------------------------------------------------------------------
@@ -148,6 +183,8 @@ dsub \
     --tasks all_samples.tsv \
     --wait
 
+# ENCODE: 
+
 #--------------------------------------------------------------------------
 # Calculate fractional methylation of each read in each region.
 #--------------------------------------------------------------------------
@@ -167,6 +204,8 @@ dsub \
 # Create a table of regions with fractional methylation of CpGs and reads
 #--------------------------------------------------------------------------
 
+# Request that the region has at least 3 CpGs.
+
 dsub \
     --project $PROJECT_ID \
     --zones $ZONE_ID \
@@ -174,13 +213,14 @@ dsub \
     --logging $LOG \
     --env DATASET_PRED="${DATASET_PRED}" \
     --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --env MIN_NB_CPG="${MIN_NB_CPG}" \
     --script ${SCRIPTS}/combine_read_cpg_fm.sh \
     --tasks all_samples.tsv \
     --wait
 
 
 #--------------------------------------------------------------------------
-# Format the table for prediction by DeepASM (do not run if you run the asm annotation)
+# Format the table for prediction by DeepASM (DO NOT RUN IF YOU DO THE ASM ANNOTATION)
 #--------------------------------------------------------------------------
 
 # If running the ENCODE samples for training and validating the model,
