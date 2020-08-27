@@ -16,6 +16,10 @@ bq query \
                 FROM ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp
             ) AS tot_nb_cpg,
             (
+                SELECT SUM(nb_reads) 
+                FROM ${DATASET_PRED}.${SAMPLE}_cpg_read_${GENOMIC_INTERVAL}bp
+            ) AS tot_nb_reads,
+            (
                 SELECT SUM(fm) 
                 FROM UNNEST(cpg)
             ) AS tot_region_cpg_fm, 
@@ -41,10 +45,13 @@ bq query \
         t2.asm_snp,
         t1.region_nb_cpg,
         t1.nb_cpg_found,
+        t1.nb_reads,
         t1.dnase,
         t1.encode_ChiP_V2,
         t1.tf_motifs,
         ROUND(tot_cpg_fm/tot_nb_cpg,3) AS global_cpg_fm,
+        t1.tot_nb_cpg,
+        t1.tot_nb_reads,
         t1.cpg,
         t1.read
     FROM TOTAL_FRAC_METHYL t1

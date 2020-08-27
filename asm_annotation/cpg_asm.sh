@@ -21,6 +21,7 @@ bq query \
         CONTEXT_ASM AS (
             SELECT *
             FROM ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
+            -- Note: we do not require that there is a min coverage because that was done by CloudASM
             WHERE chr = '${CHR}' AND (ref_cov + alt_cov < ${MAX_CPG_COV})
         ),
         REGION_CPG_JOINED AS(

@@ -106,10 +106,10 @@ dsub \
     --env P_VALUE="${P_VALUE}" \
     --env MAX_CPG_COV="${MAX_CPG_COV}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv 20 \
+    --tasks all_chr.tsv 199-289 \
     --wait
 
-# 1-99, 100-199, 200 - 289
+# 1-99, 100-198, 199-289
 
 # Delete previous tables
 while read SAMPLE ; do
