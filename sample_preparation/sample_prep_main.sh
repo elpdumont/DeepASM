@@ -22,10 +22,10 @@ MAX_CPG_COV="200"
 MIN_NB_CPG="3"
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_june2020" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
+DATASET_PRED="tcells_2020" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019" # For T-cells: "tcells_2020" # For ENCODE: "cloudasm_encode_2019"
+DATASET_CONTEXT="tcells_2020" # For T-cells: "tcells_2020" # For ENCODE: "cloudasm_encode_2019"
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -107,7 +107,7 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 496-577 \
+--tasks chr_split.tsv 1-99 \
 --wait
 
 # For ENCODE
@@ -118,6 +118,9 @@ dsub \
 # 397-495   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-222608-91' --users 'emmanuel' --status '*'
 # 496-577   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200826-080156-50' --users 'emmanuel' --status '*'
 
+# For T-cells
+# 1-99
+# 100-144   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200827-093031-28' --users 'emmanuel' --status '*'
 
 # Delete previous tables
 while read SAMPLE ; do
@@ -183,7 +186,6 @@ dsub \
     --tasks all_samples.tsv \
     --wait
 
-# ENCODE: 
 
 #--------------------------------------------------------------------------
 # Calculate fractional methylation of each read in each region.

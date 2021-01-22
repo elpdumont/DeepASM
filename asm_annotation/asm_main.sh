@@ -26,10 +26,10 @@ DATASET_EPI="hg19"
 GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_june2020" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
+DATASET_PRED="tcells_2020" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
  
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
+DATASET_CONTEXT="tcells_2020" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -106,10 +106,8 @@ dsub \
     --env P_VALUE="${P_VALUE}" \
     --env MAX_CPG_COV="${MAX_CPG_COV}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv 199-289 \
+    --tasks all_chr.tsv 1-99 \
     --wait
-
-# 1-99, 100-198, 199-289
 
 # Delete previous tables
 while read SAMPLE ; do
@@ -427,16 +425,85 @@ bq --location=US load \
     gs://deepasm/tb10206R_allchr_cloudasm_regions_encode_model_2.csv 
 
 
+8/27
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    tcells_2020.tcells_2020_08_26_encode_v3 \
+    gs://deepasm/tcells_2020_08_26_encode_v3.csv 
+
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    deepasm_june2020.encode_2020_08_26_encode_v3 \
+    gs://deepasm/encode_2020_08_26_encode_v3.csv 
+
+bq --location=US load \
+    --replace=true \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    deepasm_june2020.encode_tcell_2020_08_26_encode_v3 \
+    gs://deepasm/encode_tcell_2020_08_26_encode_v3.csv 
+
+
+bq --location=US load \
+    --replace=true \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    deepasm_june2020.encode_tcell_all_regions_2020_08_26_encode_v3 \
+    gs://deepasm/encode_tcell_all_regions_2020_08_26_encode_v3.csv 
+
+
+
+#---------- DONE
+
+DATASET_ID="tcells_2020" # "deepasm_june2020"
+
+bq rm -f -t ${DATASET_ID}.all_regions_2020_08_26_encode_v3
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    ${DATASET_ID}.all_regions_2020_08_26_encode_v3 \
+    gs://deepasm/tb10206R_all_regions_2020_08_26_encode_v3.csv 
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    ${DATASET_ID}.all_regions_2020_08_26_encode_v3 \
+    gs://deepasm/tb6878R_all_regions_2020_08_26_encode_v3.csv 
+
+bq --location=US load \
+    --replace=false \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    ${DATASET_ID}.all_regions_2020_08_26_encode_v3 \
+    gs://deepasm/tb6883R_all_regions_2020_08_26_encode_v3.csv 
+
+
 #--------------------------------------------------------------------------
 # Model evaluation
 #--------------------------------------------------------------------------
 
 DATASET_ID="tcells_2020" # "deepasm_june2020"
-TABLE="tcells_2020.tb10206R_allchr_cloudasm_regions_encode_model" # "deepasm_june2020.all_encode_with_pred"
+TABLE="all_regions_2020_08_26_encode_v3" # "deepasm_june2020.all_encode_with_pred"
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_ID}.tb10206R_model_summary \
+    --destination_table ${DATASET_ID}.${TABLE}_model_summary \
     --replace=true \
     "
     WITH 
@@ -444,7 +511,7 @@ bq query \
             SELECT 
                 sample, 
                 COUNT(*) AS fp
-            FROM ${TABLE}
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_probability > 0.5 AND asm_snp = 0
             GROUP BY sample
         ),
@@ -452,7 +519,7 @@ bq query \
             SELECT 
                 sample, 
                 COUNT(*) AS fn
-            FROM ${TABLE}
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_probability < 0.5 AND asm_snp = 1
             GROUP BY sample
         ),
@@ -460,7 +527,7 @@ bq query \
             SELECT 
                 sample, 
                 COUNT(*) AS tn
-            FROM ${TABLE}
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_probability < 0.5 AND asm_snp = 0
             GROUP BY sample
         ),
@@ -468,7 +535,7 @@ bq query \
             SELECT 
                 sample, 
                 COUNT(*) AS tp
-            FROM ${TABLE}
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_probability > 0.5 AND asm_snp = 1
             GROUP BY sample
         ),
@@ -476,17 +543,17 @@ bq query \
             SELECT 
                 sample, 
                 COUNT(*) AS total_asm
-            FROM ${TABLE}
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_snp = 1
             GROUP BY sample
         ),
-        TOTAL AS (
+        TOTAL_REGIONS AS (
             SELECT
                 sample,
                 global_cpg_fm,
                 sample_category,
-                COUNT(*) AS total
-            FROM ${TABLE}
+                COUNT(*) AS total_regions
+            FROM ${DATASET_ID}.${TABLE}
             WHERE asm_snp > -1
             GROUP BY sample, global_cpg_fm, sample_category
         )
@@ -494,22 +561,22 @@ bq query \
             t1.sample, 
             t1.sample_category,
             t1.global_cpg_fm,
-            ROUND(100*t7.total_asm/t6.total,3) AS asm_perc,
+            ROUND(100*t6.total_asm/t1.total_regions,3) AS asm_perc,
             t2.fp,
             t3.fn,
             t4.tn,
             t5.tp,
-            t6.total,
-            ROUND((t5.tp/(t5.tp + t3.fn)),3) AS sensitivity_recall,
+            t6.total_asm,
+            t1.total_regions,
+            ROUND((t5.tp/(t5.tp + t3.fn)),3) AS sensitivity,
             ROUND((t4.tn/(t2.fp + t4.tn)),3) AS specificity,
             ROUND(((t4.tn+t5.tp)/(t2.fp + t3.fn + t4.tn + t5.tp)),3) AS accuracy
-        FROM TOTAL t1 
+        FROM TOTAL_REGIONS t1 
         INNER JOIN FALSE_POSITIVE t2 ON t1.sample = t2.sample
         INNER JOIN FALSE_NEGATIVE t3 ON t1.sample = t3.sample
         INNER JOIN TRUE_NEGATIVE t4 ON t1.sample = t4.sample
         INNER JOIN TRUE_POSITIVE t5 ON t1.sample = t5.sample
-        INNER JOIN TOTAL t6 ON t1.sample = t6.sample
-        INNER JOIN ASM_PER t7 ON t1.sample = t7.sample
+        INNER JOIN ASM_PER t6 ON t1.sample = t6.sample
     "
 
 
@@ -521,10 +588,23 @@ bq query \
 # Table of ASM found by mQTL in T-cells:
 # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4863666/bin/mmc2.xlsx
 
+# After uploading the file to a bucket:
+bq --location=US load \
+    --replace=true \
+    --autodetect \
+    --source_format=CSV \
+    --skip_leading_rows 1 \
+    tcells_2020.tcells_mQTL \
+    gs://deepasm/mQTL_tcells.csv
 
+
+DATASET_ID="tcells_2020" # "deepasm_june2020"
+TABLE="all_regions_2020_08_26_encode_v3" # "deepasm_june2020.all_encode_with_pred"
+
+# Table with all the mQTL regions and their intersect with DeepASM
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.tcells_mQTL_DeepASM \
+    --destination_table ${DATASET_ID}.tcells_mQTL_DeepASM \
     --replace=true \
     "
     WITH LONG_TABLE AS(
@@ -540,8 +620,8 @@ bq query \
             t1.sample,
             t1.region_inf,
             t1.region_sup        
-        FROM ${DATASET_PRED}.all_tcells_with_pred t1
-        RIGHT JOIN ${DATASET_PRED}.tcells_mQTL t2
+        FROM ${DATASET_ID}.${TABLE} t1
+        RIGHT JOIN ${DATASET_ID}.tcells_mQTL t2
         ON 
             t1.region_inf <= t2.probe_coor AND 
             t1.region_sup >= t2. probe_coor AND
@@ -561,16 +641,40 @@ bq query \
     GROUP BY rank, probe_coor, strongest_snp, dist_cpg_snp, r_square
     "
 
+
+# Metrics to compare mQTL, DeepASM, and CloudASM
+
+
 # Total number of CpGs evaluated by mQTL and found to have ASM at the single CpG level
 # 1,440
 bq query --use_legacy_sql=false \
     "
     SELECT COUNT(*)
-    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    FROM ${DATASET_ID}.tcells_mQTL_DeepASM
     "
 
+#-------- CLOUDASM
+# Number of regions evaluated by CloudASM 
+# 526 (36% of all possible regions with ASM)
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm > -1 
+    "
+
+# Number of ASM found by CloudASM 
+# 169 (32% of all regions evaluated by CloudASM)
+bq query --use_legacy_sql=false \
+    "
+    SELECT COUNT(*)
+    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
+    WHERE cloudasm_asm = 1 
+    "
+
+#-------- DEEPASM
 # Number of regions evaluated by DeepASM 
-# 1,269
+# 1,268 (88%)
 bq query --use_legacy_sql=false \
     "
     SELECT COUNT(*)
@@ -578,17 +682,8 @@ bq query --use_legacy_sql=false \
     WHERE max_asm_probability IS NOT NULL
     "
 
-# Number of regions evaluated by CloudASM within DeepASM regions
-# 526 
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
-    WHERE cloudasm_asm > -1 AND max_asm_probability IS NOT NULL
-    "
-
-# Number of regions evaluated by DeepASM only
-# 743
+# Number of regions evaluated by DeepASM and NOT CloudASM
+# 742 (51%)
 bq query --use_legacy_sql=false \
     "
     SELECT COUNT(*)
@@ -596,9 +691,8 @@ bq query --use_legacy_sql=false \
     WHERE max_asm_probability IS NOT NULL AND cloudasm_asm = -1
     "
 
-
-# Within these 743, regions with ASM found by DeepASM
-# 64 (8.6%)
+# Within these 742, regions with ASM found by DeepASM
+# 301 (40%)
 bq query --use_legacy_sql=false \
     "
     SELECT COUNT(*)
@@ -606,23 +700,6 @@ bq query --use_legacy_sql=false \
     WHERE cloudasm_asm = -1 AND max_asm_probability > 0.5
     "
 
-# Number of regions with ASM found by DeepASM within regions evaluated by CloudASM
-# 64/526 (12%)
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
-    WHERE cloudasm_asm > -1 AND max_asm_probability > 0.5
-    "
-
-# Number of ASM = 1 found by CloudASM 
-# 169 (32% of )
-bq query --use_legacy_sql=false \
-    "
-    SELECT COUNT(*)
-    FROM ${DATASET_PRED}.tcells_mQTL_DeepASM
-    WHERE cloudasm_asm = 1 
-    "
 
 
 
