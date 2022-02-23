@@ -2,6 +2,9 @@
 
 Last update: XXX XX, 2022.
 
+## PRe-requesites
+
+you need to have Python, dsub, and Docker installed on your machine
 
 ## Overview
 

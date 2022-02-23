@@ -1,17 +1,28 @@
 # Here we prepare the ref genome with where at least 3 CpGs are present.
 # Then we annotate the windows with at least 3 CpGs present.
 
+
+#--------------------------------------------------------------------------
+# Python environment for DSUB
+#--------------------------------------------------------------------------
+
+
+python3 -m venv dsub_libs
+source dsub_libs/bin/activate
+
+# Once done type "deactivate"
+
 #--------------------------------------------------------------------------
 # Variables
 #--------------------------------------------------------------------------
 
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/hg19_preparation"
+SCRIPTS="/Users/em/code/DeepASM/hg19_preparation"
 
 # Dataset where the ref genome and the epigenetic signals will be located
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="250"
+GENOMIC_INTERVAL="500" # 250, 500 or 1000
 
 # Desired window for annotation analysis (needs to be half of INTERVAL)
 EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
@@ -136,6 +147,16 @@ dsub \
 --script ${SCRIPTS}/hg19_cpg_regions.sh \
 --tasks chr_split_hg19.tsv \
 --wait
+
+
+dsub \
+    --provider google-v2 \
+    --project $PROJECT_ID \
+    --regions us-central1 \
+    --logging gs://deepasm/logging/ \
+    --output OUT=gs://deepasm/output/out.txt \
+    --command 'echo "Hello World" > "${OUT}"' \
+    --wait
 
 # Concatenate in a single table all hg19 regions with CpGs
 bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp

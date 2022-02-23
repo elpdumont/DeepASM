@@ -6,8 +6,9 @@ bq query \
     --replace=true \
     "
     WITH 
+        -- Select genomic regions within the specificed chromosome and inf/sup limits
         GENOMIC_REGIONS AS (
-            SELECT * 
+            SELECT chr_region, region_inf, region_sup, annotate_ref
             FROM ${DATASET_EPI}.hg19_regions_${GENOMIC_INTERVAL}bp
             WHERE 
                 chr_region = '${CHR}'
@@ -15,18 +16,21 @@ bq query \
                 AND region_inf >= ${LOWER_B}
         ),
         CPG_POS AS (
-            SELECT inf
+            -- Select the CpG coordinates in the table where there is chr, CpG pos (inf), CpG pos (sup)
+            SELECT region_inf
             FROM ${DATASET_EPI}.hg19_CpG_pos
             WHERE 
-                chr = '${CHR}'
-                AND inf <= ${UPPER_B}
-                AND inf >= ${LOWER_B}
+                chr_region = '${CHR}'
+                AND region_inf <= ${UPPER_B}
+                AND region_inf >= ${LOWER_B}
         ),
+        -- Find all the CpG in each genomic region
         REGION_CPG AS (
-            SELECT * EXCEPT(inf) FROM GENOMIC_REGIONS
+            SELECT chr_region, GENOMIC_REGIONS.region_inf, GENOMIC_REGIONS.region_sup, annotate_ref FROM GENOMIC_REGIONS
             INNER JOIN CPG_POS
-            ON inf >= region_inf AND inf < region_sup
+            ON GENOMIC_REGIONS.region_inf <= CPG_POS.region_inf AND CPG_POS.region_inf <= GENOMIC_REGIONS.region_sup
         ),
+        -- Count the number of CpGs in each region
         REGION_CPG_COUNT AS (
             SELECT 
                 chr_region AS chr, 
@@ -37,6 +41,7 @@ bq query \
             FROM REGION_CPG
             GROUP BY chr_region, region_inf, region_sup, annotate_ref
         )
+        -- Keep the regions where there are at least 3 CpGs in the reference genome
         SELECT * 
         FROM REGION_CPG_COUNT
         WHERE region_nb_cpg >= 3
