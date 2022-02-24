@@ -22,7 +22,7 @@ SCRIPTS="/Users/em/code/DeepASM/hg19_preparation"
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="500" # 250, 500 or 1000
+GENOMIC_INTERVAL="1000" # 250, 500 or 1000
 
 # Desired window for annotation analysis (needs to be half of INTERVAL)
 EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
@@ -148,15 +148,6 @@ dsub \
 --tasks chr_split_hg19.tsv \
 --wait
 
-
-dsub \
-    --provider google-v2 \
-    --project $PROJECT_ID \
-    --regions us-central1 \
-    --logging gs://deepasm/logging/ \
-    --output OUT=gs://deepasm/output/out.txt \
-    --command 'echo "Hello World" > "${OUT}"' \
-    --wait
 
 # Concatenate in a single table all hg19 regions with CpGs
 bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
@@ -423,7 +414,7 @@ bq query \
 # To use this script, you need to use a table where the chr is 'chr' and 
 # the middle of the region as 'annotate_ref'
 
-SAMPLE="hg19_cpg_regions_250bp_clean"
+SAMPLE="hg19_cpg_regions_"${GENOMIC_INTERVAL}"bp_clean"
 
 # Create genomic regions used to split jobs per chromosome 
 INTERVAL="60000000"
@@ -448,7 +439,7 @@ for SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     done
 done
 
-# Run the jobs. Only 100 at a time (BQ limit)
+# Run the 192 jobs. Only 100 at a time (BQ limit)
 dsub \
     --project $PROJECT_ID \
     --zones $ZONE_ID \
@@ -458,7 +449,19 @@ dsub \
     --env EPI_REGION="${EPI_REGION}" \
     --env DATASET="${DATASET_EPI}" \
     --script ${SCRIPTS}/annotation.sh \
-    --tasks chr_split_epi.tsv \
+    --tasks chr_split_epi.tsv 1-100 \
+    --wait
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_EPI="${DATASET_EPI}" \
+    --env EPI_REGION="${EPI_REGION}" \
+    --env DATASET="${DATASET_EPI}" \
+    --script ${SCRIPTS}/annotation.sh \
+    --tasks chr_split_epi.tsv 101-192 \
     --wait
 
 
@@ -486,6 +489,9 @@ while read SAMPLE SIGNAL CHR LOWER_B UPPER_B ; do
     bq rm -f -t ${DATASET_EPI}.${SAMPLE}_${SIGNAL}_${CHR}_${LOWER_B}_${UPPER_B} 
 done 
 } < chr_split_epi.tsv
+
+
+SAMPLE="hg19_cpg_regions_"${GENOMIC_INTERVAL}"bp_clean"
 
 
 # Gather all scores in a single array per region. This creates as many tables as there
