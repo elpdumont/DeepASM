@@ -4,13 +4,13 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/sample_preparation"
+SCRIPTS="/Users/ed/code/DeepASM/sample_preparation"
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
+GENOMIC_INTERVAL="500" # must be the same that in hg19_preparation.sh
 
 # Min CpG coverage
 MIN_CPG_COV="10"
@@ -22,13 +22,13 @@ MAX_CPG_COV="200"
 MIN_NB_CPG="3"
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
+DATASET_PRED="deepasm_feb2022" # For t-cells: "tcells_2020" # For ENCODE: "deepasm_june2020"
 
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020" # For T-cells: "tcells_2020" # For ENCODE: "cloudasm_encode_2019"
+DATASET_CONTEXT="cloudasm_encode_2019" # For T-cells: "tcells_2020" # For ENCODE: "cloudasm_encode_2019"
 
 # Bucket where to put the txt files for Python analysis
-OUTPUT_B="deepasm"
+OUTPUT_B="deepasm/"$GENOMIC_INTERVAL"bp"
 
 # Cloud Storage location of the logs
 LOG="gs://cloudasm-encode/logging/deepasm"
@@ -48,6 +48,8 @@ ZONE_ID="us-central1-b"
 #--------------------------------------------------------------------------
 # Samples to be prepared for prediction
 #--------------------------------------------------------------------------
+
+
 
 # Prepare TSV file with just the samples (used for most jobs)
 echo -e "--env SAMPLE" > all_samples.tsv
