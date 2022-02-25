@@ -4,7 +4,7 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/ed/code/DeepASM/sample_preparation"
+SCRIPTS="/Users/em/code/DeepASM/sample_preparation"
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
@@ -46,10 +46,21 @@ ZONE_ID="us-central1-b"
 
 
 #--------------------------------------------------------------------------
-# Samples to be prepared for prediction
+# ENCODE samples to be prepared for prediction
 #--------------------------------------------------------------------------
 
-
+echo -e "A549" > sample_id.txt
+echo -e "CD14" >> sample_id.txt
+echo -e "CD34" >> sample_id.txt
+echo -e "HeLa_S3" >> sample_id.txt
+echo -e "HepG2" >> sample_id.txt
+echo -e "fibroblast" >> sample_id.txt
+echo -e "mammary_epithelial" >> sample_id.txt
+echo -e "right_lobe_liver" >> sample_id.txt
+echo -e "sk_n_sh" >> sample_id.txt
+echo -e "spleen_female_adult" >> sample_id.txt
+echo -e "t_cell_male_adult" >> sample_id.txt
+echo -e "gm12878" >> sample_id.txt
 
 # Prepare TSV file with just the samples (used for most jobs)
 echo -e "--env SAMPLE" > all_samples.tsv
@@ -60,12 +71,12 @@ done < sample_id.txt
 
 
 #--------------------------------------------------------------------------
-# Create CpG regions to be evaluated by DeepASM
+# Annotate individual CpGs (and their read ID) with hg19's regions
 #--------------------------------------------------------------------------
 
 # Number of nucleotides in each chromosome
 echo -e "chr\tlength" > chr_length.txt
-echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
+echo -e "1\t249250621" >> chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
 && echo -e "4\t191154276" >> chr_length.txt && echo -e "5\t180915260" >> chr_length.txt && echo -e "6\t171115067" >> chr_length.txt \
 && echo -e "7\t159138663" >> chr_length.txt && echo -e "8\t146364022" >> chr_length.txt && echo -e "9\t141213431" >> chr_length.txt \
 && echo -e "10\t135534747" >> chr_length.txt && echo -e "11\t135006516" >> chr_length.txt && echo -e "12\t133851895" >> chr_length.txt \
@@ -109,7 +120,7 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 1-99 \
+--tasks chr_split.tsv 100-198 \
 --wait
 
 # For ENCODE

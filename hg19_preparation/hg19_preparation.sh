@@ -490,12 +490,60 @@ while read SAMPLE SIGNAL CHR LOWER_B UPPER_B ; do
 done 
 } < chr_split_epi.tsv
 
+#---------------------------------
 
 SAMPLE="hg19_cpg_regions_"${GENOMIC_INTERVAL}"bp_clean"
 
 
+#--------------------
+# The following code estimates if there is any of the epigenetic marks at all
+# Will label with 0 and 1 each genomic region for each epigenetic mark
+
 # Gather all scores in a single array per region. This creates as many tables as there
 # are epigenetic signals for annotation.
+# for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
+#     echo "Processing the signal " ${EPI_SIGNAL}
+#     bq query \
+#         --use_legacy_sql=false \
+#         --destination_table ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL}_binary \
+#         --replace=true \
+#         "
+#         WITH 
+#             EPI_AGG AS ( -- we group the DNASe scores together
+#                 SELECT 
+#                     * EXCEPT(score),
+#                     ARRAY_AGG(STRUCT(score)) AS epi
+#                 FROM ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL}_all
+#                 GROUP BY 
+#                     chr,
+#                     region_inf,
+#                     region_sup,
+#                     annotate_ref,
+#                     region_nb_cpg
+#             )
+#             SELECT 
+#                 * EXCEPT(epi),
+#                 -- the command below takes care of the case if there is no  score in the array
+#                 IF(
+#                     ARRAY_LENGTH(
+#                         (SELECT ARRAY (
+#                             SELECT score 
+#                             FROM UNNEST(epi) 
+#                             WHERE score IS NOT NULL
+#                             )
+#                         )) > 0, 1, 0
+#                 ) AS ${EPI_SIGNAL}
+#             FROM EPI_AGG
+#         "
+# done
+
+
+#--------------------
+# The following code estimates the number of epigenetic marks per genomic region per epigenetic mark
+# Will label with 0 and 1 each genomic region for each epigenetic mark
+# The table of binary (yes/no) can be created from that table.
+
+
 for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
     echo "Processing the signal " ${EPI_SIGNAL}
     bq query \
@@ -503,36 +551,31 @@ for EPI_SIGNAL in "dnase" "encode_ChiP_V2" "tf_motifs" ; do
         --destination_table ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL} \
         --replace=true \
         "
-        WITH 
-            EPI_AGG AS ( -- we group the DNASe scores together
-                SELECT 
-                    * EXCEPT(score),
-                    ARRAY_AGG(STRUCT(score)) AS epi
-                FROM ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL}_all
-                GROUP BY 
-                    chr,
-                    region_inf,
-                    region_sup,
-                    annotate_ref,
-                    region_nb_cpg
-            )
-            SELECT 
-                * EXCEPT(epi),
-                -- the command below takes care of the case if there is no  score in the array
-                IF(
-                    ARRAY_LENGTH(
-                        (SELECT ARRAY (
-                            SELECT score 
-                            FROM UNNEST(epi) 
-                            WHERE score IS NOT NULL
-                            )
-                        )) > 0, 1, 0
-                ) AS ${EPI_SIGNAL}
-            FROM EPI_AGG
+        SELECT 
+            * EXCEPT(score),
+            COUNT(score) AS ${EPI_SIGNAL}
+        FROM ${DATASET_EPI}.${SAMPLE}_${EPI_SIGNAL}_all
+        GROUP BY 
+            chr,
+            region_inf,
+            region_sup,
+            annotate_ref,
+            region_nb_cpg
         "
 done
 
+## Look at the data
+bq query \
+    --use_legacy_sql=false \
+    "
+    SELECT DISTINCT(dnase) 
+    FROM ${DATASET_EPI}.${SAMPLE}_dnase
+    LIMIT 10
+    "
+
+
 # Merge the tables of epigenetic signals.
+
 bq query \
     --use_legacy_sql=false \
     --destination_table ${DATASET_EPI}.${SAMPLE}_annotated \
