@@ -21,9 +21,10 @@ The final output is a BigQuery table called `hg19_cpg_regions_XXXbp_clean_annota
 
 | Row |	chr	| region_inf | region_sup | region_nb_cpg | dnase | encode_ChiP_V2 | tf_motifs |
 |-----|-----|------------|------------|---------------|-------|----------------|-----------|
-| 1|1|25856001|25857000|31|1|0|1|
-|2|1|156194001|156195000|27|0|0|1|
-|3|1|1470001|1471000|64|1|0|1|
+| 1   |   87804001 |   87805000 |             6 |     3 |              1 |        39 |
+| 1   |  208718001 |  208719000 |             8 |     1 |              1 |        33 |
+| 1   |   38460001 |   38461000 |            15 |     2 |              1 |        25 |
+| 1   |  152634001 |  152635000 |             7 |     0 |              0 |        25 |
 
 
 ## Prepare samples by integrating read fm, cpg fm, and cpg cov into the reference genome's genomic regions
