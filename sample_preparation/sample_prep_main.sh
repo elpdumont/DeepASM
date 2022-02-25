@@ -10,7 +10,7 @@ SCRIPTS="/Users/em/code/DeepASM/sample_preparation"
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="500" # must be the same that in hg19_preparation.sh
+GENOMIC_INTERVAL="1000" # must be the same that in hg19_preparation.sh
 
 # Min CpG coverage
 MIN_CPG_COV="10"
@@ -72,6 +72,7 @@ done < sample_id.txt
 
 #--------------------------------------------------------------------------
 # Annotate individual CpGs (and their read ID) with hg19's regions
+# Longest step in the script
 #--------------------------------------------------------------------------
 
 # Number of nucleotides in each chromosome
@@ -120,7 +121,7 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 100-198 \
+--tasks chr_split.tsv 101-200 \
 --wait
 
 # For ENCODE

@@ -599,3 +599,11 @@ bq query \
     t1.region_inf = t3.region_inf AND 
     t1.region_sup = t3.region_sup
     "
+
+## Look at the data
+bq query \
+    --use_legacy_sql=false \
+    "
+    SELECT DISTINCT(encode_ChiP_V2)
+    FROM ${DATASET_EPI}.${SAMPLE}_annotated
+    "
