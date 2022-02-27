@@ -604,6 +604,7 @@ bq query \
 bq query \
     --use_legacy_sql=false \
     "
-    SELECT DISTINCT(encode_ChiP_V2)
+    SELECT *
     FROM ${DATASET_EPI}.${SAMPLE}_annotated
+    LIMIT 10
     "

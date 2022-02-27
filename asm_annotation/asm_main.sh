@@ -14,22 +14,19 @@
 #--------------------------------------------------------------------------
 
 # Where scripts are located
-SCRIPTS="/Users/emmanuel/GITHUB_REPOS/DeepASM/asm_annotation"
-
-# Where CloudASM scripts 
-CLOUDASM_SCRIPTS="/Users/emmanuel/GITHUB_REPOS/CloudASM-encode-for-deepasm"
+SCRIPTS="/Users/em/code/DeepASM/asm_annotation"
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
+GENOMIC_INTERVAL="1000" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
-DATASET_PRED="tcells_2020" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
+DATASET_PRED="deepasm_feb2022" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
  
 # BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="tcells_2020" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
+DATASET_CONTEXT="cloudasm_encode_2019" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
 
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
@@ -92,7 +89,7 @@ while read SAMPLE ; do
     done
 done < sample_id.txt
 
-# Launch the jobs in parallele (100 at most at the same time)
+# Launch the 288 jobs in parallele (100 at most at the same time)
 dsub \
     --project $PROJECT_ID \
     --zones $ZONE_ID \
@@ -106,7 +103,7 @@ dsub \
     --env P_VALUE="${P_VALUE}" \
     --env MAX_CPG_COV="${MAX_CPG_COV}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv 1-99 \
+    --tasks all_chr.tsv 201-288 \
     --wait
 
 # Delete previous tables
@@ -124,6 +121,17 @@ while read SAMPLE CHR ; do
         ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
 done 
 } < all_chr.tsv
+
+# Check tables
+bq query \
+    --use_legacy_sql=false \
+    "
+    SELECT 
+        TABLE_NAME, 
+        ROUND(TOTAL_ROWS/1000,0) AS thousand_rows 
+    FROM ${DATASET_PRED}.INFORMATION_SCHEMA.PARTITIONS
+    WHERE TABLE_NAME LIKE '%cpg_asm%_${GENOMIC_INTERVAL}bp'
+    "
 
 # Erase intermediary files.
 { read
@@ -169,7 +177,7 @@ dsub \
 echo -e "--input ASM_REGION\t--output ASM_REGION_PVALUE" > asm_regions.tsv
 
 while read SAMPLE ; do
-    echo -e "gs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json\tgs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json" >> asm_regions.tsv
+    echo -e "gs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json\tgs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json" >> asm_regions.tsv
 done < sample_id.txt
 
 
@@ -182,7 +190,7 @@ dsub \
   --logging $LOG \
   --env P_VALUE="${P_VALUE}" \
   --env BH_THRESHOLD="${BH_THRESHOLD}" \
-  --script ${CLOUDASM_SCRIPTS}/asm_region.py \
+  --script ${SCRIPTS}/asm_region.py \
   --tasks asm_regions.tsv \
   --wait
 

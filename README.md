@@ -19,8 +19,8 @@ The first step is to divide the reference genome in genomic sequences of equal l
 
 The final output is a BigQuery table called `hg19_cpg_regions_XXXbp_clean_annotated` where XXX is the length of the genomic region selected for analysis.
 
-| Row |	chr	| region_inf | region_sup | region_nb_cpg | dnase | encode_ChiP_V2 | tf_motifs |
-|-----|-----|------------|------------|---------------|-------|----------------|-----------|
+|chr  | region_inf | region_sup | region_nb_cpg | dnase | encode_ChiP_V2 | tf_motifs |
+|-----|------------|------------|---------------|-------|----------------|-----------|
 | 1   |   87804001 |   87805000 |             6 |     3 |              1 |        39 |
 | 1   |  208718001 |  208719000 |             8 |     1 |              1 |        33 |
 | 1   |   38460001 |   38461000 |            15 |     2 |              1 |        25 |

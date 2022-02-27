@@ -111,6 +111,7 @@ while read SAMPLE ; do
 done < sample_id.txt
 
 # Looping over the samples. This step requires manual intervention.
+# 1 - 576
 dsub \
 --project $PROJECT_ID \
 --zones $ZONE_ID \
@@ -121,20 +122,9 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 101-200 \
+--tasks chr_split.tsv 501-577 \
 --wait
 
-# For ENCODE
-# 1-99.   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-121649-59' --users 'emmanuel' --status '*'
-# 100-198   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-144156-62' --users 'emmanuel' --status '*'
-# 199-297   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-181153-59' --users 'emmanuel' --status '*'
-# 298-396   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-212440-04' --users 'emmanuel' --status '*'
-# 397-495   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200825-222608-91' --users 'emmanuel' --status '*'
-# 496-577   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200826-080156-50' --users 'emmanuel' --status '*'
-
-# For T-cells
-# 1-99
-# 100-144   dstat --provider google-v2 --project hackensack-tyco --jobs 'cpg-region--emmanuel--200827-093031-28' --users 'emmanuel' --status '*'
 
 # Delete previous tables
 while read SAMPLE ; do
@@ -152,6 +142,17 @@ while IFS=$'\t' read SAMPLE CHR LOWER_B UPPER_B ; do
 done 
 } < chr_split.tsv
 
+# Check that the tables were correctly corrected (expect 400 - 1000 million rows)
+bq query \
+    --use_legacy_sql=false \
+    "
+    SELECT 
+        TABLE_NAME, 
+        ROUND(TOTAL_ROWS/1000000,0) AS millions_rows 
+    FROM ${DATASET_PRED}.INFORMATION_SCHEMA.PARTITIONS
+    WHERE TABLE_NAME LIKE '%bp%'
+    "
+
 # Erase intermediary files.
 { read
 while read SAMPLE CHR LOWER_B UPPER_B ; do 
@@ -163,7 +164,7 @@ done
 
 
 #--------------------------------------------------------------------------
-# Keep the "good" CpGs
+# Keep the CpGs with a min and max coverage for quality insurance
 #--------------------------------------------------------------------------
 
 # We create a table where CpGs satisfying both MAX_CPG_COV and MIN_CPG_COV

@@ -43,4 +43,4 @@ bq query \
 bq extract \
     --destination_format NEWLINE_DELIMITED_JSON \
     ${DATASET_PRED}.${SAMPLE}_cpg_reads_asm \
-    gs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json
+    gs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json
