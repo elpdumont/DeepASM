@@ -267,47 +267,14 @@ while read SAMPLE ; do
 done < sample_id.txt
 
 
-######## Format for using in the DeepASM notebook
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
-    --replace=true \
-    "
-    WITH RENAME AS (
-        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, * EXCEPT(asm_snp, sample_category)
-        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
-    )
-    SELECT 
-        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
-        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
-        * EXCEPT(asm_snp_tmp, read, cpg, sample_c),
-        (SELECT ARRAY 
-            (SELECT fm FROM UNNEST(read) 
-            )
-        ) AS read_fm,
-        (SELECT ARRAY 
-            (SELECT fm FROM UNNEST(cpg) 
-            )
-        ) AS cpg_fm,
-        (SELECT ARRAY 
-            (SELECT cov FROM UNNEST(cpg) 
-            )
-        ) AS cpg_cov,
-        (SELECT ARRAY 
-            (SELECT pos FROM UNNEST(cpg) ORDER BY pos
-            ) 
-        ) AS cpg_pos 
-    FROM RENAME
-    "
-
 
 #--------------------------------------------------------------------------
 # Key numbers about the number of regions evaluated
 #--------------------------------------------------------------------------
 
 # Number of distinct regions in the ref genome (with 3 CpGs)
-# 3,790,920
+# 3,790,920 (250 bp)
+# 2,587,039 (1000 bp)
 
 bq query --use_legacy_sql=false \
     "
@@ -319,7 +286,8 @@ bq query --use_legacy_sql=false \
     "
 
 # Number of distinct regions evaluated by CLOUDASM across all ENCODE samples
-# 1,419,549 (37% of all regions)
+# 1,419,549 (37% of all regions, 250 bp)
+# 1,192,312 (1000 bp)
 
 bq query --use_legacy_sql=false \
     "
@@ -332,7 +300,7 @@ bq query --use_legacy_sql=false \
     "
 
 # Number of distinct regions evaluated by CLOUDASM and DEEPASM by sample
-# CloudASM evaluated about 10% of all regions with potential ASM
+# CloudASM evaluated about 10% of all regions with potential ASM, 10-20% when using 1000 bp
 bq query --use_legacy_sql=false \
     "
     WITH DISTINCT_REGIONS AS (
@@ -375,6 +343,60 @@ bq query --use_legacy_sql=false \
         ROUND(100*(asm+no_asm)/(asm+no_asm+no_snp)) AS cloudasm_cov 
     FROM ALL_JOIN
     "
+
+
+
+
+#--------------------------------------------------------------------------
+# Create table with genomic regions where we know there is ASM
+#--------------------------------------------------------------------------
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
+    --replace=true \
+    "
+    WITH RENAME AS (
+        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, * EXCEPT(asm_snp, sample_category)
+        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
+    )
+    SELECT 
+        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
+        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
+        * EXCEPT(asm_snp_tmp, read, cpg, sample_c),
+        (SELECT ARRAY 
+            (SELECT fm FROM UNNEST(read) 
+            )
+        ) AS read_fm,
+        (SELECT ARRAY 
+            (SELECT fm FROM UNNEST(cpg) 
+            )
+        ) AS cpg_fm,
+        (SELECT ARRAY 
+            (SELECT cov FROM UNNEST(cpg) 
+            )
+        ) AS cpg_cov,
+        (SELECT ARRAY 
+            (SELECT pos FROM UNNEST(cpg) ORDER BY pos
+            ) 
+        ) AS cpg_pos 
+    FROM RENAME
+    WHERE asm_snp_tmp = True OR asm_snp_tmp = False
+    "
+
+#--------------------------------------------------------------------------
+# Export ENCODE training set to Cloud Storage
+#--------------------------------------------------------------------------
+
+# Delete previous JSON files
+gsutil rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data/encode_training-*.json
+
+bq extract \
+    --location=US \
+    --destination_format=NEWLINE_DELIMITED_JSON \
+    ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
+    gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data/encode_training-*.json
+
 
 
 

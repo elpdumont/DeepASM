@@ -55,7 +55,7 @@ bq query \
         t1.cpg,
         t1.read
     FROM TOTAL_FRAC_METHYL t1
-    LEFT JOIN ${DATASET_PRED}.${SAMPLE}_asm_snp t2
+    LEFT JOIN ${DATASET_PRED}.${SAMPLE}_asm_snp_${GENOMIC_INTERVAL}bp t2
     ON 
         t1.chr = t2.chr AND
         t1.region_inf = t2.region_inf AND
