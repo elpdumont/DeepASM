@@ -43,6 +43,8 @@ bq query \
         t2.snp_id,
         t2.snp_pos,
         t2.asm_snp,
+        t2.wilcoxon_corr_pvalue,
+        t2.asm_region_effect,
         t1.region_nb_cpg,
         t1.nb_cpg_found,
         t1.nb_reads,

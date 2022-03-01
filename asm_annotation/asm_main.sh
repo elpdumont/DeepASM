@@ -391,6 +391,7 @@ bq query \
 # Delete previous JSON files
 gsutil rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data/encode_training-*.json
 
+# Export the table into several JSON files (~15 for the 12 ENCODE samples)
 bq extract \
     --location=US \
     --destination_format=NEWLINE_DELIMITED_JSON \
@@ -426,9 +427,6 @@ while read SAMPLE ; do
                 tcells_2020.all_tcells_with_pred_encode_model \
                 gs://deepasm/${SAMPLE}_asm_prob_encode_model.csv 
 done < sample_id.txt
-
-#                asm_probability:FLOAT64,asm_snp:INTEGER,sample:STRING,chr:STRING,region_inf:INT64,region_sup:INT64,snp_id:STRING,snp_pos:FLOAT64,region_nb_cpg:INT64,nb_cpg_found:INT64,dnase:INT64,encode_ChiP_V2:INT64,tf_motifs:INT64,read_fm:STRING,cpg_fm:STRING,cpg_cov:STRING,cpg_pos:STRING
-
 
 bq --location=US load \
     --replace=false \
