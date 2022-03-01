@@ -6,13 +6,13 @@ bq --location=US load \
                --autodetect \
                --replace=true \
                --source_format=NEWLINE_DELIMITED_JSON \
-                ${DATASET_ID}.${SAMPLE}_asm_region_pvalue \
-               gs://$OUTPUT_B/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json 
+                ${DATASET_ID}.${SAMPLE}_asm_region_pvalue_${GENOMIC_INTERVAL}bp \
+               gs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json 
 
 # Query to select the SNPs with at least 3 significant CpGs in the same direction
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${PROJECT_ID}:${DATASET_ID}.${SAMPLE}_asm_snp \
+    --destination_table ${PROJECT_ID}:${DATASET_ID}.${SAMPLE}_asm_snp_${GENOMIC_INTERVAL}bp \
     --replace=true \
     "
     SELECT
@@ -40,5 +40,5 @@ bq query \
         neg_sig_cpg AS nb_neg_sig_cpg,
         nb_consec_pos_sig_asm,
         nb_consec_neg_sig_asm
-    FROM ${DATASET_ID}.${SAMPLE}_asm_region_pvalue
+    FROM ${DATASET_ID}.${SAMPLE}_asm_region_pvalue_${GENOMIC_INTERVAL}bp
     "

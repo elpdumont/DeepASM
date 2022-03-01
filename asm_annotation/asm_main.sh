@@ -8,7 +8,6 @@
 # - ${DATASET_CONTEXT}.${SAMPLE}_cpg_read_genotype
 
 
-
 #--------------------------------------------------------------------------
 # Variables
 #--------------------------------------------------------------------------
@@ -206,6 +205,7 @@ dsub \
   --env OUTPUT_B="${OUTPUT_B}" \
   --env ASM_REGION_EFFECT="${ASM_REGION_EFFECT}" \
   --env CPG_SAME_DIRECTION_ASM="${CPG_SAME_DIRECTION_ASM}" \
+  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
   --env P_VALUE="${P_VALUE}" \
   --env CONSECUTIVE_CPG="${CONSECUTIVE_CPG}" \
   --script ${SCRIPTS}/summary_asm.sh \

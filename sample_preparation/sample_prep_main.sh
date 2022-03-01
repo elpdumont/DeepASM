@@ -36,9 +36,6 @@ LOG="gs://cloudasm-encode/logging/deepasm"
 # Docker file required to run the scripts
 DOCKER_GCP="google/cloud-sdk:255.0.0"
 
-# Light-weight python Docker image with statistical packages.
-DOCKER_PYTHON="gcr.io/hackensack-tyco/python"
-
 # GCP global variables
 PROJECT_ID="hackensack-tyco"
 REGION_ID="us-central1"
