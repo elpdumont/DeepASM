@@ -365,11 +365,11 @@ bq query \
         IF(sample_c = 'not_modified', 0, 1) AS sample_category,
         * EXCEPT(asm_snp_tmp, read, cpg, sample_c),
         (SELECT ARRAY 
-            (SELECT fm FROM UNNEST(read) 
+            (SELECT ROUND(fm, 3) FROM UNNEST(read) 
             )
         ) AS read_fm,
         (SELECT ARRAY 
-            (SELECT fm FROM UNNEST(cpg) 
+            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) 
             )
         ) AS cpg_fm,
         (SELECT ARRAY 
