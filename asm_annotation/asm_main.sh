@@ -357,7 +357,8 @@ bq query \
     --replace=true \
     "
     WITH RENAME AS (
-        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, * EXCEPT(asm_snp, sample_category)
+        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, 
+        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, sample, snp_id, snp_pos)
         FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
     )
     SELECT 
@@ -381,7 +382,7 @@ bq query \
             ) 
         ) AS cpg_pos 
     FROM RENAME
-    WHERE asm_snp_tmp = True OR asm_snp_tmp = False
+    WHERE (asm_snp_tmp = True OR asm_snp_tmp = False) 
     "
 
 #--------------------------------------------------------------------------
