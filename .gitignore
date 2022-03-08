@@ -3,3 +3,5 @@
 *.log
 /dsub_libs
 .ipynb_checkpoints/
+*.json
+*.hd5
