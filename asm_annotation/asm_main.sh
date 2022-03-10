@@ -358,7 +358,7 @@ bq query \
     "
     WITH RENAME AS (
         SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, 
-        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, sample, snp_id, snp_pos)
+        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, sample, snp_id, snp_pos, chr)
         FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
     )
     SELECT 
@@ -373,10 +373,6 @@ bq query \
             (SELECT ROUND(fm, 3) FROM UNNEST(cpg) 
             )
         ) AS cpg_fm,
-        (SELECT ARRAY 
-            (SELECT CAST(cov AS FLOAT64) FROM UNNEST(cpg) 
-            )
-        ) AS cpg_cov,
         (SELECT ARRAY 
             (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
             ) 

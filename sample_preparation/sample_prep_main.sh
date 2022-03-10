@@ -10,7 +10,7 @@ SCRIPTS="/Users/em/code/DeepASM/sample_preparation"
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="1000" # must be the same that in hg19_preparation.sh
+GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # Min CpG coverage
 MIN_CPG_COV="10"
