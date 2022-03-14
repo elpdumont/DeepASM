@@ -369,11 +369,11 @@ bq query \
             (SELECT ROUND(fm, 3) FROM UNNEST(read) 
             )
         ) AS read_fm,
-        (SELECT ARRAY 
+        (SELECT ARRAY -- we order by position the FM
             (SELECT ROUND(fm, 3) FROM UNNEST(cpg) ORDER BY pos
             )
         ) AS cpg_fm,
-        (SELECT ARRAY 
+        (SELECT ARRAY -- we order by position
             (SELECT CAST(pos AS INT64) FROM UNNEST(cpg) ORDER BY pos
             ) 
         ) AS cpg_pos 
