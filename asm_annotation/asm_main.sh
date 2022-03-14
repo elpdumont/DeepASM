@@ -374,7 +374,7 @@ bq query \
             )
         ) AS cpg_fm,
         (SELECT ARRAY 
-            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
+            (SELECT CAST(pos AS INT64) FROM UNNEST(cpg) ORDER BY pos
             ) 
         ) AS cpg_pos 
     FROM RENAME
