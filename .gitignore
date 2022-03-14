@@ -5,3 +5,4 @@
 .ipynb_checkpoints/
 *.json
 *.hd5
+*.h5
