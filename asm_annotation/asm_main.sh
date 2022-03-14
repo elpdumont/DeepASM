@@ -370,11 +370,11 @@ bq query \
             )
         ) AS read_fm,
         (SELECT ARRAY 
-            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) 
+            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) ORDER BY pos
             )
         ) AS cpg_fm,
         (SELECT ARRAY 
-            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg)
+            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
             ) 
         ) AS cpg_pos 
     FROM RENAME
