@@ -19,7 +19,7 @@ SCRIPTS="/Users/em/code/DeepASM/asm_annotation"
 DATASET_EPI="hg19"
 
 # Size of genomic regions:
-GENOMIC_INTERVAL="1000" # must be the same that in hg19_preparation.sh
+GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
 DATASET_PRED="deepasm_feb2022" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
@@ -102,7 +102,7 @@ dsub \
     --env P_VALUE="${P_VALUE}" \
     --env MAX_CPG_COV="${MAX_CPG_COV}" \
     --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv 201-288 \
+    --tasks all_chr.tsv \
     --wait
 
 # Delete previous tables
@@ -358,7 +358,7 @@ bq query \
     "
     WITH RENAME AS (
         SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, 
-        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, sample, snp_id, snp_pos, chr)
+        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, snp_id, snp_pos)
         FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
     )
     SELECT 
@@ -374,7 +374,7 @@ bq query \
             )
         ) AS cpg_fm,
         (SELECT ARRAY 
-            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
+            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg)
             ) 
         ) AS cpg_pos 
     FROM RENAME

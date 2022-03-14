@@ -119,7 +119,7 @@ dsub \
 --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
 --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
 --script ${SCRIPTS}/cpg_regions.sh \
---tasks chr_split.tsv 501-577 \
+--tasks chr_split.tsv 1- 100 \
 --wait
 
 
@@ -139,7 +139,7 @@ while IFS=$'\t' read SAMPLE CHR LOWER_B UPPER_B ; do
 done 
 } < chr_split.tsv
 
-# Check that the tables were correctly corrected (expect 400 - 1000 million rows)
+# Check that the tables were correctly corrected (expect 235 - 1000 million rows)
 bq query \
     --use_legacy_sql=false \
     "
@@ -147,7 +147,7 @@ bq query \
         TABLE_NAME, 
         ROUND(TOTAL_ROWS/1000000,0) AS millions_rows 
     FROM ${DATASET_PRED}.INFORMATION_SCHEMA.PARTITIONS
-    WHERE TABLE_NAME LIKE '%bp%'
+    WHERE TABLE_NAME LIKE '%bp%' AND TABLE_NAME LIKE '%cpg_region%' AND TABLE_NAME LIKE '%${GENOMIC_INTERVAL}%'
     "
 
 # Erase intermediary files.
