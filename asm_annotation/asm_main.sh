@@ -255,6 +255,22 @@ dsub \
   --wait
 
 
+############## Add genomic window informations
+
+dsub \
+  --project $PROJECT_ID \
+  --zones $ZONE_ID \
+  --image ${DOCKER_GCP} \
+  --logging $LOG \
+  --env DATASET_PRED="${DATASET_PRED}" \
+  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+  --script ${SCRIPTS}/add_genomic_window.sh \
+  --tasks all_samples.tsv \
+  --wait
+
+
+
+##################
 ######## Concatenate all files per sample
 
 bq rm -f -t ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp

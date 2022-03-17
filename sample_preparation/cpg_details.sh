@@ -2,23 +2,28 @@
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_cpg_details_${GENOMIC_INTERVAL}bp \
+    --destination_table ${DATASET_PRED}.${SAMPLE}_genomic_window_${GENOMIC_INTERVAL}bp \
     --replace=true \
     "
-    SELECT 
-        chr, 
-        region_inf,
-        region_sup,
-        region_nb_cpg, 
-        dnase,
-        encode_ChiP_V2,
-        tf_motifs,
-        COUNT(*) AS nb_cpg_found,
-        ARRAY_AGG(
-            STRUCT(pos, meth, read_id)
-            ) AS cpg_details
+    WITH TMP AS (
+        SELECT 
+            chr,
+            region_inf,
+            region_sup,
+            read_id,
+            ARRAY_AGG (pos-region_inf + 1) AS pos_array,
+            ARRAY_AGG (meth) AS meth_array
+        FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp_clean
+        GROUP BY chr, region_inf, region_sup, read_id
+        )
+        SELECT 
+            chr,
+            region_inf,
+            region_sup,
+            ARRAY_AGG(
+                STRUCT(read_id, pos_array, meth_array)
+            ) AS window_details
+        FROM TMP
+        GROUP BY chr, region_inf, region_sup
+    "
 
-    FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp_clean
-    GROUP BY chr, region_inf, region_sup, region_nb_cpg, dnase, encode_ChiP_V2, tf_motifs
-
-        "
