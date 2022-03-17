@@ -273,14 +273,74 @@ dsub \
 ##################
 ######## Concatenate all files per sample
 
-bq rm -f -t ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+bq rm -f -t ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp
 
 while read SAMPLE ; do 
     echo "Sample:" ${SAMPLE}
     bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_cpg_read_asm_${GENOMIC_INTERVAL}bp \
-        ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp
+        ${DATASET_PRED}.${SAMPLE}_all_info_${GENOMIC_INTERVAL}bp \
+        ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp
 done < sample_id.txt
+
+
+
+
+#--------------------------------------------------------------------------
+# Create table with genomic regions where we know there is ASM
+#--------------------------------------------------------------------------
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp_for_notebook \
+    --replace=true \
+    "
+    WITH RENAME AS (
+        SELECT 
+            asm_snp AS asm_snp_tmp, 
+            sample_category AS sample_c, 
+            * EXCEPT(asm_snp, 
+                     sample_category, 
+                     wilcoxon_corr_pvalue, 
+                     asm_region_effect, 
+                     snp_id, 
+                     snp_pos)
+        FROM ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp 
+    )
+    SELECT 
+        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
+        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
+        * EXCEPT(asm_snp_tmp, read, cpg, sample_c, window_details),
+        (SELECT ARRAY 
+            (SELECT ROUND(fm, 3) FROM UNNEST(read) 
+            )
+        ) AS read_fm,
+        (SELECT ARRAY -- we order by position the FM
+            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) ORDER BY pos
+            )
+        ) AS cpg_fm,
+        (SELECT ARRAY -- we order by position. We use Float because python thinks it'a string otherwise
+            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
+            ) 
+        ) AS cpg_pos,
+        window_details AS genomic_picture
+    FROM RENAME
+    WHERE (asm_snp_tmp = True OR asm_snp_tmp = False) 
+    "
+
+#--------------------------------------------------------------------------
+# Export ENCODE training set to Cloud Storage
+#--------------------------------------------------------------------------
+
+# Delete previous JSON files
+gsutil rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data_with_genomic_picture/encode_training-*.json
+
+# Export the table into several JSON files (~15 for the 12 ENCODE samples)
+bq extract \
+    --location=US \
+    --destination_format=NEWLINE_DELIMITED_JSON \
+    ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp_for_notebook \
+    gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data_with_genomic_picture/encode_training-*.json
+
 
 
 
@@ -359,57 +419,6 @@ bq query --use_legacy_sql=false \
         ROUND(100*(asm+no_asm)/(asm+no_asm+no_snp)) AS cloudasm_cov 
     FROM ALL_JOIN
     "
-
-
-
-
-#--------------------------------------------------------------------------
-# Create table with genomic regions where we know there is ASM
-#--------------------------------------------------------------------------
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
-    --replace=true \
-    "
-    WITH RENAME AS (
-        SELECT asm_snp AS asm_snp_tmp, sample_category AS sample_c, 
-        * EXCEPT(asm_snp, sample_category, wilcoxon_corr_pvalue, asm_region_effect, snp_id, snp_pos)
-        FROM ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp 
-    )
-    SELECT 
-        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
-        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
-        * EXCEPT(asm_snp_tmp, read, cpg, sample_c),
-        (SELECT ARRAY 
-            (SELECT ROUND(fm, 3) FROM UNNEST(read) 
-            )
-        ) AS read_fm,
-        (SELECT ARRAY -- we order by position the FM
-            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) ORDER BY pos
-            )
-        ) AS cpg_fm,
-        (SELECT ARRAY -- we order by position. We use Float because python thinks it'a string otherwise
-            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
-            ) 
-        ) AS cpg_pos 
-    FROM RENAME
-    WHERE (asm_snp_tmp = True OR asm_snp_tmp = False) 
-    "
-
-#--------------------------------------------------------------------------
-# Export ENCODE training set to Cloud Storage
-#--------------------------------------------------------------------------
-
-# Delete previous JSON files
-gsutil rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data/encode_training-*.json
-
-# Export the table into several JSON files (~15 for the 12 ENCODE samples)
-bq extract \
-    --location=US \
-    --destination_format=NEWLINE_DELIMITED_JSON \
-    ${DATASET_PRED}.all_samples_${GENOMIC_INTERVAL}bp_for_notebook \
-    gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data/encode_training-*.json
 
 
 

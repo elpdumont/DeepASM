@@ -180,6 +180,26 @@ dsub \
     --wait
 
 
+
+#--------------------------------------------------------------------------
+# Create a structure of read ID, CpG pos, CpG methylation
+#--------------------------------------------------------------------------
+
+# We create a table where CpGs satisfying both MAX_CPG_COV and MIN_CPG_COV
+
+dsub \
+    --project $PROJECT_ID \
+    --zones $ZONE_ID \
+    --image ${DOCKER_GCP} \
+    --logging $LOG \
+    --env DATASET_PRED="${DATASET_PRED}" \
+    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
+    --script ${SCRIPTS}/cpg_details.sh \
+    --tasks all_samples.tsv \
+    --wait
+
+
+
 #--------------------------------------------------------------------------
 # Calculate fractional methylation of each CpG in each region.
 #--------------------------------------------------------------------------
