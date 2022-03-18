@@ -11,6 +11,7 @@ bq query \
             region_inf,
             region_sup,
             read_id,
+            ROUND(SUM(meth)/SUM(cov),3) AS read_fm,
             ARRAY_AGG (pos-region_inf + 1) AS pos_array,
             ARRAY_AGG (meth) AS meth_array
         FROM ${DATASET_PRED}.${SAMPLE}_cpg_regions_${GENOMIC_INTERVAL}bp_clean
@@ -21,7 +22,7 @@ bq query \
             region_inf,
             region_sup,
             ARRAY_AGG(
-                STRUCT(read_id, pos_array, meth_array)
+                STRUCT(read_id, read_fm, pos_array, meth_array)
             ) AS window_details
         FROM TMP
         GROUP BY chr, region_inf, region_sup
