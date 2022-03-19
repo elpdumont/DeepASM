@@ -332,7 +332,7 @@ bq query \
 #--------------------------------------------------------------------------
 
 # Delete previous JSON files
-gsutil rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data_with_genomic_picture/encode_training-*.json
+gsutil -m rm gs://${OUTPUT_B}/${GENOMIC_INTERVAL}bp/encode_training_data_with_genomic_picture/encode_training-*.json
 
 # Export the table into several JSON files (~15 for the 12 ENCODE samples)
 bq extract \
