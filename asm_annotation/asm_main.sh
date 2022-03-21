@@ -319,7 +319,7 @@ bq query \
             )
         ) AS cpg_fm,
         (SELECT ARRAY -- we order by position 
-            (SELECT CAST(cov AS INT64) FROM UNNEST(cpg) ORDER BY pos
+            (SELECT CAST(cov AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
             )
         ) AS cpg_cov,
         (SELECT ARRAY -- we order by position. We use Float because python thinks it'a string otherwise
