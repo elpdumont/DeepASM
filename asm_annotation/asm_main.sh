@@ -319,7 +319,7 @@ bq query \
             )
         ) AS cpg_fm,
         (SELECT ARRAY -- we order by position. We use Float because python thinks it'a string otherwise
-            (SELECT CAST(pos AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
+            (SELECT CAST(pos - region_inf + 1 AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
             ) 
         ) AS cpg_pos,
         window_details AS genomic_picture
