@@ -5,6 +5,7 @@ from numpy import exp
 from flask import Flask, request, jsonify
 import numpy as np
 import pandas as pd
+import dask
 import dask.dataframe as dd
 import os
 import json
@@ -21,6 +22,9 @@ storage_client = storage.Client()
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
+# Disable warning log for dask
+dask.config.set({'dataframe.query-planning-warning': False})
 
 
 @app.route('/process', methods=['GET'])
