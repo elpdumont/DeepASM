@@ -1,19 +1,15 @@
-
-# import numpy as np
-# import pandas as pd
-# import dask.dataframe as dd
-
-
 # # Kernel functions
-# from sklearn.neighbors import KernelDensity
-# from numpy import asarray
-# from numpy import exp
-
-
+from sklearn.neighbors import KernelDensity
+from numpy import asarray
+from numpy import exp
 from flask import Flask, request, jsonify
+import numpy as np
+import pandas as pd
+import dask.dataframe as dd
 import os
 import json
 from google.cloud import storage
+import logging
 
 
 app = Flask(__name__)
@@ -21,13 +17,22 @@ app = Flask(__name__)
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 
+# Initialize logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
+
 @app.route('/process', methods=['GET'])
 def process_file():
+    logging.info("Processing request")
     # Get the bucket name and file path from the request
     bucket_name = request.args.get('bucket')
     file_path = request.args.get('file_path')
 
+    logging.info("")
+
     if bucket_name and file_path:
+        logging.info(f"Fetching file from bucket: {bucket_name}, file path: {file_path}")
+
         # Get the bucket and blob (file) from Google Cloud Storage
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(file_path)
@@ -43,6 +48,8 @@ def process_file():
 
         return processed_data[0] #jsonify(processed_data), 200
     else:
+        error_message = "Bucket name or file path not provided"
+        logging.error(error_message)
         return jsonify({"error": "Bucket name or file path not provided"}), 400
 
 if __name__ == '__main__':
