@@ -11,6 +11,15 @@ you need to have Python, [dsub](https://github.com/DataBiosphere/dsub), and Dock
 DeepASM evaluates the imbalance in methylation between alleles in genomic sequences, without separating the reads per allele using a single nucleotide polymorphism (SNP) in the region.
 
 
+## Prepare GCP containers
+
+
+Process:
+- Create an artifact repository
+- Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1 .`
+- Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1`
+
+
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
 
 Execute the bash scripts in `hg19_preparation/hg19_preparation.sh`.
