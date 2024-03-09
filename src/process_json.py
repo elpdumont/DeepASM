@@ -10,6 +10,8 @@ import os
 import json
 from google.cloud import storage
 import logging
+import argparse
+
 
 
 app = Flask(__name__)
@@ -25,32 +27,32 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 def process_file():
     logging.info("Processing request")
     # Get the bucket name and file path from the request
-    bucket_name = request.args.get('bucket')
-    file_path = request.args.get('file_path')
+    global args
+    bucket_name = args.bucket
+    file_path = args.file_path
 
-    logging.info("")
+    logging.info(f"Fetching file from bucket: {bucket_name}, file path: {file_path}")
 
-    if bucket_name and file_path:
-        logging.info(f"Fetching file from bucket: {bucket_name}, file path: {file_path}")
+    # Get the bucket and blob (file) from Google Cloud Storage
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(file_path)
 
-        # Get the bucket and blob (file) from Google Cloud Storage
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(file_path)
+    # Download the file as bytes and decode it to a string
+    file_contents = blob.download_as_bytes().decode('utf-8')
 
-        # Download the file as bytes and decode it to a string
-        file_contents = blob.download_as_bytes().decode('utf-8')
+    # Process each line as a separate JSON object
+    processed_data = []
+    for line in file_contents.splitlines():
+        data = json.loads(line)  # Parse each line as JSON
+        processed_data.append(data)  # Replace this with your actual processing logic
 
-        # Process each line as a separate JSON object
-        processed_data = []
-        for line in file_contents.splitlines():
-            data = json.loads(line)  # Parse each line as JSON
-            processed_data.append(data)  # Replace this with your actual processing logic
-
-        return processed_data[0] #jsonify(processed_data), 200
-    else:
-        error_message = "Bucket name or file path not provided"
-        logging.error(error_message)
-        return jsonify({"error": "Bucket name or file path not provided"}), 400
+    return processed_data[0] #jsonify(processed_data), 200
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Process some JSON files.')
+    parser.add_argument('--bucket', type=str, help='The name of the GCS bucket')
+    parser.add_argument('--file_path', type=str, help='The path to the JSON file in the GCS bucket')
+
+    args = parser.parse_args()
+
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

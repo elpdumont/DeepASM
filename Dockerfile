@@ -20,5 +20,5 @@ EXPOSE 8080
 ENV PORT 8080
 
 # Run process_json.py when the container launches
-CMD ["python", "process_json.py"]
+CMD ["python", "process_json.py", "--bucket", "YOUR_BUCKET_NAME", "--file_path", "YOUR_FILE_PATH"]
 
