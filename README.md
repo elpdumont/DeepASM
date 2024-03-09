@@ -18,6 +18,7 @@ Process:
 - Create an artifact repository
 - Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1 .`
 - Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1`
+- test the python file locally by entering this in the browser: `http://localhost:8080/process?bucket=hmh_deepasm&file_path=bq_tables/250bp_asm_labelled/raw-000000000000.json` after running `python3 src/process_json.py` from a virtual environment (`python3 -m venv venv`).
 
 
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
