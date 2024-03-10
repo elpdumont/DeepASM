@@ -13,16 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the current directory contents into the container at /app
 COPY src/ .
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8080
-
-# Define environment variable
-ENV PORT 8080
-
 # Set the default entry point to Python
 #ENTRYPOINT ["python"]
 
 # Run process_json.py when the container launches, without CMD specifying script arguments
-#CMD ["python3"]
+#CMD ["python"]
 
-# docker run --rm -it us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 python3 --version
+# docker run --rm -it us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest python3 --version

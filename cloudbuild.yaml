@@ -1,15 +1,12 @@
+# To execute the code:
+# gcloud builds submit --config=cloudbuild.yaml .  
+
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
-  _BUCKET_NAME: hmh_deepasm
-  _IMAGE: process_json
+  _IMAGE: python
   _VERSION: latest
 
 steps:
-  # Install dependencies
-  # - name: python
-  #   entrypoint: pip
-  #   args: ["install", "-r", "requirements.txt", "--user"]
-
   # Docker Build
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 
@@ -19,19 +16,6 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push',  'us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}']
 
-  # Deploy to Cloud Run
-  - name: google/cloud-sdk
-    args: ['gcloud', 'run', 'deploy', 'helloworld-${_VERSION}', 
-           '--image=us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}', 
-           '--region', 'us-east1', '--platform', 'managed', 
-           '--allow-unauthenticated']
-
-# Save test logs to Google Cloud Storage
-artifacts:
-  objects:
-    location: gs://${_BUCKET_NAME}/
-    paths:
-      - ${_VERSION}_test_log.xml
 # Store images in Google Artifact Registry 
 images:
   - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}
