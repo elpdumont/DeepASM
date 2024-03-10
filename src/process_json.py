@@ -25,33 +25,44 @@ dask.config.set({'dataframe.query-planning-warning': False})
 
 
 # Retrieve Job-defined env vars
-TASK_INDEX = os.getenv("CLOUD_RUN_TASK_INDEX", 0)
+TASK_INDEX = int(os.getenv("CLOUD_RUN_TASK_INDEX", 0))
 TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 
 # Retrieve User-defined env vars
 BUCKET_NAME = os.getenv("BUCKET_NAME")
-FILE_PATH = os.getenv("FILE_PATH")
+FOLDER_PATH = os.getenv("FOLDER_PATH")
 
 
 # Define main script
-def main(bucket_name, file_path):
-    """Program that simulates work using the sleep method and random failures.
+def main(bucket_name, folder_path, max_digits = 12):
 
-    Args:
-        sleep_ms: number of milliseconds to sleep
-        fail_rate: rate of simulated errors
-    """
+    # Define the prefix to search within a specific folder, ensuring it ends with '/'
+    prefix = folder_path if folder_path.endswith('/') else f"{folder_path}/"
 
-    logging.info(f"Fetching file from bucket: {bucket_name}, file path: {file_path}")
+    # List all blobs in the specified folder
+    blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
 
-    print(f"Fetching file from bucket: {bucket_name}, file path: {file_path}")
+    # Filter blobs that match the 'raw-*.json' pattern and sort them
+    filtered_blobs = sorted(
+        (blob for blob in blobs if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")),
+        key=lambda blob: blob.name
+    )
 
+    # Ensure task_index is within the range of available files
+    if 0 <= TASK_INDEX < len(filtered_blobs):
+        # Get the file name of the blob at the specified index
+        blob_name = filtered_blobs[TASK_INDEX]
+    else:
+        logging.info(f"Task index {TASK_INDEX} is out of range.")
+        sys.exit(1)
     # Get the bucket and blob (file) from Google Cloud Storage
+    
+    logging.info(f"Processing the bucket {bucket_name} with the folder path {folder_path} and the file name {blob_name.name}")
+
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_path)
 
     # Download the file as bytes and decode it to a string
-    file_contents = blob.download_as_bytes().decode('utf-8')
+    file_contents = blob_name.download_as_bytes().decode('utf-8')
 
     # Process each line as a separate JSON object
     processed_data = []
@@ -61,12 +72,12 @@ def main(bucket_name, file_path):
 
     logging.info(processed_data[0])
 
-    return processed_data[0] #jsonify(processed_data), 200
-   
+    return processed_data[0] 
+
 # Start script
 if __name__ == "__main__":
     try:
-        main(BUCKET_NAME, FILE_PATH)
+        main(BUCKET_NAME, FOLDER_PATH)
     except Exception as err:
         message = (
             f"Task #{TASK_INDEX}, " + f"Attempt #{TASK_ATTEMPT} failed: {str(err)}"

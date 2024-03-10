@@ -16,7 +16,7 @@ COPY src/ .
 # Set the default entry point to Python
 #ENTRYPOINT ["python"]
 
-CMD ["python", "./process_json.py"]
+CMD ["python"]
 
 # To test locally with Docker
 # docker pull us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest

@@ -4,7 +4,7 @@ Last update: XXX XX, 2022.
 
 ## PRe-requesites
 
-you need to have Python, [dsub](https://github.com/DataBiosphere/dsub), and Docker installed on your machine. Dsub is used to execute jobs in parallele using Docker images. You also need an account on [Google Cloud Platform](https://cloud.google.com/) (GCP).
+You  need an account on [Google Cloud Platform](https://cloud.google.com/) (GCP).
 
 ## Overview
 
@@ -13,51 +13,27 @@ DeepASM evaluates the imbalance in methylation between alleles in genomic sequen
 
 ## Prepare GCP containers
 
+```
 gcloud config set project hmh-em-deepasm
 gcloud config set run/region us-east1
+```
 
-
-
-
-Process:
-- Create an artifact repository
-- Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v10 .`
-- Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v9`
-- test the python file locally by visiting `http://localhost:8080/process` after running `python3 src/process_json.py --bucket "hmh_deepasm" --file_path "bq_tables/250bp_asm_labelled/raw-000000000000.json"`
-
-
-gcloud run deploy process-json \
-  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 \
-  --command "python" \
-  --args process_json.py,--bucket,hmh_deepasm,--file_path,bq_tables/250bp_asm_labelled/raw-000000000000.json \
-  --platform managed \
-  --region us-east1 \
-  --allow-unauthenticated 
-
-
-gcloud run jobs create process-json-job16 \
-  --image=us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 \
-  --command="python process_json.py" \
-  --args="--bucket","hmh_deepasm","--file_path","bq_tables/250bp_asm_labelled/raw-000000000000.json" \
-  --max-retries=0 \
-  --region=us-east1 
   
 
 gcloud run jobs deploy process-json \
-  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process-raw-json:latest \
+  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest \
+  --args="python,/app/process_json.py" \
   --tasks 2 \
   --set-env-vars BUCKET_NAME="hmh_deepasm" \
-  --set-env-vars FILE_PATH="bq_tables/250bp_asm_labelled/raw-000000000000.json" \
+  --set-env-vars FOLDER_PATH="bq_tables/250bp_asm_labelled/" \
   --max-retries 2 \
   --cpu 4 \
   --memory 16Gi \
   --region us-east1 \
   --project=hmh-em-deepasm
 
-gcloud run jobs execute job-quickstart
+gcloud run jobs execute process-json
 
-
-gcloud builds submit  --config=cloudbuild.yaml
 
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
 
