@@ -19,4 +19,6 @@ COPY src/ .
 # Run process_json.py when the container launches, without CMD specifying script arguments
 #CMD ["python"]
 
+# To test locally with Docker
+# docker pull us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest
 # docker run --rm -it us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest python3 --version
