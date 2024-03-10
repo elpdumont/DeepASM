@@ -3,7 +3,7 @@
 
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
-  _IMAGE: python
+  _IMAGE: process-raw-json
   _VERSION: latest
 
 steps:

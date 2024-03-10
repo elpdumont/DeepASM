@@ -43,19 +43,21 @@ gcloud run jobs create process-json-job16 \
   --region=us-east1 
   
 
-  gcloud run jobs deploy job-quickstart \
-    --source . \
-    --tasks 50 \
-    --set-env-vars SLEEP_MS=10000 \
-    --set-env-vars FAIL_RATE=0.1 \
-    --max-retries 5 \
-    --region us-east1 \
-    --project=hmh-em-deepasm
+gcloud run jobs deploy process-json \
+  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process-raw-json:latest \
+  --tasks 2 \
+  --set-env-vars BUCKET_NAME="hmh_deepasm" \
+  --set-env-vars FILE_PATH="bq_tables/250bp_asm_labelled/raw-000000000000.json" \
+  --max-retries 2 \
+  --cpu 4 \
+  --memory 16Gi \
+  --region us-east1 \
+  --project=hmh-em-deepasm
+
+gcloud run jobs execute job-quickstart
 
 
-
-
-gcloud builds submit  --config=cloudbuild.yaml .
+gcloud builds submit  --config=cloudbuild.yaml
 
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
 
