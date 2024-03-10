@@ -13,12 +13,37 @@ DeepASM evaluates the imbalance in methylation between alleles in genomic sequen
 
 ## Prepare GCP containers
 
+gcloud config set project hmh-em-deepasm
+gcloud config set run/region us-east1
+
+
+
 
 Process:
 - Create an artifact repository
 - Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1 .`
-- Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1`
+- Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v9`
 - test the python file locally by visiting `http://localhost:8080/process` after running `python3 src/process_json.py --bucket "hmh_deepasm" --file_path "bq_tables/250bp_asm_labelled/raw-000000000000.json"`
+
+
+gcloud run deploy process-json \
+  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v10 \
+  --command "python" \
+  --args process_json.py,--bucket,hmh_deepasm,--file_path,bq_tables/250bp_asm_labelled/raw-000000000000.json \
+  --platform managed \
+  --region us-east1 \
+  --allow-unauthenticated 
+
+
+gcloud run jobs create process-json-job7 \
+  --image=us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 \
+  --command="python3 process_json.py" \
+  --args="--bucket","hmh_deepasm","--file_path","bq_tables/250bp_asm_labelled/raw-000000000000.json" \
+  --max-retries=0 \
+  --region=us-east1 
+  
+gcloud run jobs execute process-json-job5
+
 
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
 
