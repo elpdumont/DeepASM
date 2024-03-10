@@ -21,13 +21,13 @@ gcloud config set run/region us-east1
 
 Process:
 - Create an artifact repository
-- Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v1 .`
+- Build the image using `docker build -t us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v10 .`
 - Push the image to the repository: `docker push us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v9`
 - test the python file locally by visiting `http://localhost:8080/process` after running `python3 src/process_json.py --bucket "hmh_deepasm" --file_path "bq_tables/250bp_asm_labelled/raw-000000000000.json"`
 
 
 gcloud run deploy process-json \
-  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v10 \
+  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 \
   --command "python" \
   --args process_json.py,--bucket,hmh_deepasm,--file_path,bq_tables/250bp_asm_labelled/raw-000000000000.json \
   --platform managed \
@@ -35,15 +35,27 @@ gcloud run deploy process-json \
   --allow-unauthenticated 
 
 
-gcloud run jobs create process-json-job7 \
+gcloud run jobs create process-json-job16 \
   --image=us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/process_json:v12 \
-  --command="python3 process_json.py" \
+  --command="python process_json.py" \
   --args="--bucket","hmh_deepasm","--file_path","bq_tables/250bp_asm_labelled/raw-000000000000.json" \
   --max-retries=0 \
   --region=us-east1 
   
-gcloud run jobs execute process-json-job5
 
+  gcloud run jobs deploy job-quickstart \
+    --source . \
+    --tasks 50 \
+    --set-env-vars SLEEP_MS=10000 \
+    --set-env-vars FAIL_RATE=0.1 \
+    --max-retries 5 \
+    --region us-east1 \
+    --project=hmh-em-deepasm
+
+
+
+
+gcloud builds submit  --config=cloudbuild.yaml .
 
 ## Preparation of the reference genome with annotations (hg19_preparation folder)
 

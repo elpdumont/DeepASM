@@ -1,4 +1,3 @@
-*.txt
 *.tsv
 *.log
 /dsub_libs
@@ -9,3 +8,4 @@
 *.png
 *.csv
 /venv
+.venv
