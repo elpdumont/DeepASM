@@ -14,7 +14,6 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from google.cloud import storage
-from numpy import asarray, exp
 from sklearn.neighbors import KernelDensity
 
 # Initialize random seed
@@ -430,10 +429,12 @@ def process_file_at_index(bucket_name, folder_path, task_index):
 
 
 # Define main script
-def main(bucket_name, folder_path, max_digits=12):
+def main():
 
     # Store the JSON file into a dataframe
-    df_raw, file_name = process_file_at_index(bucket_name, folder_path, TASK_INDEX)
+    df_raw, file_name = process_file_at_index(
+        BUCKET_NAME, INPUT_DATA_FOLDER_PATH, TASK_INDEX
+    )
     logging.info(f"File name: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
@@ -569,7 +570,7 @@ def main(bucket_name, folder_path, max_digits=12):
 # Start script
 if __name__ == "__main__":
     try:
-        main(BUCKET_NAME, INPUT_DATA_FOLDER_PATH)
+        main()
     except Exception as err:
         message = (
             f"Task #{TASK_INDEX}, " + f"Attempt #{TASK_ATTEMPT} failed: {str(err)}"
