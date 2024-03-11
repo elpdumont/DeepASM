@@ -1,21 +1,21 @@
 # # Kernel functions
-from sklearn.neighbors import KernelDensity
-from numpy import asarray
-from numpy import exp
+import json
+import logging
+
+# File and variable management
+import os
+import random
+import sys
+
+import dask
+import dask.dataframe as dd
 
 # Python packages for data, stats
 import numpy as np
 import pandas as pd
-import random
-import dask
-import dask.dataframe as dd
-
-# File and variable management
-import os
-import json
 from google.cloud import storage
-import logging
-import sys
+from numpy import asarray, exp
+from sklearn.neighbors import KernelDensity
 
 # Initialize random seed
 random_seed = 42
@@ -27,10 +27,10 @@ np.random.seed(random_seed)
 storage_client = storage.Client()
 
 # Initialize logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 # Disable warning log for dask
-dask.config.set({'dataframe.query-planning-warning': False})
+dask.config.set({"dataframe.query-planning-warning": False})
 
 
 # Retrieve Job-defined env vars
@@ -41,8 +41,6 @@ TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 INPUT_DATA_FOLDER_PATH = os.getenv("INPUT_DATA_FOLDER_PATH")
 OUTPUT_DATA_FOLDER_PATH = os.getenv("OUTPUT_DATA_FOLDER_PATH")
-
-# Pipeline variables (user-defined as well)
 GENOMIC_LENGTH = int(os.getenv("GENOMIC_LENGTH"))
 MIN_CPG_COV = int(os.getenv("MIN_CPG_COV"))
 KERNEL_FM_NB_VALUES = int(os.getenv("KERNEL_FM_NB_VALUES"))
@@ -51,58 +49,56 @@ KERNEL_COV_NB_MAX = int(os.getenv("KERNEL_COV_NB_MAX"))
 KERNEL_COV_NB_STEP = int(os.getenv("KERNEL_COV_NB_STEP"))
 KERNEL_COV_BANDWIDTH = int(os.getenv("KERNEL_COV_BANDWIDTH"))
 
-# Generate variables used in the code
-TABLE_ID = "all_samples_all_info_" + str(GENOMIC_LENGTH) + "bp_for_notebook"
+VARS_TO_REMOVE = [
+    "region_inf",
+    "region_sup",
+    "read_fm",
+    "cpg_pos",
+    "cpg_cov",
+    "cpg_dist",
+    "cpg_fm",
+    "genomic_picture",
+    "global_cpg_fm",
+    "tot_nb_reads",
+    "tot_nb_cpg",
+    "cpg_cov_kd",
+    "read_fm_kd",
+    "cpg_fm_kd",
+    "cpg_dist_kd",
+]
 
-VARS_TO_REMOVE = ['region_inf',
-                  'region_sup',
-                  'read_fm',
-                  'cpg_pos',
-                  'cpg_cov',
-                  'cpg_dist',
-                  'cpg_fm',
-                  'genomic_picture',
-                  'global_cpg_fm',
-                  'tot_nb_reads',
-                  'tot_nb_cpg',
-                  'cpg_cov_kd',
-                  'read_fm_kd',
-                  'cpg_fm_kd',
-                  'cpg_dist_kd'
-                  ]
+VARS_TO_NORMALIZE = [
+    "region_nb_cpg",
+    "nb_cpg_found",
+    "nb_reads",
+    "encode_ChiP_V2",
+    "tf_motifs",
+    "cpg_cov_kd",
+    "read_fm_kd",
+    "cpg_fm_kd",
+    "cpg_dist_kd",
+    "std_read_fm",
+    "mean_read_fm",
+    "std_cpg_fm",
+    "mean_cpg_fm",
+    "std_cpg_cov",
+    "mean_cpg_cov",
+    "std_cpg_dist",
+    "mean_cpg_dist",
+]
 
-VARS_TO_NORMALIZE = ['region_nb_cpg', 
-                     'nb_cpg_found', 
-                     'nb_reads',
-                     'encode_ChiP_V2', 
-                     'tf_motifs', 'cpg_cov_kd',
-                     'read_fm_kd', 
-                     'cpg_fm_kd', 
-                     'cpg_dist_kd',
-                     'std_read_fm', 
-                     'mean_read_fm', 
-                     'std_cpg_fm',
-                     'mean_cpg_fm', 
-                     'std_cpg_cov', 
-                     'mean_cpg_cov',
-                     'std_cpg_dist', 
-                     'mean_cpg_dist'
-                     ]
+CATEGORICAL_VARS = ["chr", "sample_category", "dnase"]
 
-CATEGORICAL_VARS = ['chr', 
-                    'sample_category', 
-                    'dnase']
-
-CATEGORICAL_VARS_TO_ONE_HOT_ENCODE = ['chr']
+CATEGORICAL_VARS_TO_ONE_HOT_ENCODE = ["chr"]
 
 
 def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
     # Convert DataFrame to JSON format
-    json_data = df.to_json(orient='records', lines=True)
+    json_data = df.to_json(orient="records", lines=True)
 
-    file_name = file_name + "_" + data_type
-    # Save JSON data to a local file
-    with open(file_name, 'w') as file:
+    file_name = data_type + "_" + file_name
+    logging.info(f"Saving JSON data as{file_name}")
+    with open(file_name, "w") as file:
         file.write(json_data)
 
     # Cloud filename includes the bucket_path
@@ -118,7 +114,8 @@ def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
     blob = bucket.blob(cloud_filename)
     blob.upload_from_filename(file_name)
 
-    print(f'File {file_name} uploaded to {cloud_filename}.')
+    logging.info(f"File {file_name} uploaded to {cloud_filename}.")
+
 
 def compute_counts_and_percentages(column):
     """
@@ -139,6 +136,7 @@ def compute_counts_and_percentages(column):
 
     return counts.to_dict(), percentages.to_dict()
 
+
 def filter_chromosomes(df):
     """
     Ffilters out rows where the 'chr' column is 'X' or 'Y'.
@@ -150,8 +148,8 @@ def filter_chromosomes(df):
     - pd.DataFrame: The modified DataFrame without the 'sample' column and without rows where 'chr' is 'X' or 'Y'.
     """
 
-    df = df[~df['chr'].isin(['X', 'Y'])].copy()
-    df['chr'] = df['chr'].astype(int)
+    df = df[~df["chr"].isin(["X", "Y"])].copy()
+    df["chr"] = df["chr"].astype(int)
     return df
 
 
@@ -194,7 +192,8 @@ def generate_kernel_values(start, stop, step=1, reshape=True):
         values = values.reshape(-1, 1)
     return values
 
-def estimate_kernel_density(x, values_for_kernel, bandwidth, kernel='gaussian'):
+
+def estimate_kernel_density(x, values_for_kernel, bandwidth, kernel="gaussian"):
     """
     Estimates the kernel density for a given sample and set of values.
 
@@ -214,10 +213,8 @@ def estimate_kernel_density(x, values_for_kernel, bandwidth, kernel='gaussian'):
     probabilities = np.exp(log_densities)
     return np.round(probabilities, 4)
 
-def convert_arrays_to_kernel_densities(df,
-                                       column_name,
-                                       values_for_kernel,
-                                       bandwidth):
+
+def convert_arrays_to_kernel_densities(df, column_name, values_for_kernel, bandwidth):
     """
     Calculates the mean, standard deviation, and kernel density estimate for a given column in a DataFrame.
 
@@ -230,14 +227,18 @@ def convert_arrays_to_kernel_densities(df,
     # Calculate mean and standard deviation
     std_name = f"std_{column_name}"
     mean_name = f"mean_{column_name}"
-    print(f"Calculating the standard deviation and mean for {column_name}")
-    df[std_name] = df[column_name].apply(lambda x: np.round(np.std(x, ddof=1), 4))  # ddof=1 for sample standard deviation
+    logging.info(f"Calculating the standard deviation and mean for {column_name}")
+    df[std_name] = df[column_name].apply(
+        lambda x: np.round(np.std(x, ddof=1), 4)
+    )  # ddof=1 for sample standard deviation
     df[mean_name] = df[column_name].apply(lambda x: np.round(np.mean(x), 4))
 
     # Kernel density estimates
-    kernel_name = column_name + '_kd'
-    print(f"Calculating the probability distribution for {column_name}")
-    df[kernel_name] = df[column_name].apply(lambda x: estimate_kernel_density(x, values_for_kernel, bandwidth))
+    kernel_name = column_name + "_kd"
+    logging.info(f"Calculating the probability distribution for {column_name}")
+    df[kernel_name] = df[column_name].apply(
+        lambda x: estimate_kernel_density(x, values_for_kernel, bandwidth)
+    )
 
 
 def expand_array_elements(df, column_name):
@@ -264,12 +265,14 @@ def expand_array_elements(df, column_name):
         new_column_name = f"{column_name}_{i}"
 
         # Extract the i-th element from each array in the specified column
-        df[new_column_name] = df[column_name].apply(lambda x: x[i] if i < len(x) else None)
+        df[new_column_name] = df[column_name].apply(
+            lambda x: x[i] if i < len(x) else None
+        )
 
     # Note: This function modifies the DataFrame in place and does not return anything.
 
 
-def generate_methylation_sequence(row, genomic_length = GENOMIC_LENGTH):
+def generate_methylation_sequence(row, genomic_length=GENOMIC_LENGTH):
     """
     Creates arrays of positions and fractional methylation for CpGs within a specified genomic region.
     Positions with CpGs are marked with 1, others with 0. The fractional methylation is set according to the CpG positions,
@@ -288,18 +291,18 @@ def generate_methylation_sequence(row, genomic_length = GENOMIC_LENGTH):
     genomic_fm = np.zeros(genomic_length)
 
     # Convert CpG positions to zero-based index relative to the region's start
-    #cpg_indices = np.array(row['cpg_pos'].astype(int))
+    # cpg_indices = np.array(row['cpg_pos'].astype(int))
 
     # Mark positions with CpGs and assign fractional methylation
-    genomic_positions[row['cpg_pos']] = 1
-    genomic_fm[row['cpg_pos']] = row['cpg_fm']
+    genomic_positions[row["cpg_pos"]] = 1
+    genomic_fm[row["cpg_pos"]] = row["cpg_fm"]
 
     return np.stack([genomic_positions, genomic_fm], axis=1)
 
 
 def generate_methyl_profile_for_read(read_dictionary):
-    pos_array = np.array(read_dictionary['pos_array'], dtype=int)
-    meth_array = np.array(read_dictionary['meth_array'], dtype=int)
+    pos_array = np.array(read_dictionary["pos_array"], dtype=int)
+    meth_array = np.array(read_dictionary["meth_array"], dtype=int)
 
     # Initialize the result array with zeros
     result = np.zeros((GENOMIC_LENGTH, 2), dtype=int)
@@ -311,11 +314,12 @@ def generate_methyl_profile_for_read(read_dictionary):
     result[pos_array - 1, 1] = meth_array
 
     return {
-        'read_id': read_dictionary['read_id'],
-        'read_fm': read_dictionary['read_fm'],
-        'nb_cpg': read_dictionary['nb_cpg'],
-        'cpg_methylation_profile': result
+        "read_id": read_dictionary["read_id"],
+        "read_fm": read_dictionary["read_fm"],
+        "nb_cpg": read_dictionary["nb_cpg"],
+        "cpg_methylation_profile": result,
     }
+
 
 def generate_cpg_methylation_matrix(row_df, min_coverage):
     """
@@ -343,15 +347,12 @@ def generate_cpg_methylation_matrix(row_df, min_coverage):
       the shape of the matrix will be (250, 20, 2).
     """
 
-    genomic_array = row_df['genomic_picture']
-    nb_cpg_in_region = row_df['nb_cpg_found']
-    required_nb_cpg = round(1.0 * nb_cpg_in_region)
-
-    length_genomic_interval = row_df['region_sup'] - row_df['region_inf'] + 1
+    genomic_array = row_df["genomic_picture"]
 
     # Generate the 1D CpG methylation profile for each read
-    profiles = [generate_methyl_profile_for_read(read_dict)
-                  for read_dict in genomic_array]
+    profiles = [
+        generate_methyl_profile_for_read(read_dict) for read_dict in genomic_array
+    ]
 
     # Filter out empty results
     profiles = [profile for profile in profiles if profile]
@@ -359,16 +360,21 @@ def generate_cpg_methylation_matrix(row_df, min_coverage):
     if profiles and len(profiles) >= min_coverage:
 
         # Randomly sample profiles if more are available than the minimum required
-        sampled_profiles = random.sample(profiles, min_coverage) if len(profiles) > min_coverage else profiles
+        sampled_profiles = (
+            random.sample(profiles, min_coverage)
+            if len(profiles) > min_coverage
+            else profiles
+        )
 
         # Sort the sampled profiles by read FM, descending
-        sorted_profiles = sorted(sampled_profiles,
-                                 key=lambda d: d['read_fm'],
-                                 reverse=True)
+        sorted_profiles = sorted(
+            sampled_profiles, key=lambda d: d["read_fm"], reverse=True
+        )
 
         # Extract the CpG methylation profiles
-        methylation_matrix = np.array([profile['cpg_methylation_profile'] \
-                                       for profile in sorted_profiles])
+        methylation_matrix = np.array(
+            [profile["cpg_methylation_profile"] for profile in sorted_profiles]
+        )
 
         # Transpose the matrix to match the required dimensions
         methylation_matrix = np.transpose(methylation_matrix, (1, 0, 2))
@@ -383,15 +389,19 @@ def process_file_at_index(bucket_name, folder_path, task_index):
     storage_client = storage.Client()
 
     # Define the prefix to search within a specific folder, ensuring it ends with '/'
-    prefix = folder_path if folder_path.endswith('/') else f"{folder_path}/"
+    prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
 
     # List all blobs in the specified folder
     blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
 
     # Filter blobs that match the 'raw-*.json' pattern and sort them
     filtered_blobs = sorted(
-        (blob for blob in blobs if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")),
-        key=lambda blob: blob.name
+        (
+            blob
+            for blob in blobs
+            if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")
+        ),
+        key=lambda blob: blob.name,
     )
 
     # Ensure task_index is within the range of available files
@@ -403,85 +413,97 @@ def process_file_at_index(bucket_name, folder_path, task_index):
         sys.exit(1)
 
     # Log the processing info
-    logging.info(f"Processing the bucket {bucket_name} with the folder path {folder_path} and the file name {selected_blob.name}")
+    logging.info(
+        f"Processing the bucket {bucket_name} with the folder path {folder_path} and the file name {selected_blob.name}"
+    )
 
-    # Download the file as bytes and decode it to a string
-    file_contents = selected_blob.download_as_bytes().decode('utf-8')
+    logging.info("Download the file as bytes and decode it to a string")
+    file_contents = selected_blob.download_as_bytes().decode("utf-8")
 
-    # Process each line as a separate JSON object
+    logging.info("Process each line as a separate JSON object")
     processed_data = []
     for line in file_contents.splitlines():
         data = json.loads(line)  # Parse each line as JSON
-        processed_data.append(data)  # Replace this with your actual processing logic
+        processed_data.append(data)
 
-    return processed_data, selected_blob.name
+    return pd.DataFrame(processed_data), os.path.basename(selected_blob.name)
 
 
 # Define main script
-def main(bucket_name, folder_path, max_digits = 12):
+def main(bucket_name, folder_path, max_digits=12):
 
     # Store the JSON file into a dataframe
     df_raw, file_name = process_file_at_index(bucket_name, folder_path, TASK_INDEX)
+    logging.info(f"File name: {file_name}")
+    logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
-    # Create kernel functions
-    values_for_kernel_cov = generate_kernel_values(0, KERNEL_COV_NB_MAX, KERNEL_COV_NB_STEP)
+    logging.info("Create kernel functions")
+    values_for_kernel_cov = generate_kernel_values(
+        0, KERNEL_COV_NB_MAX, KERNEL_COV_NB_STEP
+    )
     bandwidth_cov = KERNEL_COV_BANDWIDTH
 
     # Kernel function for fractional methylation ('read_fm', 'cpg_fm')
-    values_for_kernel_fm = generate_kernel_values(0, 1, step=1/KERNEL_FM_NB_VALUES)
+    values_for_kernel_fm = generate_kernel_values(0, 1, step=1 / KERNEL_FM_NB_VALUES)
     bandwidth_fm = KERNEL_FM_BANDWIDTH
 
-    dic_kernel = {'read_fm': {
-                    'values': values_for_kernel_fm,
-                    'bandwidth': bandwidth_fm
-                },
-                'cpg_fm': {
-                    'values': values_for_kernel_fm,
-                    'bandwidth': bandwidth_fm
-                },
-                'cpg_cov': {
-                    'values': values_for_kernel_cov,
-                    'bandwidth': bandwidth_cov
-                },
-                'cpg_dist': {
-                    'values': values_for_kernel_cov,
-                    'bandwidth': bandwidth_cov
-                }
-            }
-    
-    dic_data = {'raw': df_raw.copy(deep = True)}
-
+    dic_kernel = {
+        "read_fm": {"values": values_for_kernel_fm, "bandwidth": bandwidth_fm},
+        "cpg_fm": {"values": values_for_kernel_fm, "bandwidth": bandwidth_fm},
+        "cpg_cov": {"values": values_for_kernel_cov, "bandwidth": bandwidth_cov},
+        "cpg_dist": {"values": values_for_kernel_cov, "bandwidth": bandwidth_cov},
+    }
 
     logging.info("Remove unwanted chromosomes")
-    df_filtered = filter_chromosomes(dic_data['raw'])
-    logging.info(compute_counts_and_percentages(df_filtered['asm_snp']))
-    
+    df_filtered = filter_chromosomes(df_raw)
+    logging.info(f"Number of rows of df_filtered: {len(df_filtered)}")
+    logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
+
     logging.info("Calculate consecutive distances between CpGs")
-    df_filtered['cpg_dist'] = df_filtered['cpg_pos'].apply(calculate_cpg_distances)
+    df_filtered["cpg_dist"] = df_filtered["cpg_pos"].apply(calculate_cpg_distances)
+
+    logging.info("Example of an array of cpg distances")
+    logging.info(df_filtered.iloc[0]["cpg_dist"])
 
     logging.info("Convert specific arrays into kernel densities")
     for col in dic_kernel.keys():
         if col in df_filtered.columns:
-            convert_arrays_to_kernel_densities(df_filtered,
-                                                col,
-                                                dic_kernel[col]['values'],
-                                                dic_kernel[col]['bandwidth'])
+            convert_arrays_to_kernel_densities(
+                df_filtered,
+                col,
+                dic_kernel[col]["values"],
+                dic_kernel[col]["bandwidth"],
+            )
 
-    logging.info("Create a column for each kernel density estimate (right now they are stored in arrays)")
+    logging.info(
+        "Create a column for each kernel density estimate (right now they are stored in arrays)"
+    )
     for col in dic_kernel.keys():
         expand_array_elements(df_filtered, col + "_kd")
-        
-    logging.info("Create a methylation sequence of nucleotide over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation")
-    df_filtered['methylation_sequence'] = df_filtered.apply(generate_methylation_sequence, axis = 1)
-    
-    logging.info("Create a methylation matrix of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth. Each element represents the presence of a CpG and its methylation status")
-    ddf = dd.from_pandas(df_filtered, npartitions = 100)
-    result = ddf.apply(lambda x: generate_cpg_methylation_matrix(x, MIN_CPG_COV), axis=1, meta=('x', 'object'))
-    df_filtered['methylation_matrix'] = result.compute()
+
+    logging.info(
+        "Create a methylation sequence of nucleotide over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
+    )
+    df_filtered["methylation_sequence"] = df_filtered.apply(
+        generate_methylation_sequence, axis=1
+    )
+
+    logging.info(
+        "Create a methylation matrix of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth. Each element represents the presence of a CpG and its methylation status"
+    )
+    ddf = dd.from_pandas(df_filtered, npartitions=10)
+    result = ddf.apply(
+        lambda x: generate_cpg_methylation_matrix(x, MIN_CPG_COV),
+        axis=1,
+        meta=("x", "object"),
+    )
+    df_filtered["methylation_matrix"] = result.compute()
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list
-    df_filtered = df_filtered[df_filtered['methylation_matrix'].apply(lambda x: len(x) > 0)]
+    df_filtered = df_filtered[
+        df_filtered["methylation_matrix"].apply(lambda x: len(x) > 0)
+    ]
 
     # Count the number of rows after removing rows with empty lists
     final_row_count = len(df_filtered)
@@ -489,36 +511,59 @@ def main(bucket_name, folder_path, max_digits = 12):
     # Calculate the number of rows removed
     rows_removed = initial_row_count - final_row_count
 
-    logging.info(f"There are {rows_removed} rows without methylation matrix data from the dataset out of {initial_row_count} rows")
+    logging.info(
+        f"There are {rows_removed} rows without methylation matrix data from the dataset out of {initial_row_count} rows"
+    )
     percentage_removed = (rows_removed / initial_row_count) * 100
     logging.info(f"{percentage_removed:.2f}% of the rows were removed")
-    
-    dic_data['vars_not_used'] = df_filtered[VARS_TO_REMOVE]
-    dic_data['clean'] = df_filtered.drop(columns=VARS_TO_REMOVE, axis=1, errors='ignore')
 
-    # One-hot encode categoricals variables that are not binary
-    dic_data['clean'] = pd.get_dummies(dic_data['clean'], columns=CATEGORICAL_VARS_TO_ONE_HOT_ENCODE)
-    
-    # Create a list of categorical variables    
-    categorical_vars = [col for col in dic_data['train']['normalized'].columns \
-          if any(col.startswith(var) for var in CATEGORICAL_VARS)]
-    
-    # Create the 3 types of dataset.
-    dic_data['tabular'] = dic_data['clean'][['sample', 'asm_snp'] + CATEGORICAL_VARS + VARS_TO_NORMALIZE]
-    
-    dic_data['methylation_sequence'] = dic_data['clean'][['sample', 'asm_snp', 'methylation_sequence']]
-    
-    dic_data['methylation_matrix'] = dic_data['clean'][['sample', 'asm_snp', 'methylation_matrix']]
-    
-    for data_type in ['tabular', 'methylation_sequence', 'methylation_matrix']:
-        export_df_to_gcs_json(dic_data[data_type], 
-                              data_type, 
-                              BUCKET_NAME, 
-                              OUTPUT_DATA_FOLDER_PATH, 
-                              file_name)
-    
-    # Upload the 3 datasets to Cloud Storage.
+    # Store the different datasets into a hash table.
+    dic_data = {}
 
+    dic_data["clean"] = df_filtered.drop(
+        columns=VARS_TO_REMOVE, axis=1, errors="ignore"
+    )
+
+    logging.info("One-hot encode categoricals variables that are not binary")
+    dic_data["clean"] = pd.get_dummies(
+        dic_data["clean"], columns=CATEGORICAL_VARS_TO_ONE_HOT_ENCODE
+    )
+
+    logging.info("Create a list of categorical variables")
+    categorical_vars = [
+        col
+        for col in dic_data["clean"].columns
+        if any(col.startswith(var) for var in CATEGORICAL_VARS)
+    ]
+
+    logging.info(f"All categorical variables: {categorical_vars}")
+
+    logging.info("Creating the dataset with a methylation sequence")
+    dic_data["methylation_sequence"] = dic_data["clean"][
+        ["sample", "asm_snp", "methylation_sequence"]
+    ].copy(deep=True)
+
+    logging.info("Creating the  dataset with the methylation matrix")
+    dic_data["methylation_matrix"] = dic_data["clean"][
+        ["sample", "asm_snp", "methylation_matrix"]
+    ].copy(deep=True)
+
+    logging.info("Creating the tabular dataset")
+    dic_data["tabular"] = (
+        dic_data["clean"]
+        .drop(columns=["methylation_sequence", "methylation_matrix"], axis=1)
+        .copy(deep=True)
+    )
+
+    logging.info("Uploading the 3 datasets to the bucket")
+    for data_type in ["tabular", "methylation_sequence", "methylation_matrix"]:
+        export_df_to_gcs_json(
+            dic_data[data_type],
+            data_type,
+            BUCKET_NAME,
+            OUTPUT_DATA_FOLDER_PATH,
+            file_name,
+        )
 
 
 # Start script

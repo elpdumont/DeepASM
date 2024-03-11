@@ -1,5 +1,5 @@
 # To execute the code:
-# gcloud builds submit --config=cloudbuild.yaml .  
+# gcloud builds submit --config=cloudbuild.yaml .
 
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
@@ -8,14 +8,23 @@ substitutions:
 
 steps:
   # Docker Build
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 
-           'us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}', '.']
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-t",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}",
+        ".",
+      ]
 
   # Docker push to Google Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push',  'us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}']
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "push",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}",
+      ]
 
-# Store images in Google Artifact Registry 
+# Store images in Google Artifact Registry
 images:
   - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}
