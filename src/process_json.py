@@ -97,7 +97,7 @@ def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
     json_data = df.to_json(orient="records", lines=True)
 
     file_name = data_type + "_" + file_name
-    logging.info(f"Saving JSON data as{file_name}")
+    logging.info(f"Saving JSON data as {file_name}")
     with open(file_name, "w") as file:
         file.write(json_data)
 
