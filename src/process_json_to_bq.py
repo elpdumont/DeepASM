@@ -9,7 +9,6 @@ import sys
 
 # Python packages for data, stats
 from google.cloud import bigquery, storage
-from google.cloud.exceptions import NotFound
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
@@ -40,16 +39,6 @@ def list_files(bucket_name, folder_path, dataset_type):
     return [
         f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
     ]
-
-
-def delete_table_if_exists(dataset_name, table_name):
-    """Deletes the BigQuery table if it exists."""
-    table_id = f"{bq_client.project}.{dataset_name}.{table_name}"
-    try:
-        bq_client.delete_table(table_id)
-        logging.info(f"Deleted table '{table_id}'.")
-    except NotFound:
-        logging.info(f"Table {table_id} not found, no deletion performed.")
 
 
 # Function to load JSON files into BigQuery

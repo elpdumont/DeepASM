@@ -49,8 +49,6 @@ KERNEL_COV_NB_STEP = int(os.getenv("KERNEL_COV_NB_STEP"))
 KERNEL_COV_BANDWIDTH = int(os.getenv("KERNEL_COV_BANDWIDTH"))
 
 VARS_TO_REMOVE = [
-    "region_inf",
-    "region_sup",
     "read_fm",
     "cpg_pos",
     "cpg_cov",

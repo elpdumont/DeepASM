@@ -25,6 +25,7 @@ gcloud run jobs deploy process-json \
  --max-retries 3 \
  --cpu 4 \
  --memory 16Gi \
+ --task-timeout 2000 \
  --region us-east1 \
  --project=hmh-em-deepasm
 
@@ -42,8 +43,9 @@ gcloud run jobs deploy load-json-to-bq \
  --set-env-vars BUCKET_FOLDER_PATH="ml_datasets/" \
  --set-env-vars BQ_ML_DATASET_NAME="ml" \
  --set-env-vars BQ_ML_TABLE_NAME="tabular" \
- --max-retries 3 \
+ --max-retries 0 \
  --region us-east1 \
+ --task-timeout 2000 \
  --project=hmh-em-deepasm
 
 gcloud run jobs execute load-json-to-bq

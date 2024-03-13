@@ -1,0 +1,61 @@
+GCP:
+  - BUCKET_NAME: hmh_deepasm
+  - REGION: us-east1
+  - VERTEX_MAX_PARALLEL: 10
+  - BUCKET: hmh_deepasm
+  - RAW_DATA_BUCKET_FOLDER: raw/
+  - ML_DATA_BUCKET_FOLDER: ml/
+  - BQ_ML_DATASET_NAME: ml
+
+GENOMICS:
+  - GENOMIC_LENGTH: 250
+  - MIN_CPG_COV: 20
+
+FEATURE_PREP:
+  - KERNEL_FM_NB_VALUES: 10
+  - KERNEL_FM_BANDWIDTH: 0.1
+  - KERNEL_COV_NB_MAX: 200
+  - KERNEL_COV_NB_STEP: 10
+  - KERNEL_COV_BANDWIDTH: 5
+
+VARS_TO_REMOVE:
+  - read_fm
+  - cpg_pos
+  - cpg_cov
+  - cpg_dist
+  - cpg_fm
+  - genomic_picture
+  - global_cpg_fm
+  - tot_nb_reads
+  - tot_nb_cpg
+  - cpg_cov_kd
+  - read_fm_kd
+  - cpg_fm_kd
+  - cpg_dist_kd
+
+VARS_TO_NORMALIZE:
+  - region_nb_cpg
+  - nb_cpg_found
+  - nb_reads
+  - encode_ChiP_V2
+  - tf_motifs
+  - cpg_cov_kd
+  - read_fm_kd
+  - cpg_fm_kd
+  - cpg_dist_kd
+  - std_read_fm
+  - mean_read_fm
+  - std_cpg_fm
+  - mean_cpg_fm
+  - std_cpg_cov
+  - mean_cpg_cov
+  - std_cpg_dist
+  - mean_cpg_dist
+
+CATEGORICAL_VARS:
+  - chr
+  - sample_category
+  - dnase
+
+CATEGORICAL_VARS_TO_ONE_HOT_ENCODE:
+  - chr
