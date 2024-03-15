@@ -4,7 +4,6 @@ import logging
 
 # File and variable management
 import os
-import re
 import sys
 
 # Python packages for data, stats
@@ -28,17 +27,6 @@ DATASET_TYPE = os.getenv("DATASET_TYPE")
 BUCKET_FOLDER_PATH = os.getenv("BUCKET_FOLDER_PATH")
 BQ_ML_DATASET_NAME = os.getenv("BQ_ML_DATASET_NAME")
 BQ_ML_TABLE_NAME = os.getenv("BQ_ML_TABLE_NAME")
-
-
-# Function to list files in a bucket that match a specific prefix and pattern
-def list_files(bucket_name, folder_path, dataset_type):
-    """Lists all the files in the bucket that match the prefix and pattern."""
-    prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
-    files = storage_client.list_blobs(bucket_name, prefix=prefix)
-    pattern = re.compile(rf"{re.escape(prefix + dataset_type)}_raw.*\.json$")
-    return [
-        f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
-    ]
 
 
 # Function to load JSON files into BigQuery

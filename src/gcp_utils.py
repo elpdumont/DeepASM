@@ -69,26 +69,27 @@ def list_files_in_bucket_folder(bucket_name, folder_path, dataset_type):
     return [
         f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
     ]
-    # def process_file_at_index(bucket_name, folder_path, task_index):
-    #     # Initialize the GCP Storage client
-    #     storage_client = storage.Client()
 
-    #     # Define the prefix to search within a specific folder, ensuring it ends with '/'
-    #     prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
 
-    #     # List all blobs in the specified folder
-    #     blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
+def create_df_from_json_for_index_file(bucket_name, folder_path, task_index):
+    # Initialize the GCP Storage client
+    storage_client = storage.Client()
 
-    #     # Filter blobs that match the 'raw-*.json' pattern and sort them
-    #     filtered_blobs = sorted(
-    #         (
-    #             blob
-    #             for blob in blobs
-    #             if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")
-    #         ),
-    #         key=lambda blob: blob.name,
-    #     )
+    # Define the prefix to search within a specific folder, ensuring it ends with '/'
+    prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
 
+    # List all blobs in the specified folder
+    blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
+
+    # Filter blobs that match the 'raw-*.json' pattern and sort them
+    filtered_blobs = sorted(
+        (
+            blob
+            for blob in blobs
+            if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")
+        ),
+        key=lambda blob: blob.name,
+    )
     # Ensure task_index is within the range of available files
     if 0 <= task_index < len(filtered_blobs):
         # Get the Blob object at the specified index

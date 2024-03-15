@@ -4,7 +4,7 @@
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
   _IMAGE: python
-  _VERSION: latest
+  #_VERSION: latest
 
 steps:
   # Docker Build
@@ -13,7 +13,7 @@ steps:
       [
         "build",
         "-t",
-        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
         ".",
       ]
 
@@ -22,9 +22,9 @@ steps:
     args:
       [
         "push",
-        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
       ]
 
 # Store images in Google Artifact Registry
 images:
-  - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${_VERSION}
+  - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}

@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.12
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -13,8 +13,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the current directory contents into the container at /app
 COPY src/ .
 
+# Copy the config files
+COPY config/ .
+
 # Set the default entry point to Python
 #ENTRYPOINT ["python"]
+
+# Healthcheck
+HEALTHCHECK CMD python --version || exit 1
+
 
 CMD ["python"]
 
