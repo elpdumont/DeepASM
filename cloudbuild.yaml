@@ -1,5 +1,5 @@
 # To execute the code:
-# gcloud builds submit --config=cloudbuild.yaml .
+# gcloud builds submit --config=cloudbuild.yaml . --substitutions=SHORT_SHA=$(git rev-parse --short HEAD)
 
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
@@ -11,17 +11,17 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args:
       [
-        "build",
-        "-t",
+        build,
+        -t,
         "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
-        ".",
+        .,
       ]
 
   # Docker push to Google Artifact Registry
   - name: gcr.io/cloud-builders/docker
     args:
       [
-        "push",
+        push,
         "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
       ]
 

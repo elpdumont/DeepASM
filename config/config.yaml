@@ -1,27 +1,27 @@
 GCP:
-  - BUCKET_NAME: hmh_deepasm
-  - REGION: us-east1
-  - DOCKER_REGION: us-east1-docker.pkg.dev
-  - ARTIFACT_REGISTRY_REPO: deepasm-docker-repo
-  - DOCKER_PYTHON_IMAGE: deepasm_python
-  - VERTEX_MAX_PARALLEL: 10
-  - BUCKET: hmh_deepasm
-  - RAW_DATA_BUCKET_FOLDER: raw/
-  - ML_DATA_BUCKET_FOLDER: ml/
-  - BQ_ML_DATASET_NAME: ml
+  BUCKET_NAME: hmh_deepasm
+  REGION: us-east1
+  DOCKER_REGION: us-east1-docker.pkg.dev
+  ARTIFACT_REGISTRY_REPO: deepasm-docker-repo
+  DOCKER_PYTHON_IMAGE: deepasm_python
+  VERTEX_MAX_PARALLEL: 10
+  BUCKET: hmh_deepasm
+  RAW_DATA_BUCKET_FOLDER: raw/
+  ML_DATA_BUCKET_FOLDER: ml/
+  BQ_ML_DATASET_NAME: ml
 
 GENOMICS:
-  - GENOMIC_LENGTH: 250
-  - MIN_CPG_COV: 20
-  - REFERENCE_GENOME: hg19
+  GENOMIC_LENGTH: 250
+  MIN_CPG_COV: 20
+  REFERENCE_GENOME: hg19
 
 FEATURE_PREP:
-  - KERNEL_FM_NB_VALUES: 10
-  - KERNEL_FM_BANDWIDTH: 0.1
-  - KERNEL_COV_NB_MAX: 200
-  - KERNEL_COV_NB_STEP: 10
-  - KERNEL_COV_BANDWIDTH: 5
-  - KERNEL_TYPE: gaussian
+  KERNEL_FM_NB_VALUES: 10
+  KERNEL_FM_BANDWIDTH: 0.1
+  KERNEL_COV_NB_MAX: 200
+  KERNEL_COV_NB_STEP: 10
+  KERNEL_COV_BANDWIDTH: 5
+  KERNEL_TYPE: gaussian
 
 VARS_TO_REMOVE:
   - read_fm
@@ -39,10 +39,10 @@ VARS_TO_REMOVE:
   - cpg_dist_kd
 
 VARS_TO_KEEP:
-  - sample: STRING
-  - chr: STRING
-  - region_inf: INTEGER
-  - region_sup: INTEGER
+  sample: STRING
+  chr: STRING
+  region_inf: INTEGER
+  region_sup: INTEGER
 
 VARS_TO_NORMALIZE:
   - region_nb_cpg
