@@ -6,7 +6,7 @@ GCP:
   DOCKER_PYTHON_IMAGE: deepasm_python
   VERTEX_MAX_PARALLEL: 10
   BUCKET: hmh_deepasm
-  RAW_DATA_BUCKET_FOLDER: raw/
+  RAW_DATA_BUCKET_FOLDER: bq_tables/250bp_asm_labelled/
   ML_DATA_BUCKET_FOLDER: ml/
   BQ_ML_DATASET_NAME: ml
 
