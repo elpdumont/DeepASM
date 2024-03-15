@@ -47,7 +47,7 @@ bq_ml_dataset_name = config["GCP"]["BQ_ML_DATASET_NAME"]
 # Variables to handle
 vars_to_remove = config["VARS_TO_REMOVE"]
 dic_vars_to_keep = config["VARS_TO_KEEP"]
-vars_to_keep = [list(item.keys()) for item in dic_vars_to_keep]
+vars_to_keep = list(dic_vars_to_keep.keys())
 
 # vars_to_normalize = config["VARS_TO_NORMALIZE"]
 categorical_vars = config["CATEGORICAL_VARS"]
