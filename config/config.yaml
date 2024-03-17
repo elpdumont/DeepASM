@@ -2,9 +2,7 @@ GCP:
   PROJECT_ID: hmh-em-deepasm
   BUCKET_NAME: hmh_deepasm
   REGION: us-east1
-  IMAGE:
-    REPOSITORY: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
-    TAG: 005ae2d
+  IMAGE: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
   VERTEX_MAX_PARALLEL: 10
   BUCKET:
     NAME: hmh_deepasm

@@ -1,12 +1,15 @@
 #!/bin/bash
 
+
+# Image TAG
+IMAGE_TAG="aa664f9"
+
 # Path to the YAML file
 CONFIG_FILE="config/config.yaml"
 
 # Use `yq` to read the values. Ensure `yq` is installed and in your PATH.
 PROJECT_ID=$(yq e ".GCP.PROJECT_ID" "${CONFIG_FILE}")
-IMAGE_REPOSITORY=$(yq e ".GCP.IMAGE.REPOSITORY" "${CONFIG_FILE}")
-IMAGE_TAG=$(yq e '.GCP.IMAGE.TAG' "${CONFIG_FILE}")
+IMAGE=$(yq e ".GCP.IMAGE" "${CONFIG_FILE}")
 
 GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' "${CONFIG_FILE}")
 MIN_CPG_COV=$(yq e '.GENOMICS.MIN_CPG_COV' "${CONFIG_FILE}")
@@ -44,7 +47,7 @@ done
 
 
 gcloud run jobs deploy process-json \
- --image "${IMAGE_REPOSITORY}":"${IMAGE_TAG}" \
+ --image "${IMAGE}":"${IMAGE_TAG}" \
  --args="python,/app/process_raw_json_to_bq.py" \
  --set-env-vars ML_DATASET_ID="${ML_DATASET_ID}" \
  --tasks 1 \
