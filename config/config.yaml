@@ -1,14 +1,15 @@
 GCP:
+  PROJECT_ID: hmh-em-deepasm
   BUCKET_NAME: hmh_deepasm
   REGION: us-east1
-  DOCKER_REGION: us-east1-docker.pkg.dev
-  ARTIFACT_REGISTRY_REPO: deepasm-docker-repo
-  DOCKER_PYTHON_IMAGE: deepasm_python
+  IMAGE:
+    REPOSITORY: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
+    TAG: 005ae2d
   VERTEX_MAX_PARALLEL: 10
-  BUCKET: hmh_deepasm
-  RAW_DATA_BUCKET_FOLDER: bq_tables/250bp_asm_labelled/
-  ML_DATA_BUCKET_FOLDER: ml/
-  BQ_ML_DATASET_NAME: ml
+  BUCKET:
+    NAME: hmh_deepasm
+    RAW_DATA_FOLDER: bq_tables/250bp_asm_labelled/
+    ML_DATA_FOLDER: ml/
 
 GENOMICS:
   GENOMIC_LENGTH: 250

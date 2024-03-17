@@ -17,7 +17,7 @@ gcloud config set project hmh-em-deepasm
 gcloud config set run/region us-east1
 ```
 
-gcloud run jobs deploy process-json3 \
+gcloud run jobs deploy process-json \
  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest \
  --args="python,/app/process_json.py" \
  --tasks 116 \

@@ -36,13 +36,16 @@ dask.config.set({"dataframe.query-planning-warning": False})
 TASK_INDEX = int(os.getenv("CLOUD_RUN_TASK_INDEX", 0))
 TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 
+# Retrieve user-defined variables
+ml_dataset_id = os.getenv("ML_DATASET_ID")
+
+# Import all other variables from the config file
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 # Accessing GCP configuration
-bucket_name = config["GCP"]["BUCKET_NAME"]
-raw_data_bucket_folder = config["GCP"]["RAW_DATA_BUCKET_FOLDER"]
-bq_ml_dataset_name = config["GCP"]["BQ_ML_DATASET_NAME"]
+bucket_name = config["GCP"]["BUCKET"]["NAME"]
+raw_data_bucket_folder = config["GCP"]["BUCKET"]["RAW_DATA_FOLDER"]
 
 # Variables to handle
 vars_to_remove = config["VARS_TO_REMOVE"]
@@ -402,7 +405,7 @@ def main():
         expand_array_elements(df_filtered, col + "_kd")
 
     logging.info(
-        "Create a methylation sequence of nucleotide over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
+        "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
     )
     df_filtered["sequence_cpg_fm"] = df_filtered.apply(
         lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
@@ -500,9 +503,12 @@ def main():
         "Uploading the dataframe with the sequence of CpG fractional methylations"
     )
     job_config = bigquery.LoadJobConfig(schema=schema_sequence_cpg_fm)
-    bq_client.load_table_from_dataframe(
-        dic_data["sequence_cpg_fm"], "ml.test7", job_config=job_config
+    job = bq_client.load_table_from_dataframe(
+        dic_data["sequence_cpg_fm"],
+        ml_dataset_id + "." + "sequence_cpg_fm",
+        job_config=job_config,
     )
+    logging.info(job.result())
 
     # for data_type in ["tabular", "sequence_cpg_fm", "methylation_matrix"]:
     #     export_df_to_gcs_json(
