@@ -2,7 +2,7 @@
 
 
 # Image TAG
-IMAGE_TAG="aa664f9"
+IMAGE_TAG="4b10ec2"
 
 # Path to the YAML file
 CONFIG_FILE="config/config.yaml"
@@ -56,9 +56,8 @@ gcloud run jobs deploy process-json \
  --memory 16Gi \
  --task-timeout 2000 \
  --region us-east1 \
- --project="${PROJECT_ID}"
-
-gcloud run jobs execute process-json
+ --project="${PROJECT_ID}" \
+ --execute-now
 
 #------------------------------------------------------------------
 # Load tabular data in BigQuery

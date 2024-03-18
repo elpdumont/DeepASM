@@ -59,6 +59,8 @@ categorical_vars_ohe = config["CAT_VARS_OHE"]
 # Genomic variables
 genomic_length = config["GENOMICS"]["GENOMIC_LENGTH"]
 min_cpg_cov = config["GENOMICS"]["MIN_CPG_COV"]
+min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
+min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
 
 # Feature prep (Kernel functions)
 kernel_fm_nb_values = config["FEATURE_PREP"]["KERNEL_FM_NB_VALUES"]
@@ -244,7 +246,6 @@ def generate_nucleotide_sequence_of_cpg_fm(row, genomic_length):
                     'cpg_fm' (float or None): The fractional methylation value at positions with a CpG site; None
                                               for positions without CpG sites.
     """
-    import numpy as np
 
     # Initialize the list to hold dictionaries for each genomic position
     result = [{"pos": k + 1, "cpg": 0, "cpg_fm": None} for k in range(genomic_length)]
@@ -258,79 +259,104 @@ def generate_nucleotide_sequence_of_cpg_fm(row, genomic_length):
 
     return result
 
-    # Initialize the list to hold dictionaries for each genomic position
-    result = [{f"{k+1}": 0, "cpg_fm": 0.0} for k in range(genomic_length)]
 
-    # Update dictionaries in the result list for positions with CpGs
-    for pos, fm in zip(row["cpg_pos"], row["cpg_fm"]):
-        result[pos] = {f"{pos}": 1, "cpg_fm": fm}
+def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
+    read_dictionary, genomic_length, min_nb_cpg_in_read
+):
+    """
+    Generates a methylation profile for a given read.
 
-    return result
+    The profile is a one-dimensional numpy array representing each position within
+    the genomic length. Each position in the array can have a value of:
+    - 0 if there is no CpG at that position,
+    - 1 if there is a CpG with no methylation, and
+    - 2 if there is a CpG with methylation.
 
+    Parameters:
+    - read_dictionary (dict): A dictionary containing 'pos_array' with 1-indexed positions of CpGs,
+                              'meth_array' indicating methylation status (0 or 1) for each CpG,
+                              'read_fm' indicating forward or reverse read, and 'nb_cpg' the number of CpGs.
+    - genomic_length (int): The length of the genome or region being considered.
+    - min_nb_cpg_in_read (int): Minimum number of CpGs required in a read for it to be considered.
 
-def generate_methyl_profile_for_read(read_dictionary):
-    pos_array = np.array(read_dictionary["pos_array"], dtype=int)
+    Returns:
+    - dict: A dictionary containing 'read_fm' and 'cpg_methylation_profile' if nb_cpg meets or exceeds the minimum.
+            Returns None if the condition is not met.
+    """
+
+    pos_array = (
+        np.array(read_dictionary["pos_array"], dtype=int) - 1
+    )  # Convert to 0-indexed
     meth_array = np.array(read_dictionary["meth_array"], dtype=int)
 
     # Initialize the result array with zeros
-    result = np.zeros((genomic_length, 2), dtype=int)
+    result = np.zeros(genomic_length, dtype=int)
 
-    # Set the first column to 1 at positions where CpG sites are present
-    result[pos_array - 1, 0] = 1  # Assuming pos_array is 1-indexed
+    # Set the values based on CpG presence and methylation status
+    result[pos_array] = meth_array + 1
 
-    # Update the methylation status
-    result[pos_array - 1, 1] = meth_array
+    return (
+        {
+            "read_fm": read_dictionary["read_fm"],
+            "cpg_methylation_profile": result,
+        }
+        if int(read_dictionary["nb_cpg"]) >= min_nb_cpg_in_read
+        else None
+    )
 
-    return {
-        "read_id": read_dictionary["read_id"],
-        "read_fm": read_dictionary["read_fm"],
-        "nb_cpg": read_dictionary["nb_cpg"],
-        "cpg_methylation_profile": result,
-    }
 
-
-def generate_cpg_methylation_matrix(row_df, min_coverage):
+def generate_sequence_cpg_cov_and_methyl_over_reads(
+    row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg
+):
     """
-    Generates a 3D CpG methylation matrix for a set of genomic reads
-    within a specific genomic window.
-    The matrix dimensions are length_genomic_interval x min_coverage x 2, where:
-    - The first dimension (length_genomic_interval) represents the length of the genomic window.
-    - The second dimension (min_coverage) corresponds to the minimum number of reads required.
-    - The third dimension contains a tuple [a, b] for each genomic position in a read:
-        'a' indicates the presence (1) or absence (0) of a CpG site,
-        'b' indicates the methylation status of the site if present.
+    Generates a genomic-length wide list of dictionaries.
+    Each dictionary is a dictionary with 2 keys: nucleotide position, and reads.
+    Each "reads" is also dictionary with 2 keys: read number and CpG status:
+       - 0 if there is no CpG at that position,
+       - 1 if there is a CpG with no methylation, and
+       - 2 if there is a CpG with methylation.
 
-    Reads are ordered by fractional methylation (FM) in descending order within the matrix.
+    Reads are ordered by fractional methylation (FM) in descending order..
     If the minimum coverage is not met, an empty list is returned.
 
     Parameters:
     - row_df (pd.Series): A row from a DataFrame, representing data for a specific genomic window.
     - genomic_interval (int): The length of the genomic window to be considered.
-    - min_coverage (int): The minimum number of reads required to generate the matrix.
+    - nb_reads_in_sequence (int): The minimum number of reads required to generate the matrix.
+    - min_fraction_of_nb_cpg (float): The minimum fraction of CpGs required to select a read to be considered.
 
     Returns:
-    - methylation_matrix (np.array or list):
-      A 3D numpy array representing the CpG methylation matrix if the minimum coverage is met;
-      otherwise, an empty list. For instance, if the genomic window length is 250 and the min coverage is 20,
-      the shape of the matrix will be (250, 20, 2).
+    - list: A list of dictionaries with 2 keys: nucleotide position, and reads.
+            Each "reads" is a list of dictionaries with 2 keys: read number and CpG status:
+               - 0 if there is no CpG at that position,
+               - 1 if there is a CpG with no methylation, and
+               - 2 if there is a CpG with methylation.
+            Reads are ordered by fractional methylation (FM) in descending order across the genomic sequence.
+            If the minimum nb of reads in sequence is not met, an empty list is returned.
+
     """
 
     genomic_array = row_df["genomic_picture"]
+    nb_cpg_found_in_region = row_df["nb_cpg_found"]
 
     # Generate the 1D CpG methylation profile for each read
     profiles = [
-        generate_methyl_profile_for_read(read_dict) for read_dict in genomic_array
+        generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
+            read_dict,
+            genomic_length,
+            int(min_fraction_of_nb_cpg * nb_cpg_found_in_region),
+        )
+        for read_dict in genomic_array
     ]
 
-    # Filter out empty results
     profiles = [profile for profile in profiles if profile]
 
-    if profiles and len(profiles) >= min_coverage:
+    if len(profiles) >= nb_reads_in_sequence:
 
         # Randomly sample profiles if more are available than the minimum required
         sampled_profiles = (
-            random.sample(profiles, min_coverage)
-            if len(profiles) > min_coverage
+            random.sample(profiles, nb_reads_in_sequence)
+            if len(profiles) > nb_reads_in_sequence
             else profiles
         )
 
@@ -344,12 +370,23 @@ def generate_cpg_methylation_matrix(row_df, min_coverage):
             [profile["cpg_methylation_profile"] for profile in sorted_profiles]
         )
 
-        # Transpose the matrix to match the required dimensions
-        methylation_matrix = np.transpose(methylation_matrix, (1, 0, 2))
-    else:
-        methylation_matrix = []
+        # Transpose the matrix to match the required dimensions to be genomic_length x nb_reads_in_sequence
+        methylation_matrix = np.transpose(methylation_matrix)
 
-    return np.array(methylation_matrix)
+        pos_reads_array = []
+
+        for pos in range(genomic_length):
+            reads_info = []
+            for read_nb in range(nb_reads_in_sequence):
+                cpg_state = methylation_matrix[pos, read_nb]
+                reads_info.append({"read_nb": read_nb + 1, "cpg_state": cpg_state})
+
+            pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
+
+    else:
+        pos_reads_array = []
+
+    return pos_reads_array
 
 
 # Define main script
@@ -414,18 +451,20 @@ def main():
     logging.info(
         "Create a methylation matrix of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth. Each element represents the presence of a CpG and its methylation status"
     )
-    ddf = dd.from_pandas(df_filtered, npartitions=10)
+    ddf = dd.from_pandas(df_filtered, npartitions=20)
     result = ddf.apply(
-        lambda x: generate_cpg_methylation_matrix(x, min_cpg_cov),
+        lambda x: generate_sequence_cpg_cov_and_methyl_over_reads(
+            x, genomic_length, min_nb_reads_in_sequence, min_fraction_of_nb_cpg_in_read
+        ),
         axis=1,
         meta=("x", "object"),
     )
-    df_filtered["methylation_matrix"] = result.compute()
+    df_filtered["sequence_cpg_cov_and_methyl"] = result.compute()
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list
     df_filtered = df_filtered[
-        df_filtered["methylation_matrix"].apply(lambda x: len(x) > 0)
+        df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
     ]
 
     # Count the number of rows after removing rows with empty lists
@@ -435,7 +474,7 @@ def main():
     rows_removed = initial_row_count - final_row_count
 
     logging.info(
-        f"There are {rows_removed} rows without methylation matrix data from the dataset out of {initial_row_count} rows"
+        f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
     )
     percentage_removed = (rows_removed / initial_row_count) * 100
     logging.info(f"{percentage_removed:.2f}% of the rows were removed")
@@ -467,14 +506,14 @@ def main():
     ].copy(deep=True)
 
     logging.info("Creating the  dataset with the methylation matrix")
-    dic_data["methylation_matrix"] = dic_data["clean"][
-        vars_to_keep + ["methylation_matrix"]
+    dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
+        vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
 
     logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
         dic_data["clean"]
-        .drop(columns=["sequence_cpg_fm", "methylation_matrix"], axis=1)
+        .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)
         .copy(deep=True)
     )
 
@@ -509,15 +548,6 @@ def main():
         job_config=job_config,
     )
     logging.info(job.result())
-
-    # for data_type in ["tabular", "sequence_cpg_fm", "methylation_matrix"]:
-    #     export_df_to_gcs_json(
-    #         dic_data[data_type],
-    #         data_type,
-    #         BUCKET_NAME,
-    #         OUTPUT_DATA_FOLDER_PATH,
-    #         file_name,
-    #     )
 
 
 # Start script
