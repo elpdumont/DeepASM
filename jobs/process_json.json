@@ -2,10 +2,15 @@
   "taskGroups": [
     {
       "taskSpec": {
+        "environment": {
+          "variables": {
+            "ML_DATASET_ID": "ml_250_20"
+          }
+        },
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:5cf26ea",
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:8029221",
               "commands": ["python", "/app/process_raw_json_to_bq.py"]
             }
           }

@@ -1,5 +1,6 @@
 # File management
 import json
+import logging
 import os
 import random
 import sys
@@ -13,23 +14,18 @@ import yaml
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
 
-from gcp_utils import (
-    StructuredMessage,
-    create_df_from_json_for_index_file,
-    structured_logger,
-)
+from gcp_utils import create_df_from_json_for_index_file
 
 # Initialize random seed (for selecting the reads used in the matrix)
 random_seed = 42
 random.seed(random_seed)
-
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
 
 # Initialize logging
-logger = structured_logger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
@@ -393,20 +389,16 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 # Define main script
 def main():
 
-    logger.info(StructuredMessage(f"Config file : {config}", severity="INFO"))
+    logging.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
         bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX
     )
-    logger.info(StructuredMessage(f"File name: {file_name}", severity="INFO"))
-    logger.info(
-        StructuredMessage(
-            f"Number of rows in raw dataframe: {len(df_raw)}", severity="INFO"
-        )
-    )
+    logging.info(f"File name: {file_name}")
+    logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
-    logger.info(StructuredMessage("Create kernel functions", severity="INFO"))
+    logging.info("Create kernel functions")
     values_for_kernel_cov = generate_kernel_values(
         0, kernel_cov_nb_max, kernel_cov_nb_step
     )
@@ -424,31 +416,15 @@ def main():
         },
     }
 
-    logger.info(StructuredMessage("Remove unwanted chromosomes", severity="INFO"))
+    logging.info("Remove unwanted chromosomes")
     df_filtered = filter_chromosomes(df_raw)
-    logger.info(
-        StructuredMessage(
-            f"Number of rows of df_filtered: {len(df_filtered)}", severity="INFO"
-        )
-    )
-    logger.info(
-        StructuredMessage(
-            compute_counts_and_percentages(df_filtered["asm_snp"]), severity="INFO"
-        )
-    )
+    logging.info(f"Number of rows of df_filtered: {len(df_filtered)}")
+    logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
-    logger.info(
-        StructuredMessage(
-            "Calculate consecutive distances between CpGs", severity="INFO"
-        )
-    )
+    logging.info("Calculate consecutive distances between CpGs")
     df_filtered["cpg_dist"] = df_filtered["cpg_pos"].apply(calculate_cpg_distances)
 
-    logger.info(
-        StructuredMessage(
-            "Convert specific arrays into kernel densities", severity="INFO"
-        )
-    )
+    logging.info("Convert specific arrays into kernel densities")
     for col in dic_kernel.keys():
         if col in df_filtered.columns:
             convert_arrays_to_kernel_densities(
@@ -458,30 +434,21 @@ def main():
                 dic_kernel[col]["bandwidth"],
             )
 
-    logger.info(
-        StructuredMessage(
-            "Create a column for each kernel density estimate (right now they are stored in arrays)",
-            severity="INFO",
-        )
+    logging.info(
+        "Create a column for each kernel density estimate (right now they are stored in arrays)"
     )
     for col in dic_kernel.keys():
         expand_array_elements(df_filtered, col + "_kd")
 
-    logger.info(
-        StructuredMessage(
-            "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation",
-            severity="INFO",
-        )
+    logging.info(
+        "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
     )
     df_filtered["sequence_cpg_fm"] = df_filtered.apply(
         lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
     )
 
-    logger.info(
-        StructuredMessage(
-            "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)",
-            severity="INFO",
-        )
+    logging.info(
+        "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
     )
 
     ddf = dd.from_pandas(df_filtered, npartitions=20)
@@ -507,18 +474,11 @@ def main():
     # Calculate the number of rows removed
     rows_removed = initial_row_count - final_row_count
 
-    logger.info(
-        StructuredMessage(
-            f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows",
-            severity="INFO",
-        )
+    logging.info(
+        f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
     )
     percentage_removed = (rows_removed / initial_row_count) * 100
-    logger.info(
-        StructuredMessage(
-            f"{percentage_removed:.2f}% of the rows were removed", severity="INFO"
-        )
-    )
+    logging.info(f"{percentage_removed:.2f}% of the rows were removed")
 
     # Store the different datasets into a hash table.
     dic_data = {}
@@ -527,52 +487,41 @@ def main():
         columns=vars_to_remove, axis=1, errors="ignore"
     )
 
-    logger.info(
-        StructuredMessage(
-            "One-hot encode categoricals variables that are not binary", severity="INFO"
-        )
-    )
-    dic_data["clean"] = pd.get_dummies(
-        dic_data["clean"], columns=categorical_vars_ohe, dtype=int
-    )
+    logging.info("One-hot encode categoricals variables that are not binary")
+    ohe_df = pd.get_dummies(dic_data["clean"][categorical_vars_ohe], dtype=int)
+    dic_data["clean"] = pd.concat([dic_data["clean"], ohe_df], axis=1)
 
-    # logger.info(StructuredMessage("Create a list of categorical variables")
+    # dic_data["clean"] = pd.get_dummies(
+    #     dic_data["clean"], columns=categorical_vars_ohe, dtype=int
+    # )
+
+    # logging.info("Create a list of categorical variables")
     # categorical_vars_updated = [
     #     col
     #     for col in dic_data["clean"].columns
     #     if any(col.startswith(var) for var in categorical_vars)
     # ]
 
-    # logger.info(StructuredMessage(f"All categorical variables: {categorical_vars_updated}")
+    # logging.info(f"All categorical variables: {categorical_vars_updated}")
 
-    logger.info(
-        StructuredMessage(
-            "Creating the dataset with a methylation sequence", severity="INFO"
-        )
-    )
+    logging.info("Creating the dataset with a methylation sequence")
     dic_data["sequence_cpg_fm"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
 
-    logger.info(
-        StructuredMessage(
-            "Creating the  dataset with the methylation matrix", severity="INFO"
-        )
-    )
+    logging.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
 
-    logger.info(StructuredMessage("Creating the tabular dataset", severity="INFO"))
+    logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
         dic_data["clean"]
         .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)
         .copy(deep=True)
     )
 
-    logger.info(
-        StructuredMessage("Uploading the 3 datasets to BigQuery", severity="INFO")
-    )
+    logging.info("Uploading the 3 datasets to BigQuery")
     schema_fields = []
 
     for name, type_ in dic_vars_to_keep.items():
@@ -593,11 +542,8 @@ def main():
     )
     schema_sequence_cpg_fm = schema_fields.append(record_field_sequence_cpg_fm)
 
-    logger.info(
-        StructuredMessage(
-            "Uploading the dataframe with the sequence of CpG fractional methylations",
-            severity="INFO",
-        )
+    logging.info(
+        "Uploading the dataframe with the sequence of CpG fractional methylations"
     )
     job_config = bigquery.LoadJobConfig(schema=schema_sequence_cpg_fm)
     job = bq_client.load_table_from_dataframe(
@@ -605,7 +551,7 @@ def main():
         ml_dataset_id + "." + "sequence_cpg_fm",
         job_config=job_config,
     )
-    logger.info(StructuredMessage(job.result(), severity="INFO"))
+    logging.info(job.result())
 
 
 # Start script
