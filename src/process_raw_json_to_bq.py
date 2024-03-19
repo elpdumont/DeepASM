@@ -453,12 +453,16 @@ def main():
         "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
     )
 
-    df_filtered["sequence_cpg_cov_and_methyl"] = df_filtered.apply(
+    ddf = dd.from_pandas(df_filtered, npartitions=20)
+    result = ddf.apply(
         lambda x: generate_sequence_cpg_cov_and_methyl_over_reads(
             x, genomic_length, min_nb_reads_in_sequence, min_fraction_of_nb_cpg_in_read
         ),
         axis=1,
+        meta=("x", "object"),
     )
+
+    df_filtered["methylation_matrix"] = result.compute()
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list
