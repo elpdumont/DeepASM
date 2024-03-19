@@ -594,8 +594,16 @@ def main():
     )
 
     record_field_sequence_cpg_cov_and_methyl = [
-        bigquery.SchemaField("pos", "INTEGER", mode="NULLABLE"),
-        bigquery.SchemaField("reads", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("pos", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField(
+            "reads",
+            "RECORD",
+            mode="REPEATED",
+            fields=[
+                bigquery.SchemaField("read_nb", "INTEGER", mode="REQUIRED"),
+                bigquery.SchemaField("cpg_state", "INTEGER", mode="REQUIRED"),
+            ],
+        ),
     ]
 
     record_field_sequence_cpg_cov_and_methyl = bigquery.SchemaField(
