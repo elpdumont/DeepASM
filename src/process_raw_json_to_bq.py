@@ -503,6 +503,17 @@ def main():
         f"All variables before splitting the dataset: {dic_data['clean'].columns}"
     )
 
+    logging.info("Enforcing data types")
+    dic_data["clean"]["chr"] = dic_data["clean"]["chr"].astype(pd.Int64Dtype())
+    dic_data["clean"]["region_inf"] = dic_data["clean"]["region_inf"].astype(
+        pd.Int64Dtype()
+    )
+    dic_data["clean"]["region_sup"] = dic_data["clean"]["region_sup"].astype(
+        pd.Int64Dtype()
+    )
+
+    # Repeat for any other columns as necessary
+
     # dic_data["clean"] = pd.get_dummies(
     #     dic_data["clean"], columns=categorical_vars_ohe, dtype=int
     # )
