@@ -547,13 +547,14 @@ def main():
     schema_fields = []
 
     for name, type_ in dic_vars_to_keep.items():
+        logging.info(f"Name and type: {name, type_}")
         # Here we assume all fields are required, adjust if that's not the case
         field = bigquery.SchemaField(name, type_, mode="REQUIRED")
         schema_fields.append(field)
 
     record_fields_sequence_cpg_fm = [
-        bigquery.SchemaField("pos", "INTEGER", mode="NULLABLE"),
-        bigquery.SchemaField("cpg", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("pos", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("cpg", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField("cpg_fm", "FLOAT", mode="NULLABLE"),
     ]
     record_field_sequence_cpg_fm = bigquery.SchemaField(
@@ -563,6 +564,8 @@ def main():
         fields=record_fields_sequence_cpg_fm,
     )
     schema_sequence_cpg_fm = schema_fields + [record_field_sequence_cpg_fm]
+
+    logging.info(f"Schema used: {schema_sequence_cpg_fm}")
 
     logging.info(
         "Uploading the dataframe with the sequence of CpG fractional methylations"
