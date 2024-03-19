@@ -2,7 +2,7 @@
 
 
 # Image TAG
-IMAGE_TAG="f59e8b7"
+IMAGE_TAG="c009e19"
 
 # Path to the YAML file
 CONFIG_FILE="config/config.yaml"
@@ -34,6 +34,13 @@ TABLE_NAMES=("tabular" "sequence_cpg_fm" "sequence_cpg_cov_and_methyl")
 
 
 
+
+# bq extract --destination_format=NEWLINE_DELIMITED_JSON \
+#   --compression=None \
+#   'hmh-em-deepasm:'hmh-em-deepasm.deepasm_feb2022.all_samples_all_info_250bp_for_notebook \
+#   gs://hmh_deepasm/test/table-*.json
+
+
 #---------------------------------------------------------------
 # Prepare 3 datasets
 # tabular
@@ -46,19 +53,23 @@ for TABLE_NAME in "${TABLE_NAMES[@]}"; do
     bq rm -f -t "${PROJECT_ID}:${ML_DATASET_ID}.${TABLE_NAME}"
 done
 
+gcloud batch jobs submit process-json \
+  --location "${REGION}" \
+  --config jobs/process_json.json
 
-gcloud run jobs deploy process-json \
- --image "${IMAGE}":"${IMAGE_TAG}" \
- --args="python,/app/process_raw_json_to_bq.py" \
- --set-env-vars ML_DATASET_ID="${ML_DATASET_ID}" \
- --tasks 1 \
- --max-retries 0 \
- --cpu 8 \
- --memory 32Gi \
- --task-timeout 2000 \
- --region "${REGION}" \
- --project "${PROJECT_ID}" \
- --execute-now
+
+# gcloud run jobs deploy process-json \
+#  --image "${IMAGE}":"${IMAGE_TAG}" \
+#  --args="python,/app/process_raw_json_to_bq.py" \
+#  --set-env-vars ML_DATASET_ID="${ML_DATASET_ID}" \
+#  --tasks 1 \
+#  --max-retries 0 \
+#  --cpu 8 \
+#  --memory 32Gi \
+#  --task-timeout 2000 \
+#  --region "${REGION}" \
+#  --project "${PROJECT_ID}" \
+#  --execute-now
 
 #------------------------------------------------------------------
 # Load tabular data in BigQuery

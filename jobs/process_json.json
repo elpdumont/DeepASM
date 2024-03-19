@@ -1,0 +1,37 @@
+{
+  "taskGroups": [
+    {
+      "taskSpec": {
+        "runnables": [
+          {
+            "container": {
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:c009e19",
+              "commands": ["python", "/app/process_raw_json_to_bq.py"]
+            }
+          }
+        ],
+        "computeResource": {
+          "cpuMilli": 2000,
+          "memoryMib": 16
+        },
+        "maxRetryCount": 0,
+        "maxRunDuration": "3600s"
+      },
+      "taskCount": 1,
+      "parallelism": 0
+    }
+  ],
+  "allocationPolicy": {
+    "instances": [
+      {
+        "policy": { "machineType": "e2-standard-4" }
+      }
+    ]
+  },
+  "labels": {
+    "env": "deployment"
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  }
+}

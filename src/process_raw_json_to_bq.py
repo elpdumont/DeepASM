@@ -62,8 +62,8 @@ kernel_type = config["FEATURE_PREP"]["KERNEL_TYPE"]
 
 
 # Retrieve Job-defined env vars
-TASK_INDEX = int(os.getenv("CLOUD_RUN_TASK_INDEX", 0))
-TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
+BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
+# TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 ml_dataset_id = os.getenv("ML_DATASET_ID")
 
 
@@ -395,7 +395,7 @@ def main():
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
-        bucket_name, raw_data_bucket_folder, TASK_INDEX
+        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX
     )
     logging.info(f"File name: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
@@ -554,9 +554,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as err:
-        message = (
-            f"Task #{TASK_INDEX}, " + f"Attempt #{TASK_ATTEMPT} failed: {str(err)}"
-        )
+        message = f"Task #{BATCH_TASK_INDEX} failed: {str(err)}"
 
         print(json.dumps({"message": message, "severity": "ERROR"}))
         sys.exit(1)  # Retry Job Task by exiting the process
