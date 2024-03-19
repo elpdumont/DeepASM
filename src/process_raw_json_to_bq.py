@@ -214,7 +214,7 @@ def expand_array_elements(df, column_name):
 
         # Extract the i-th element from each array in the specified column
         df[new_column_name] = df[column_name].apply(
-            lambda x: x[i] if i < len(x) else None
+            lambda x, i=i: x[i] if i < len(x) else None
         )
 
     # Note: This function modifies the DataFrame in place and does not return anything.
@@ -491,11 +491,12 @@ def main():
     dummies_list = []
     for var in categorical_vars_ohe:
         logging.info(f"One hot for variable {var}")
-        dummies = pd.get_dummies(df_filtered[var], dtype=int)
+        dummies = pd.get_dummies(df_filtered[var], prefix=var, dtype=int)
         dummies_list.append(dummies)
+    dic_data["clean"] = pd.concat(
+        [df_filtered, pd.concat(dummies_list, axis=1)], axis=1
+    )
 
-    concat_dummies = pd.concat(dummies_list, axis=1)
-    dic_data["clean"] = pd.concat([df_filtered, concat_dummies], axis=1)
     logging.info(
         f"All variables before splitting the dataset: {dic_data['clean'].columns}"
     )
