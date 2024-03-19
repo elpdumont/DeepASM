@@ -2,13 +2,14 @@
 
 
 # Image TAG
-IMAGE_TAG="4b10ec2"
+IMAGE_TAG="f59e8b7"
 
 # Path to the YAML file
 CONFIG_FILE="config/config.yaml"
 
 # Use `yq` to read the values. Ensure `yq` is installed and in your PATH.
 PROJECT_ID=$(yq e ".GCP.PROJECT_ID" "${CONFIG_FILE}")
+REGION=$(yq e ".GCP.REGION" "${CONFIG_FILE}")
 IMAGE=$(yq e ".GCP.IMAGE" "${CONFIG_FILE}")
 
 GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' "${CONFIG_FILE}")
@@ -52,11 +53,11 @@ gcloud run jobs deploy process-json \
  --set-env-vars ML_DATASET_ID="${ML_DATASET_ID}" \
  --tasks 1 \
  --max-retries 0 \
- --cpu 4 \
- --memory 16Gi \
+ --cpu 8 \
+ --memory 32Gi \
  --task-timeout 2000 \
- --region us-east1 \
- --project="${PROJECT_ID}" \
+ --region "${REGION}" \
+ --project "${PROJECT_ID}" \
  --execute-now
 
 #------------------------------------------------------------------

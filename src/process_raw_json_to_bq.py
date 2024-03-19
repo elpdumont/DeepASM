@@ -5,7 +5,6 @@ import os
 import random
 import sys
 
-import dask
 import dask.dataframe as dd
 
 # Python packages for data, stats
@@ -27,25 +26,16 @@ storage_client = storage.Client()
 bq_client = bigquery.Client()
 
 # Initialize logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logging.basicConfig(level=logging.INFO)
 
-# Disable warning log for dask
-dask.config.set({"dataframe.query-planning-warning": False})
-
-# Retrieve Job-defined env vars
-TASK_INDEX = int(os.getenv("CLOUD_RUN_TASK_INDEX", 0))
-TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
-
-# Retrieve user-defined variables
-ml_dataset_id = os.getenv("ML_DATASET_ID")
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 # Accessing GCP configuration
-bucket_name = config["GCP"]["BUCKET"]["NAME"]
-raw_data_bucket_folder = config["GCP"]["BUCKET"]["RAW_DATA_FOLDER"]
+bucket_name = config["GCP"]["BUCKET_NAME"]
+raw_data_bucket_folder = config["GCP"]["RAW_DATA_FOLDER"]
 
 # Variables to handle
 vars_to_remove = config["VARS_TO_REMOVE"]
@@ -71,6 +61,12 @@ kernel_cov_bandwidth = config["FEATURE_PREP"]["KERNEL_COV_BANDWIDTH"]
 kernel_type = config["FEATURE_PREP"]["KERNEL_TYPE"]
 
 
+# Retrieve Job-defined env vars
+TASK_INDEX = int(os.getenv("CLOUD_RUN_TASK_INDEX", 0))
+TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
+ml_dataset_id = os.getenv("ML_DATASET_ID")
+
+
 def compute_counts_and_percentages(column):
     """
     Computes the counts and percentages of zeros and ones in a column.
@@ -82,6 +78,8 @@ def compute_counts_and_percentages(column):
     - counts (dict): A dictionary with counts of zeros and ones.
     - percentages (dict): A dictionary with percentages of zeros and ones.
     """
+
+    column = column.astype(int)
     # Count the absolute number of zeros and ones
     counts = column.value_counts().reindex([0, 1], fill_value=0)
 
@@ -337,14 +335,15 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     """
 
     genomic_array = row_df["genomic_picture"]
-    nb_cpg_found_in_region = row_df["nb_cpg_found"]
+    nb_cpg_found_in_region = int(row_df["nb_cpg_found"])
+    min_cpg_to_keep_in_read = int(nb_cpg_found_in_region * min_fraction_of_nb_cpg)
 
     # Generate the 1D CpG methylation profile for each read
     profiles = [
         generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
             read_dict,
             genomic_length,
-            int(min_fraction_of_nb_cpg * nb_cpg_found_in_region),
+            min_cpg_to_keep_in_read,
         )
         for read_dict in genomic_array
     ]
@@ -391,6 +390,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
 # Define main script
 def main():
+
+    logging.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
@@ -449,17 +450,15 @@ def main():
     )
 
     logging.info(
-        "Create a methylation matrix of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth. Each element represents the presence of a CpG and its methylation status"
+        "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
     )
-    ddf = dd.from_pandas(df_filtered, npartitions=20)
-    result = ddf.apply(
+
+    df_filtered["sequence_cpg_cov_and_methyl"] = df_filtered.apply(
         lambda x: generate_sequence_cpg_cov_and_methyl_over_reads(
             x, genomic_length, min_nb_reads_in_sequence, min_fraction_of_nb_cpg_in_read
         ),
         axis=1,
-        meta=("x", "object"),
     )
-    df_filtered["sequence_cpg_cov_and_methyl"] = result.compute()
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list

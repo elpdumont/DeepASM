@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim
+FROM python:3.10.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -26,9 +26,8 @@ HEALTHCHECK CMD python --version || exit 1
 CMD ["python"]
 
 # To test locally with Docker
-# docker pull us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:d11bb2d
-# docker run --rm -it us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:d11bb2d python3 --version
-# docker run --rm -it --platform linux/amd64 us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:d11bb2d
+# docker pull us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:f59e8b7
+# docker run --rm -it --platform linux/amd64 us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:f59e8b7
 
 # Then, in the image, type:
 # import os
