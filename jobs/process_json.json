@@ -10,14 +10,14 @@
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:d18e8b1",
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:b0584f1",
               "commands": ["python", "/app/process_raw_json_to_bq.py"]
             }
           }
         ],
         "computeResource": {
-          "cpuMilli": 8000,
-          "memoryMib": 64000
+          "cpuMilli": 7500,
+          "memoryMib": 60000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "4000s"

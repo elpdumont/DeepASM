@@ -490,8 +490,10 @@ def main():
     logging.info("One-hot encode categoricals variables that are not binary")
     ohe_df = pd.get_dummies(df_filtered[categorical_vars_ohe], dtype=int)
     dic_data["clean"] = pd.concat([df_filtered, ohe_df], axis=1)
-    
-    logging.info(f"All variables before splitting the dataset: {dic_data["clean"].columns}")
+
+    logging.info(
+        f"All variables before splitting the dataset: {dic_data['clean'].columns}"
+    )
 
     # dic_data["clean"] = pd.get_dummies(
     #     dic_data["clean"], columns=categorical_vars_ohe, dtype=int
@@ -510,15 +512,19 @@ def main():
     dic_data["sequence_cpg_fm"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
-    
-    logging.info(f"All variables in sequence_cpg_fm dataset: {dic_data["sequence_cpg_fm"].columns}")
+
+    logging.info(
+        f"All variables in sequence_cpg_fm dataset: {dic_data['sequence_cpg_fm'].columns}"
+    )
 
     logging.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
-    
-    logging.info(f"All variables in sequence_cpg_cov_and_methyl dataset: {dic_data["sequence_cpg_cov_and_methyl"].columns}")
+
+    logging.info(
+        f"All variables in sequence_cpg_cov_and_methyl dataset: {dic_data['sequence_cpg_cov_and_methyl'].columns}"
+    )
 
     logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
@@ -526,8 +532,8 @@ def main():
         .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)
         .copy(deep=True)
     )
-    
-    logging.info(f"All variables in tabular dataset: {dic_data["tabular"].columns}")
+
+    logging.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
 
     logging.info("Uploading the 3 datasets to BigQuery")
     schema_fields = []
