@@ -480,6 +480,8 @@ def main():
     percentage_removed = (rows_removed / initial_row_count) * 100
     logging.info(f"{percentage_removed:.2f}% of the rows were removed")
 
+    logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
+
     # Store the different datasets into a hash table.
     dic_data = {}
 
@@ -560,7 +562,7 @@ def main():
         mode="REPEATED",
         fields=record_fields_sequence_cpg_fm,
     )
-    schema_sequence_cpg_fm = schema_fields.append(record_field_sequence_cpg_fm)
+    schema_sequence_cpg_fm = schema_fields + [record_field_sequence_cpg_fm]
 
     logging.info(
         "Uploading the dataframe with the sequence of CpG fractional methylations"
@@ -569,6 +571,42 @@ def main():
     job = bq_client.load_table_from_dataframe(
         dic_data["sequence_cpg_fm"],
         ml_dataset_id + "." + "sequence_cpg_fm",
+        job_config=job_config,
+    )
+    logging.info(job.result())
+
+    logging.info(
+        "Uploading the dataframe with the sequence of CpG coverage and methylation"
+    )
+
+    record_field_sequence_cpg_cov_and_methyl = [
+        bigquery.SchemaField("pos", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("reads", "STRING", mode="NULLABLE"),
+    ]
+
+    record_field_sequence_cpg_cov_and_methyl = bigquery.SchemaField(
+        "sequence_cpg_cov_and_methyl",
+        "RECORD",
+        mode="REPEATED",
+        fields=record_field_sequence_cpg_cov_and_methyl,
+    )
+
+    schema_sequence_cpg_cov_and_methyl = schema_fields + [
+        record_field_sequence_cpg_cov_and_methyl
+    ]
+    job_config = bigquery.LoadJobConfig(schema=schema_sequence_cpg_cov_and_methyl)
+    job = bq_client.load_table_from_dataframe(
+        dic_data["sequence_cpg_cov_and_methyl"],
+        ml_dataset_id + "." + "sequence_cpg_cov_and_methyl",
+        job_config=job_config,
+    )
+    logging.info(job.result())
+
+    logging.info("Upload tabular data")
+    job_config = bigquery.LoadJobConfig(autodetect=True)
+    job = bq_client.load_table_from_dataframe(
+        dic_data["tabular"],  # Your DataFrame
+        f"{ml_dataset_id}.tabular",  # Your table ID
         job_config=job_config,
     )
     logging.info(job.result())
