@@ -57,6 +57,9 @@ gcloud batch jobs submit process-json \
   --location "${REGION}" \
   --config jobs/process_json.json
 
+# To delete the job
+gcloud batch jobs delete process-json
+
 
 # gcloud run jobs deploy process-json \
 #  --image "${IMAGE}":"${IMAGE_TAG}" \
