@@ -483,13 +483,13 @@ def main():
     # Store the different datasets into a hash table.
     dic_data = {}
 
-    dic_data["clean"] = df_filtered.drop(
+    df_filtered = df_filtered.drop(
         columns=vars_to_remove, axis=1, errors="ignore"
-    )
+    ).copy(deep=True)
 
     logging.info("One-hot encode categoricals variables that are not binary")
-    ohe_df = pd.get_dummies(dic_data["clean"][categorical_vars_ohe], dtype=int)
-    dic_data["clean"] = pd.concat([dic_data["clean"], ohe_df], axis=1)
+    ohe_df = pd.get_dummies(df_filtered[categorical_vars_ohe], dtype=int)
+    dic_data["clean"] = pd.concat([df_filtered, ohe_df], axis=1)
 
     # dic_data["clean"] = pd.get_dummies(
     #     dic_data["clean"], columns=categorical_vars_ohe, dtype=int
