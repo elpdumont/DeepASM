@@ -16,6 +16,25 @@ bq_client = bigquery.Client()
 storage_client = storage.Client()
 
 
+class StructuredMessage:
+    def __init__(self, message, **kwargs):
+        self.message = message
+        self.kwargs = kwargs
+
+    def __str__(self):
+        return json.dumps({"message": self.message, **self.kwargs})
+
+
+def structured_logger(name=None):
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter("%(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+
 def delete_bq_table(bq_dataset_id, bq_table_id):
     """Deletes the BigQuery table if it exists."""
     table_id = f"{bq_client.project}.{bq_dataset_id}.{bq_table_id}"

@@ -5,7 +5,7 @@
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:453969b",
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:5cf26ea",
               "commands": ["python", "/app/process_raw_json_to_bq.py"]
             }
           }
