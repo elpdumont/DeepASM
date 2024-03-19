@@ -488,9 +488,14 @@ def main():
     ).copy(deep=True)
 
     logging.info("One-hot encode categoricals variables that are not binary")
-    ohe_df = pd.get_dummies(df_filtered[categorical_vars_ohe], dtype=int)
-    dic_data["clean"] = pd.concat([df_filtered, ohe_df], axis=1)
+    dummies_list = []
+    for var in categorical_vars_ohe:
+        logging.info(f"One hot for variable {var}")
+        dummies = pd.get_dummies(df_filtered[var], dtype=int)
+        dummies_list.append(dummies)
 
+    concat_dummies = pd.concat(dummies_list, axis=1)
+    dic_data["clean"] = pd.concat([df_filtered, concat_dummies], axis=1)
     logging.info(
         f"All variables before splitting the dataset: {dic_data['clean'].columns}"
     )
