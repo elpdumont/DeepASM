@@ -633,6 +633,8 @@ def main():
     )
     logging.info(job.result())
 
+    logging.info("SCRIPT COMPLETE")
+
 
 # Start script
 if __name__ == "__main__":
