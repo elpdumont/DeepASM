@@ -462,7 +462,7 @@ def main():
         meta=("x", "object"),
     )
 
-    df_filtered["methylation_matrix"] = result.compute()
+    df_filtered["sequence_cpg_cov_and_methyl"] = result.compute()
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list
