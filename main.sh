@@ -21,7 +21,7 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON \
 
 # List, filter, and count JSON files
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | wc -l)
-
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/process_json.json
 # Echo the count for demonstration
 echo "Number of JSON files: ${NUM_JSON_FILES}"
 
@@ -34,44 +34,11 @@ echo "Number of JSON files: ${NUM_JSON_FILES}"
 
 # Delete the tables if they exist
 for TABLE_NAME in "${TABLE_NAMES[@]}"; do
-	bq rm -f -t "${PROJECT_ID}:${ML_DATASET_ID}.${TABLE_NAME}"
+	bq rm -f -t "${PROJECT_ID}:${ML_DATASET}.${TABLE_NAME}"
 done
 
-gcloud batch jobs submit process-json \
+JOB_NAME="process-json-${SHORT_SHA}"
+
+gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
 	--config jobs/process_json.json
-
-# To delete the job
-gcloud batch jobs delete process-json --location "${REGION}"
-
-# gcloud run jobs deploy process-json \
-#  --image "${IMAGE}":"${IMAGE_TAG}" \
-#  --args="python,/app/process_raw_json_to_bq.py" \
-#  --set-env-vars ML_DATASET_ID="${ML_DATASET_ID}" \
-#  --tasks 1 \
-#  --max-retries 0 \
-#  --cpu 8 \
-#  --memory 32Gi \
-#  --task-timeout 2000 \
-#  --region "${REGION}" \
-#  --project "${PROJECT_ID}" \
-#  --execute-now
-
-#------------------------------------------------------------------
-# Load tabular data in BigQuery
-
-# gcloud run jobs deploy load-json-to-bq \
-#  --image us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:latest \
-#  --args="python,/app/process_json_to_bq.py" \
-#  --tasks 1 \
-#  --set-env-vars BUCKET_NAME="hmh_deepasm" \
-#  --set-env-vars DATASET_TYPE="tabular" \
-#  --set-env-vars BUCKET_FOLDER_PATH="ml_datasets/" \
-#  --set-env-vars BQ_ML_DATASET_NAME="ml" \
-#  --set-env-vars BQ_ML_TABLE_NAME="tabular" \
-#  --max-retries 0 \
-#  --region us-east1 \
-#  --task-timeout 2000 \
-#  --project=hmh-em-deepasm
-
-# gcloud run jobs execute load-json-to-bq

@@ -525,10 +525,6 @@ def main():
         [df_filtered, pd.concat(dummies_list, axis=1)], axis=1
     )
 
-    logging.info(
-        f"All variables before splitting the dataset: {dic_data['clean'].columns}"
-    )
-
     logging.info("Enforcing data types for integer variables")
     for var in [
         "chr",
@@ -543,38 +539,15 @@ def main():
     ]:
         dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
 
-    # Repeat for any other columns as necessary
-
-    # dic_data["clean"] = pd.get_dummies(
-    #     dic_data["clean"], columns=categorical_vars_ohe, dtype=int
-    # )
-
-    # logging.info("Create a list of categorical variables")
-    # categorical_vars_updated = [
-    #     col
-    #     for col in dic_data["clean"].columns
-    #     if any(col.startswith(var) for var in categorical_vars)
-    # ]
-
-    logging.info(f"Variables kept in each dataset: {vars_to_keep}")
-
     logging.info("Creating the dataset with a methylation sequence")
     dic_data["sequence_cpg_fm"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
 
-    logging.info(
-        f"All variables in sequence_cpg_fm dataset: {dic_data['sequence_cpg_fm'].columns}"
-    )
-
     logging.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
-
-    logging.info(
-        f"All variables in sequence_cpg_cov_and_methyl dataset: {dic_data['sequence_cpg_cov_and_methyl'].columns}"
-    )
 
     logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
