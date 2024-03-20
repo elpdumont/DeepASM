@@ -45,7 +45,6 @@ categorical_vars_ohe = config["CAT_VARS_OHE"]
 
 # Genomic variables
 genomic_length = config["GENOMICS"]["GENOMIC_LENGTH"]
-min_cpg_cov = config["GENOMICS"]["MIN_CPG_COV"]
 min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
 min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
 
