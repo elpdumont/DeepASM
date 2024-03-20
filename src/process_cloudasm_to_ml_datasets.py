@@ -33,7 +33,6 @@ with open("config.yaml", "r") as file:
 
 # Accessing GCP configuration
 bucket_name = config["GCP"]["BUCKET_NAME"]
-raw_data_bucket_folder = config["GCP"]["RAW_DATA_FOLDER"]
 
 # Variables to handle
 vars_to_remove = config["VARS_TO_REMOVE"]
@@ -63,6 +62,7 @@ kernel_type = config["FEATURE_PREP"]["KERNEL_TYPE"]
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 # TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 ml_dataset_id = os.getenv("ML_DATASET_ID")
+raw_data_bucket_folder = os.getenv("CLOUDASM_DATASET_ID")
 
 
 def compute_counts_and_percentages(column):

@@ -11,14 +11,14 @@
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:e00bd60",
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:d9efc64",
               "commands": ["python", "/app/process_cloudasm_to_ml_datasets.py"]
             }
           }
         ],
         "computeResource": {
-          "cpuMilli": 8500,
-          "memoryMib": 59000
+          "cpuMilli": 2000,
+          "memoryMib": 13000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "4000s"
