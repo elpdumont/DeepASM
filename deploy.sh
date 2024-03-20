@@ -10,7 +10,7 @@ echo "SHORT_SHA: ${SHORT_SHA}"
 # Submit the build to Google Cloud Build
 gcloud builds submit --config=cloudbuild.yaml . --substitutions=SHORT_SHA="${SHORT_SHA}"
 
-
+export PROJECT_ID=$(yq e '.GCP.PROJECT_ID' config/config.yaml)
 export PYTHON_IMAGE=$(yq e '.GCP.IMAGE' config/config.yaml)
 export GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' config/config.yaml)
 export BUCKET_NAME=$(yq e '.GCP.BUCKET_NAME' config/config.yaml)

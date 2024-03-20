@@ -2,9 +2,7 @@ GCP:
   PROJECT_ID: hmh-em-deepasm
   REGION: us-east1
   IMAGE: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
-  VERTEX_MAX_PARALLEL: 10
   BUCKET_NAME: hmh_deepasm
-  RAW_DATA_FOLDER: bq_tables/250bp_asm_labelled/
 
 GENOMICS:
   GENOMIC_LENGTH: 250
