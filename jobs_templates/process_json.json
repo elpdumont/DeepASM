@@ -4,13 +4,13 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "hg19_250_ml"
+            "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER"
           }
         },
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:ae005e8",
+              "imageUri": "PYTHON_IMAGE_PLACEHOLDER:IMAGE_TAG_PLACEHOLDER",
               "commands": ["python", "/app/process_raw_json_to_bq.py"]
             }
           }
