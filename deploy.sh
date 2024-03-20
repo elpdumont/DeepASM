@@ -37,10 +37,10 @@ sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" jobs/process
 
 # Create respective folders in BigQuery and Cloud Storage if they do not exist
 
-if bq ls --project_id="${PROJECT_ID}" | grep -w "${ML_DATASET_ID}"; then
-	echo "Dataset ${ML_DATASET_ID} already exists in project ${PROJECT_ID}."
+if bq ls --project_id="${PROJECT_ID}" | grep -w "${ML_DATASET}"; then
+	echo "Dataset ${ML_DATASET} already exists in project ${PROJECT_ID}."
 else
 	# Create the dataset since it does not exist
-	bq mk --project_id="${PROJECT_ID}" --dataset "${PROJECT_ID}:${ML_DATASET_ID}"
-	echo "Dataset ${ML_DATASET_ID} created in project ${PROJECT_ID}."
+	bq mk --project_id="${PROJECT_ID}" --dataset "${PROJECT_ID}:${ML_DATASET}"
+	echo "Dataset ${ML_DATASET} created in project ${PROJECT_ID}."
 fi
