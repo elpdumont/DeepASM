@@ -4,7 +4,8 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER"
+            "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER",
+            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PLACEHOLDER"
           }
         },
         "runnables": [
@@ -16,8 +17,8 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 8500,
-          "memoryMib": 59000
+          "cpuMilli": 2000,
+          "memoryMib": 13000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "4000s"
@@ -29,7 +30,7 @@
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-64" }
+        "policy": { "machineType": "n1-highmem-2" }
       }
     ]
   },

@@ -1,40 +1,29 @@
 #!/bin/bash
 
-# Image TAG
-IMAGE_TAG="c009e19"
-
-# Path to the YAML file
-CONFIG_FILE="config/config.yaml"
-
-# Use `yq` to read the values. Ensure `yq` is installed and in your PATH.
-PROJECT_ID=$(yq e ".GCP.PROJECT_ID" "${CONFIG_FILE}")
-REGION=$(yq e ".GCP.REGION" "${CONFIG_FILE}")
-IMAGE=$(yq e ".GCP.IMAGE" "${CONFIG_FILE}")
-
-GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' "${CONFIG_FILE}")
-MIN_CPG_COV=$(yq e '.GENOMICS.MIN_CPG_COV' "${CONFIG_FILE}")
-
-# Use variables to create custom variables
-ML_DATASET_ID="ml_${GENOMIC_LENGTH}_${MIN_CPG_COV}"
 
 #---------------------------------------------------------------
 
-# Check if the dataset exists
-if bq ls --project_id="${PROJECT_ID}" | grep -w "${ML_DATASET_ID}"; then
-	echo "Dataset ${ML_DATASET_ID} already exists in project ${PROJECT_ID}."
-else
-	# Create the dataset since it does not exist
-	bq mk --project_id="${PROJECT_ID}" --dataset "${PROJECT_ID}:${ML_DATASET_ID}"
-	echo "Dataset ${ML_DATASET_ID} created in project ${PROJECT_ID}."
-fi
 
 # List of table names to be used for ML
 TABLE_NAMES=("tabular" "sequence_cpg_fm" "sequence_cpg_cov_and_methyl")
 
-# bq extract --destination_format=NEWLINE_DELIMITED_JSON \
-#   --compression=None \
-#   'hmh-em-deepasm:'hmh-em-deepasm.deepasm_feb2022.all_samples_all_info_250bp_for_notebook \
-#   gs://hmh_deepasm/test/table-*.json
+#---------------------------------------------------------------
+# Export CloudASM output to bucket into JSON shards
+
+gsutil -m rm gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json
+
+bq extract --destination_format=NEWLINE_DELIMITED_JSON \
+  --compression=NONE \
+  "${PROJECT_ID}":"${CLOUDASM_DATASET}".hg_19_250_all_samples \
+  gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/cloudasm-*.json
+
+
+
+# List, filter, and count JSON files
+NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | wc -l)
+
+# Echo the count for demonstration
+echo "Number of JSON files: ${NUM_JSON_FILES}"
 
 #---------------------------------------------------------------
 # Prepare 3 datasets

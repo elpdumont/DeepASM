@@ -4,32 +4,33 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "hg19_250_ml"
+            "ML_DATASET_ID": "hg19_250_ml",
+            "CLOUDASM_DATASET_ID": "hg19_250_cloudasm"
           }
         },
         "runnables": [
           {
             "container": {
-              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:ae005e8",
-              "commands": ["python", "/app/process_raw_json_to_bq.py"]
+              "imageUri": "us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:e00bd60",
+              "commands": ["python", "/app/process_cloudasm_to_ml_datasets.py"]
             }
           }
         ],
         "computeResource": {
-          "cpuMilli": 7500,
-          "memoryMib": 60000
+          "cpuMilli": 8500,
+          "memoryMib": 59000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "4000s"
       },
       "taskCount": 1,
-      "parallelism": 0
+      "parallelism": 1
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "e2-highmem-8" }
+        "policy": { "machineType": "n1-highmem-2" }
       }
     ]
   },

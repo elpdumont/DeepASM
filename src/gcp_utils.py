@@ -3,7 +3,8 @@ import logging
 
 # File and variable management
 import os
-import re
+
+# import re
 import sys
 
 # Python packages for data, stats
@@ -35,40 +36,39 @@ def append_df_to_bq_table(df, bq_dataset_id, bq_table_id):
     )
 
 
-def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
-    # Convert DataFrame to JSON format
-    json_data = df.to_json(orient="records", lines=True)
+# def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
+#     # Convert DataFrame to JSON format
+#     json_data = df.to_json(orient="records", lines=True)
 
-    file_name = data_type + "_" + file_name
-    logging.info(f"Saving JSON data as {file_name}")
-    with open(file_name, "w") as file:
-        file.write(json_data)
+#     file_name = data_type + "_" + file_name
+#     logging.info(f"Saving JSON data as {file_name}")
+#     with open(file_name, "w") as file:
+#         file.write(json_data)
 
-    # Cloud filename includes the bucket_path
-    cloud_filename = os.path.join(bucket_path, file_name)
+#     # Cloud filename includes the bucket_path
+#     cloud_filename = os.path.join(bucket_path, file_name)
 
-    # Initialize a Google Cloud Storage client
-    storage_client = storage.Client()
+#     # Initialize a Google Cloud Storage client
+#     storage_client = storage.Client()
 
-    # Get the bucket
-    bucket = storage_client.bucket(bucket_name)
+#     # Get the bucket
+#     bucket = storage_client.bucket(bucket_name)
 
-    # Create a blob (GCS object) and upload the file
-    blob = bucket.blob(cloud_filename)
-    blob.upload_from_filename(file_name)
+#     # Create a blob (GCS object) and upload the file
+#     blob = bucket.blob(cloud_filename)
+#     blob.upload_from_filename(file_name)
 
-    logging.info(f"File {file_name} uploaded to {cloud_filename}.")
+#     logging.info(f"File {file_name} uploaded to {cloud_filename}.")
 
 
-# Function to list files in a bucket that match a specific prefix and pattern
-def list_files_in_bucket_folder(bucket_name, folder_path, dataset_type):
-    """Lists all the files in the bucket that match the prefix and pattern (dataset_type)."""
-    prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
-    files = storage_client.list_blobs(bucket_name, prefix=prefix)
-    pattern = re.compile(rf"{re.escape(prefix + dataset_type)}_raw.*\.json$")
-    return [
-        f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
-    ]
+# def list_json_files_in_bucket_folder(bucket_name, folder_path):
+#     """Lists all the JSON files in the specified bucket folder."""
+#     prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
+#     files = storage_client.list_blobs(bucket_name, prefix=prefix)
+#     pattern = re.compile(rf"{re.escape(prefix)}.*\.json$")
+#     return [
+#         f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
+#     ]
 
 
 def create_df_from_json_for_index_file(bucket_name, folder_path, task_index):
@@ -81,13 +81,9 @@ def create_df_from_json_for_index_file(bucket_name, folder_path, task_index):
     # List all blobs in the specified folder
     blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
 
-    # Filter blobs that match the 'raw-*.json' pattern and sort them
+    # Filter blobs that match the '*.json' pattern and sort them
     filtered_blobs = sorted(
-        (
-            blob
-            for blob in blobs
-            if blob.name.startswith(prefix + "raw-") and blob.name.endswith(".json")
-        ),
+        (blob for blob in blobs if blob.name.endswith(".json")),
         key=lambda blob: blob.name,
     )
     # Ensure task_index is within the range of available files
