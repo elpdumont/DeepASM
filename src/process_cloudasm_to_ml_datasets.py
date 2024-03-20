@@ -64,6 +64,33 @@ ml_dataset_id = os.getenv("ML_DATASET_ID")
 raw_data_bucket_folder = os.getenv("CLOUDASM_DATASET_ID")
 
 
+def create_schema_fields(variables_dict):
+    """Create schema fields from a dictionary of variable names and types."""
+    schema_fields = [
+        bigquery.SchemaField(name, type_, mode="REQUIRED")
+        for name, type_ in variables_dict.items()
+    ]
+    logging.info(f"Schema fields created: {schema_fields}")
+    return schema_fields
+
+
+def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
+    """Add a record field to an existing schema."""
+    record_field = bigquery.SchemaField(record_name, "RECORD", mode=mode, fields=fields)
+    return schema_fields + [record_field]
+
+
+def upload_dataframe(bq_client, dataframe, table_id, schema):
+    """Upload a dataframe to BigQuery with the specified schema."""
+    logging.info(f"Uploading dataframe to {table_id}")
+    job_config = bigquery.LoadJobConfig(schema=schema)
+    job = bq_client.load_table_from_dataframe(
+        dataframe, table_id, job_config=job_config
+    )
+    result = job.result()  # Wait for the job to complete
+    logging.info(f"Load job result for {table_id}: {result}")
+
+
 def compute_counts_and_percentages(column):
     """
     Computes the counts and percentages of zeros and ones in a column.
@@ -502,14 +529,19 @@ def main():
         f"All variables before splitting the dataset: {dic_data['clean'].columns}"
     )
 
-    logging.info("Enforcing data types")
-    dic_data["clean"]["chr"] = dic_data["clean"]["chr"].astype(pd.Int64Dtype())
-    dic_data["clean"]["region_inf"] = dic_data["clean"]["region_inf"].astype(
-        pd.Int64Dtype()
-    )
-    dic_data["clean"]["region_sup"] = dic_data["clean"]["region_sup"].astype(
-        pd.Int64Dtype()
-    )
+    logging.info("Enforcing data types for integer variables")
+    for var in [
+        "chr",
+        "region_inf",
+        "region_sup",
+        "region_nb_cpg",
+        "nb_reads",
+        "nb_cpg_found",
+        "dnase",
+        "encode_ChiP_V2",
+        "tf_motifs",
+    ]:
+        dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
 
     # Repeat for any other columns as necessary
 
@@ -554,45 +586,17 @@ def main():
     logging.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
 
     logging.info("Uploading the 3 datasets to BigQuery")
-    schema_fields = []
+    # Define schema fields based on a dictionary of variables
+    schema_fields = create_schema_fields(dic_vars_to_keep)
 
-    for name, type_ in dic_vars_to_keep.items():
-        logging.info(f"Name and type: {name, type_}")
-        # Here we assume all fields are required, adjust if that's not the case
-        field = bigquery.SchemaField(name, type_, mode="REQUIRED")
-        schema_fields.append(field)
-
+    # Define additional record fields
     record_fields_sequence_cpg_fm = [
         bigquery.SchemaField("pos", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField("cpg", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField("cpg_fm", "FLOAT", mode="NULLABLE"),
     ]
-    record_field_sequence_cpg_fm = bigquery.SchemaField(
-        "sequence_cpg_fm",
-        "RECORD",
-        mode="REPEATED",
-        fields=record_fields_sequence_cpg_fm,
-    )
-    schema_sequence_cpg_fm = schema_fields + [record_field_sequence_cpg_fm]
 
-    logging.info(f"Schema used: {schema_sequence_cpg_fm}")
-
-    logging.info(
-        "Uploading the dataframe with the sequence of CpG fractional methylations"
-    )
-    job_config = bigquery.LoadJobConfig(schema=schema_sequence_cpg_fm)
-    job = bq_client.load_table_from_dataframe(
-        dic_data["sequence_cpg_fm"],
-        ml_dataset_id + "." + "sequence_cpg_fm",
-        job_config=job_config,
-    )
-    logging.info(job.result())
-
-    logging.info(
-        "Uploading the dataframe with the sequence of CpG coverage and methylation"
-    )
-
-    record_field_sequence_cpg_cov_and_methyl = [
+    record_fields_sequence_cpg_cov_and_methyl = [
         bigquery.SchemaField("pos", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField(
             "reads",
@@ -605,30 +609,36 @@ def main():
         ),
     ]
 
-    record_field_sequence_cpg_cov_and_methyl = bigquery.SchemaField(
+    # Add record fields to the base schema
+    schema_sequence_cpg_fm = add_record_field(
+        schema_fields, "sequence_cpg_fm", record_fields_sequence_cpg_fm
+    )
+
+    schema_sequence_cpg_cov_and_methyl = add_record_field(
+        schema_fields,
         "sequence_cpg_cov_and_methyl",
-        "RECORD",
-        mode="REPEATED",
-        fields=record_field_sequence_cpg_cov_and_methyl,
+        record_fields_sequence_cpg_cov_and_methyl,
     )
 
-    schema_sequence_cpg_cov_and_methyl = schema_fields + [
-        record_field_sequence_cpg_cov_and_methyl
-    ]
-    job_config = bigquery.LoadJobConfig(schema=schema_sequence_cpg_cov_and_methyl)
-    job = bq_client.load_table_from_dataframe(
+    upload_dataframe(
+        bq_client,
+        dic_data["sequence_cpg_fm"],
+        f"{ml_dataset_id}.sequence_cpg_fm",
+        schema_sequence_cpg_fm,
+    )
+
+    upload_dataframe(
+        bq_client,
         dic_data["sequence_cpg_cov_and_methyl"],
-        ml_dataset_id + "." + "sequence_cpg_cov_and_methyl",
-        job_config=job_config,
+        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl",
+        schema_sequence_cpg_cov_and_methyl,
     )
-    logging.info(job.result())
 
-    logging.info("Upload tabular data")
+    # For tabular data with autodetection
+    logging.info("Uploading tabular data with schema autodetection")
     job_config = bigquery.LoadJobConfig(autodetect=True)
     job = bq_client.load_table_from_dataframe(
-        dic_data["tabular"],  # Your DataFrame
-        f"{ml_dataset_id}.tabular",  # Your table ID
-        job_config=job_config,
+        dic_data["tabular"], f"{ml_dataset_id}.tabular", job_config=job_config
     )
     logging.info(job.result())
 
