@@ -95,7 +95,7 @@ def create_df_from_json_for_index_file(
 
     # Handle the case for the last task index if we have less than the number of files to download
     if start_index >= len(filtered_blobs):
-        logging.info("Task index is out of range.")
+        # logging.info("Task index is out of range.")
         sys.exit(1)
     if end_index > len(filtered_blobs):
         end_index = len(filtered_blobs)
@@ -104,7 +104,7 @@ def create_df_from_json_for_index_file(
     all_data = []
     file_names = []
     for blob in filtered_blobs[start_index:end_index]:
-        logging.info(f"Processing file: {blob.name}")
+        # logging.info(f"Processing file: {blob.name}")
 
         # Download the file as bytes and decode it to a string
         file_contents = blob.download_as_bytes().decode("utf-8")

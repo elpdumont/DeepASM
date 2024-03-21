@@ -572,7 +572,7 @@ def main():
         .copy(deep=True)
     )
 
-    logger.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
+    # logger.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
 
     logger.info("Uploading the 3 datasets to BigQuery")
     # Define schema fields based on a dictionary of variables
