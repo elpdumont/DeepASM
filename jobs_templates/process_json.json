@@ -21,7 +21,7 @@
           "cpuMilli": 2000,
           "memoryMib": 12000
         },
-        "maxRetryCount": 3,
+        "maxRetryCount": 1,
         "maxRunDuration": "4000s"
       },
       "taskCount": TASK_COUNT_PLACEHOLDER,
