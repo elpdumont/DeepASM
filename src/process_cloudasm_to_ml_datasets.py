@@ -29,7 +29,7 @@ logging_client = google.cloud.logging.Client()
 
 # Set up logging (using GCP)
 handler = CloudLoggingHandler(logging_client)
-google.cloud.logging.setup_logging(handler)
+logging_client.setup_logging(handler)
 logging.getLogger().setLevel(logging.INFO)
 
 # Import all other variables from the config file
