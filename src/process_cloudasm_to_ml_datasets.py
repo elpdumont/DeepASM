@@ -1,6 +1,5 @@
 # File management
 import json
-import logging
 import os
 import random
 import sys
@@ -29,6 +28,7 @@ logging_client = google.cloud.logging.Client()
 
 # Set up logging (using GCP)
 logging_client.setup_logging()
+import logging
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
