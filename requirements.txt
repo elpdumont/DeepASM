@@ -1,6 +1,6 @@
 google-cloud-storage==2.15.0
 google-cloud-bigquery==3.19.0
-google-cloud-logging==3.10.0
+#google-cloud-logging==3.10.0
 scikit-learn==1.4.1.post1
 dask==2024.2.1
 pandas==1.5.3
