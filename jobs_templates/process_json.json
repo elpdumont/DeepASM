@@ -5,7 +5,8 @@
         "environment": {
           "variables": {
             "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER",
-            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PLACEHOLDER"
+            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PLACEHOLDER",
+            "NB_FILES_PER_TASK": NB_FILES_PER_TASK_PLACEHOLDER
           }
         },
         "runnables": [
@@ -17,20 +18,20 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 1000,
-          "memoryMib": 6000
+          "cpuMilli": 1500,
+          "memoryMib": 8000
         },
-        "maxRetryCount": 1,
+        "maxRetryCount": 3,
         "maxRunDuration": "4000s"
       },
       "taskCount": TASK_COUNT_PLACEHOLDER,
-      "parallelism": 2
+      "parallelism": 35
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-2" }
+        "policy": { "machineType": "n1-highmem-32" }
       }
     ]
   },

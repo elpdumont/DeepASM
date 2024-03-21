@@ -419,9 +419,9 @@ def main():
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
-        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX
+        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, 5
     )
-    logging.info(f"File name: {file_name}")
+    logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
     logging.info("Create kernel functions")
