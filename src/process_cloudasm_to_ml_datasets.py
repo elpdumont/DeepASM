@@ -25,12 +25,23 @@ random.seed(random_seed)
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
-logging_client = google.cloud.logging.Client()
 
 # Set up logging (using GCP)
-handler = CloudLoggingHandler(logging_client)
-logging_client.setup_logging(handler)
-logging.getLogger().setLevel(logging.INFO)
+log_name = "procee_json"
+
+# Create a handler for Google Cloud Logging.
+gcloud_logging_client = google.cloud.logging.Client()
+gcloud_logging_handler = CloudLoggingHandler(gcloud_logging_client, name=log_name)
+
+# Create a stream handler to log messages to the console.
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.WARNING)
+
+# Now create a logger and add the handlers:
+logger = logging.getLogger(log_name)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(gcloud_logging_handler)
+logger.addHandler(stream_handler)
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
@@ -75,7 +86,7 @@ def create_schema_fields(variables_dict):
         bigquery.SchemaField(name, type_, mode="REQUIRED")
         for name, type_ in variables_dict.items()
     ]
-    logging.info(f"Schema fields created: {schema_fields}")
+    logger.info(f"Schema fields created: {schema_fields}")
     return schema_fields
 
 
@@ -87,13 +98,13 @@ def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
 
 def upload_dataframe(bq_client, dataframe, table_id, schema):
     """Upload a dataframe to BigQuery with the specified schema."""
-    logging.info(f"Uploading dataframe to {table_id}")
+    logger.info(f"Uploading dataframe to {table_id}")
     job_config = bigquery.LoadJobConfig(schema=schema)
     job = bq_client.load_table_from_dataframe(
         dataframe, table_id, job_config=job_config
     )
     result = job.result()  # Wait for the job to complete
-    logging.info(f"Load job result for {table_id}: {result}")
+    logger.info(f"Load job result for {table_id}: {result}")
 
 
 def compute_counts_and_percentages(column):
@@ -420,16 +431,16 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 # Define main script
 def main():
 
-    logging.info(f"Config file : {config}")
+    logger.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
         bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
     )
-    logging.info(f"File names: {file_name}")
-    logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
+    logger.info(f"File names: {file_name}")
+    logger.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
-    logging.info("Create kernel functions")
+    logger.info("Create kernel functions")
     values_for_kernel_cov = generate_kernel_values(
         0, kernel_cov_nb_max, kernel_cov_nb_step
     )
@@ -447,15 +458,15 @@ def main():
         },
     }
 
-    logging.info("Remove unwanted chromosomes")
+    logger.info("Remove unwanted chromosomes")
     df_filtered = filter_chromosomes(df_raw)
-    logging.info(f"Number of rows of df_filtered: {len(df_filtered)}")
-    logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
+    logger.info(f"Number of rows of df_filtered: {len(df_filtered)}")
+    logger.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
-    logging.info("Calculate consecutive distances between CpGs")
+    logger.info("Calculate consecutive distances between CpGs")
     df_filtered["cpg_dist"] = df_filtered["cpg_pos"].apply(calculate_cpg_distances)
 
-    logging.info("Convert specific arrays into kernel densities")
+    logger.info("Convert specific arrays into kernel densities")
     for col in dic_kernel.keys():
         if col in df_filtered.columns:
             convert_arrays_to_kernel_densities(
@@ -465,20 +476,20 @@ def main():
                 dic_kernel[col]["bandwidth"],
             )
 
-    logging.info(
+    logger.info(
         "Create a column for each kernel density estimate (right now they are stored in arrays)"
     )
     for col in dic_kernel.keys():
         expand_array_elements(df_filtered, col + "_kd")
 
-    logging.info(
+    logger.info(
         "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
     )
     df_filtered["sequence_cpg_fm"] = df_filtered.apply(
         lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
     )
 
-    logging.info(
+    logger.info(
         "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
     )
 
@@ -505,13 +516,13 @@ def main():
     # Calculate the number of rows removed
     rows_removed = initial_row_count - final_row_count
 
-    logging.info(
+    logger.info(
         f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
     )
     percentage_removed = (rows_removed / initial_row_count) * 100
-    logging.info(f"{percentage_removed:.2f}% of the rows were removed")
+    logger.info(f"{percentage_removed:.2f}% of the rows were removed")
 
-    logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
+    logger.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
     # Store the different datasets into a hash table.
     dic_data = {}
@@ -520,17 +531,17 @@ def main():
         columns=vars_to_remove, axis=1, errors="ignore"
     ).copy(deep=True)
 
-    logging.info("One-hot encode categoricals variables that are not binary")
+    logger.info("One-hot encode categoricals variables that are not binary")
     dummies_list = []
     for var in categorical_vars_ohe:
-        logging.info(f"One hot for variable {var}")
+        logger.info(f"One hot for variable {var}")
         dummies = pd.get_dummies(df_filtered[var], prefix=var, dtype=int)
         dummies_list.append(dummies)
     dic_data["clean"] = pd.concat(
         [df_filtered, pd.concat(dummies_list, axis=1)], axis=1
     )
 
-    logging.info("Enforcing data types for integer variables")
+    logger.info("Enforcing data types for integer variables")
     for var in [
         "chr",
         "region_inf",
@@ -544,26 +555,26 @@ def main():
     ]:
         dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
 
-    logging.info("Creating the dataset with a methylation sequence")
+    logger.info("Creating the dataset with a methylation sequence")
     dic_data["sequence_cpg_fm"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
 
-    logging.info("Creating the  dataset with the methylation matrix")
+    logger.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
 
-    logging.info("Creating the tabular dataset")
+    logger.info("Creating the tabular dataset")
     dic_data["tabular"] = (
         dic_data["clean"]
         .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)
         .copy(deep=True)
     )
 
-    logging.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
+    logger.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
 
-    logging.info("Uploading the 3 datasets to BigQuery")
+    logger.info("Uploading the 3 datasets to BigQuery")
     # Define schema fields based on a dictionary of variables
     schema_fields = create_schema_fields(dic_vars_to_keep)
 
@@ -613,14 +624,14 @@ def main():
     )
 
     # For tabular data with autodetection
-    logging.info("Uploading tabular data with schema autodetection")
+    logger.info("Uploading tabular data with schema autodetection")
     job_config = bigquery.LoadJobConfig(autodetect=True)
     job = bq_client.load_table_from_dataframe(
         dic_data["tabular"], f"{ml_dataset_id}.tabular", job_config=job_config
     )
-    logging.info(job.result())
+    logger.info(job.result())
 
-    logging.info("SCRIPT COMPLETE")
+    logger.info("SCRIPT COMPLETE")
 
 
 # Start script
