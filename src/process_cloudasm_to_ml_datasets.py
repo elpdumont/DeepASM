@@ -18,7 +18,7 @@ from gcp_utils import create_df_from_json_for_index_file
 
 # Specify logging again
 logger = logging.getLogger(__name__)
-logger.setLevel(logger.info)
+logger.setLevel("INFO")
 
 # Ensure a handler is added to the logger
 handler = logging.StreamHandler()
