@@ -16,6 +16,11 @@ from sklearn.neighbors import KernelDensity
 
 from gcp_utils import create_df_from_json_for_index_file
 
+# Specify logging again
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
 # Initialize random seed (for selecting the reads used in the matrix)
 random_seed = 42
 random.seed(random_seed)
@@ -23,9 +28,6 @@ random.seed(random_seed)
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
-
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:

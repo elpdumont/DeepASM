@@ -18,8 +18,8 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 1500,
-          "memoryMib": 8000
+          "cpuMilli": 2000,
+          "memoryMib": 12000
         },
         "maxRetryCount": 3,
         "maxRunDuration": "4000s"
