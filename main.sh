@@ -23,7 +23,8 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON \
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | wc -l)
 
 
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/process_json.json
+#sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/process_json.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/5/g" jobs/process_json.json
 
 # Echo the count for demonstration

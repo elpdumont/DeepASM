@@ -11,21 +11,12 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import yaml
-from google.cloud import bigquery, storage
+from google.cloud import bigquery
+from google.cloud import logging as cloud_logging
+from google.cloud import storage
 from sklearn.neighbors import KernelDensity
 
 from gcp_utils import create_df_from_json_for_index_file
-
-# Specify logging again
-logger = logging.getLogger(__name__)
-logger.setLevel("INFO")
-
-# Ensure a handler is added to the logger
-handler = logging.StreamHandler()
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
 
 # Initialize random seed (for selecting the reads used in the matrix)
 random_seed = 42
@@ -34,6 +25,10 @@ random.seed(random_seed)
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
+
+# Set up logging (using GCP)
+client = cloud_logging.Client()
+logger = client.logger(__name__)
 
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
