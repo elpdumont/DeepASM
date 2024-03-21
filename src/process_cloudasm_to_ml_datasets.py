@@ -59,9 +59,9 @@ kernel_type = config["FEATURE_PREP"]["KERNEL_TYPE"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
-# TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 ml_dataset_id = os.getenv("ML_DATASET_ID")
 raw_data_bucket_folder = os.getenv("CLOUDASM_DATASET_ID")
+nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
 
 
 def create_schema_fields(variables_dict):
@@ -419,7 +419,7 @@ def main():
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
-        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, 5
+        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
     )
     logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")

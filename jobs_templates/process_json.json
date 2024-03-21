@@ -6,7 +6,7 @@
           "variables": {
             "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER",
             "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PLACEHOLDER",
-            "NB_FILES_PER_TASK": NB_FILES_PER_TASK_PLACEHOLDER
+            "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PLACEHOLDER"
           }
         },
         "runnables": [
