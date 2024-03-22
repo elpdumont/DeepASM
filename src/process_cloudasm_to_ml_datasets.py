@@ -72,7 +72,7 @@ def create_schema_fields(variables_dict):
         bigquery.SchemaField(name, type_, mode="REQUIRED")
         for name, type_ in variables_dict.items()
     ]
-    logging.info(f"Schema fields created: {schema_fields}")
+    # logging.info(f"Schema fields created: {schema_fields}")
     return schema_fields
 
 
@@ -114,6 +114,10 @@ def upload_dataframe(bq_client, dataframe, table_id, schema=None):
         # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
         if attempt < 5:
             sleep_time = 2**attempt  # Exponential backoff formula
+            random_sleep = random.uniform(
+                0, 3
+            )  # Add randomness between 0 and 3 seconds
+            sleep_time = base_sleep + random_sleep
             logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
             time.sleep(sleep_time)
         else:
