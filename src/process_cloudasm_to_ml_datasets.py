@@ -82,11 +82,14 @@ def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
     return schema_fields + [record_field]
 
 
-def upload_dataframe(bq_client, dataframe, table_id, schema):
+def upload_dataframe(bq_client, dataframe, table_id, schema=None):
     logging.info(f"Uploading dataframe to {table_id}")
-    job_config = bigquery.LoadJobConfig(schema=schema)
+    if not schema:
+        job_config = bigquery.LoadJobConfig(autodetect=True)
+    else:
+        job_config = bigquery.LoadJobConfig(schema=schema)
 
-    for attempt in range(1, 6):  # Retry up to 5 times
+    for attempt in range(1, 8):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
                 dataframe, table_id, job_config=job_config
@@ -531,7 +534,7 @@ def main():
     # logging.info("One-hot encode categoricals variables that are not binary")
     dummies_list = []
     for var in categorical_vars_ohe:
-        logging.info(f"One hot for variable {var}")
+        # logging.info(f"One hot for variable {var}")
         dummies = pd.get_dummies(df_filtered[var], prefix=var, dtype=int)
         dummies_list.append(dummies)
     dic_data["clean"] = pd.concat(
@@ -621,12 +624,7 @@ def main():
     )
 
     # For tabular data with autodetection
-    logging.info("Uploading tabular data with schema autodetection")
-    job_config = bigquery.LoadJobConfig(autodetect=True)
-    job = bq_client.load_table_from_dataframe(
-        dic_data["tabular"], f"{ml_dataset_id}.tabular", job_config=job_config
-    )
-    logging.info(job.result())
+    upload_dataframe(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
 
     logging.info("SCRIPT COMPLETE")
 
