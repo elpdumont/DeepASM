@@ -22,17 +22,17 @@
           "memoryMib": 20000
         },
         "maxRetryCount": 0,
-        "maxRunDuration": "4000s"
+        "maxRunDuration": "2000s"
       },
       "taskCount": TASK_COUNT_PLACEHOLDER,
-      "parallelism": 35
+      "parallelism": 60
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "e2-highmem-4" }
-      }
+        "policy": { "machineType": "n1-highmem-96"
+      }}
     ]
   },
   "labels": {

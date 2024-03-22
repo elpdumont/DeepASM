@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import sys
+import time
 
 import dask.dataframe as dd
 
@@ -11,6 +12,7 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import yaml
+from google.api_core.exceptions import TooManyRequests
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
 
@@ -81,14 +83,25 @@ def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
 
 
 def upload_dataframe(bq_client, dataframe, table_id, schema):
-    """Upload a dataframe to BigQuery with the specified schema."""
     logging.info(f"Uploading dataframe to {table_id}")
     job_config = bigquery.LoadJobConfig(schema=schema)
-    job = bq_client.load_table_from_dataframe(
-        dataframe, table_id, job_config=job_config
-    )
-    result = job.result()  # Wait for the job to complete
-    logging.info(f"Load job result for {table_id}: {result}")
+
+    for attempt in range(1, 6):  # Retry up to 5 times
+        try:
+            job = bq_client.load_table_from_dataframe(
+                dataframe, table_id, job_config=job_config
+            )
+            result = job.result()  # Wait for the job to complete
+            logging.info(f"Load job result for {table_id}: {result}")
+            break  # Success, exit the retry loop
+        except TooManyRequests:
+            if attempt == 5:
+                logging.error("Maximum retry attempts reached. Job failed.")
+                raise  # Reraise the exception or handle as appropriate
+            else:
+                sleep_time = 2**attempt  # Exponential backoff formula
+                logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
+                time.sleep(sleep_time)
 
 
 def compute_counts_and_percentages(column):
@@ -424,7 +437,7 @@ def main():
     logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
-    logging.info("Create kernel functions")
+    # logging.info("Create kernel functions")
     values_for_kernel_cov = generate_kernel_values(
         0, kernel_cov_nb_max, kernel_cov_nb_step
     )
@@ -447,10 +460,10 @@ def main():
     logging.info(f"Number of rows of df_filtered: {len(df_filtered)}")
     logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
-    logging.info("Calculate consecutive distances between CpGs")
+    # logging.info("Calculate consecutive distances between CpGs")
     df_filtered["cpg_dist"] = df_filtered["cpg_pos"].apply(calculate_cpg_distances)
 
-    logging.info("Convert specific arrays into kernel densities")
+    # logging.info("Convert specific arrays into kernel densities")
     for col in dic_kernel.keys():
         if col in df_filtered.columns:
             convert_arrays_to_kernel_densities(
@@ -460,9 +473,9 @@ def main():
                 dic_kernel[col]["bandwidth"],
             )
 
-    logging.info(
-        "Create a column for each kernel density estimate (right now they are stored in arrays)"
-    )
+    # logging.info(
+    #     "Create a column for each kernel density estimate (right now they are stored in arrays)"
+    # )
     for col in dic_kernel.keys():
         expand_array_elements(df_filtered, col + "_kd")
 
@@ -515,7 +528,7 @@ def main():
         columns=vars_to_remove, axis=1, errors="ignore"
     ).copy(deep=True)
 
-    logging.info("One-hot encode categoricals variables that are not binary")
+    # logging.info("One-hot encode categoricals variables that are not binary")
     dummies_list = []
     for var in categorical_vars_ohe:
         logging.info(f"One hot for variable {var}")
@@ -525,7 +538,7 @@ def main():
         [df_filtered, pd.concat(dummies_list, axis=1)], axis=1
     )
 
-    logging.info("Enforcing data types for integer variables")
+    # logging.info("Enforcing data types for integer variables")
     for var in [
         "chr",
         "region_inf",
@@ -539,17 +552,17 @@ def main():
     ]:
         dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
 
-    logging.info("Creating the dataset with a methylation sequence")
+    # logging.info("Creating the dataset with a methylation sequence")
     dic_data["sequence_cpg_fm"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
 
-    logging.info("Creating the  dataset with the methylation matrix")
+    # logging.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
 
-    logging.info("Creating the tabular dataset")
+    # logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
         dic_data["clean"]
         .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)

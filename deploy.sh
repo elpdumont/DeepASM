@@ -17,7 +17,7 @@ export BUCKET_NAME=$(yq e '.GCP.BUCKET_NAME' config/config.yaml)
 export REFERENCE_GENOME=$(yq e '.GENOMICS.REFERENCE_GENOME' config/config.yaml)
 
 export CLOUDASM_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_cloudasm"
-export ML_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_ml_test"
+export ML_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_ml_test5"
 
 echo "CloudASM dataset: ${CLOUDASM_DATASET}"
 echo "ML dataset: ${ML_DATASET}"
