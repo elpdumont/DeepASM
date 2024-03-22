@@ -113,7 +113,7 @@ def upload_dataframe(bq_client, dataframe, table_id, schema=None):
 
         # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
         if attempt < 5:
-            sleep_time = 2**attempt  # Exponential backoff formula
+            base_sleep = 2**attempt  # Exponential backoff formula
             random_sleep = random.uniform(
                 0, 3
             )  # Add randomness between 0 and 3 seconds

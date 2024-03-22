@@ -47,3 +47,13 @@ JOB_NAME="process-json-${SHORT_SHA}"
 gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
 	--config jobs/process_json.json
+
+
+
+# To obtain failed jobs
+gcloud batch tasks list --job="${JOB_NAME}" --location "${REGION}" --filter="STATE=FAILED"
+
+gcloud batch tasks describe 69 \
+  --location="${REGION}" \
+  --job=process23 \
+  --task_group=group0
