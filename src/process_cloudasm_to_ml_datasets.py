@@ -12,7 +12,7 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import yaml
-from google.api_core.exceptions import TooManyRequests
+from google.api_core.exceptions import Forbidden, TooManyRequests
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
 
@@ -89,7 +89,7 @@ def upload_dataframe(bq_client, dataframe, table_id, schema=None):
     else:
         job_config = bigquery.LoadJobConfig(schema=schema)
 
-    for attempt in range(1, 8):  # Retry up to 5 times
+    for attempt in range(1, 6):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
                 dataframe, table_id, job_config=job_config
@@ -98,13 +98,27 @@ def upload_dataframe(bq_client, dataframe, table_id, schema=None):
             logging.info(f"Load job result for {table_id}: {result}")
             break  # Success, exit the retry loop
         except TooManyRequests:
-            if attempt == 5:
-                logging.error("Maximum retry attempts reached. Job failed.")
-                raise  # Reraise the exception or handle as appropriate
+            logging.warning("Caught TooManyRequests; applying backoff.")
+        except Forbidden as e:
+            if "rateLimitExceeded" in str(e):
+                logging.warning(
+                    "Caught Forbidden with rateLimitExceeded; applying backoff."
+                )
             else:
-                sleep_time = 2**attempt  # Exponential backoff formula
-                logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
-                time.sleep(sleep_time)
+                logging.error("Forbidden error not related to rate limits.")
+                raise
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
+
+        # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
+        if attempt < 5:
+            sleep_time = 2**attempt  # Exponential backoff formula
+            logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
+            time.sleep(sleep_time)
+        else:
+            logging.error("Maximum retry attempts reached. Job failed.")
+            raise Exception("Maximum retry attempts reached.")
 
 
 def compute_counts_and_percentages(column):
