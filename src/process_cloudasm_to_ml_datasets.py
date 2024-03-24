@@ -118,7 +118,7 @@ def upload_dataframe(bq_client, dataframe, table_id, schema=None):
         if attempt < 5:
             base_sleep = 2**attempt  # Exponential backoff formula
             random_sleep = random.uniform(
-                0, 3
+                0, 4
             )  # Add randomness between 0 and 3 seconds
             sleep_time = base_sleep + random_sleep
             logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
