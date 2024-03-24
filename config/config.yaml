@@ -36,6 +36,7 @@ VARS_TO_REMOVE:
 VARS_TO_KEEP:
   sample: STRING
   chr: INTEGER
+  asm_snp: INTEGER
   region_inf: INTEGER
   region_sup: INTEGER
 

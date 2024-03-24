@@ -119,6 +119,44 @@ def create_df_from_json_for_index_file(
     return combined_data, file_names
 
 
+def export_dataframe_to_gcs_as_json(
+    df, bucket_name, folder_path, index, file_name_base
+):
+    """
+    Export a pandas DataFrame to a Google Cloud Storage bucket as a JSON file.
+
+    Parameters:
+    - df: pandas.DataFrame to be exported.
+    - bucket_name: Name of the GCS bucket.
+    - folder_path: Path within the bucket to save the file (excluding the file name).
+    - index: An index to include in the file name.
+    - file_name_base: A base string to include in the file name.
+
+    Returns:
+    - None
+    """
+
+    # Get the bucket
+    bucket = storage_client.bucket(bucket_name)
+
+    # Convert the DataFrame to a JSON string
+    json_string = df.to_json()
+
+    # Construct the full path including the file name
+    # Ensuring folder_path ends with '/'
+    if not folder_path.endswith("/"):
+        folder_path += "/"
+    file_name = f"{folder_path}{file_name_base}_{index}.json"
+
+    # Create a blob (GCS object) for the file
+    blob = bucket.blob(file_name)
+
+    # Upload the JSON string
+    blob.upload_from_string(json_string, content_type="application/json")
+
+    print(f"DataFrame exported to: gs://{bucket_name}/{file_name}")
+
+
 # def create_df_from_json_for_index_file(bucket_name, folder_path, task_index):
 #     # Initialize the GCP Storage client
 #     storage_client = storage.Client()

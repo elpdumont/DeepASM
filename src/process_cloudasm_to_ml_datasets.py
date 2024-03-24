@@ -16,7 +16,10 @@ from google.api_core.exceptions import Forbidden, TooManyRequests
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
 
-from gcp_utils import create_df_from_json_for_index_file
+from gcp_utils import (
+    create_df_from_json_for_index_file,
+    export_dataframe_to_gcs_as_json,
+)
 
 # Initialize random seed (for selecting the reads used in the matrix)
 random_seed = 42
@@ -643,6 +646,17 @@ def main():
 
     # For tabular data with autodetection
     upload_dataframe(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
+
+    logging.info("Uploading the dataframes as JSONs on Cloud Storage")
+
+    for dataset_type in ["sequence_cpg_fm", "sequence_cpg_cov_and_methyl", "tabular"]:
+        export_dataframe_to_gcs_as_json(
+            dic_data[dataset_type],
+            bucket_name,
+            ml_dataset_id,
+            BATCH_TASK_INDEX,
+            dataset_type,
+        )
 
     logging.info("SCRIPT COMPLETE")
 
