@@ -572,6 +572,8 @@ def main():
         "nb_cpg_found",
         "dnase",
         "encode_ChiP_V2",
+        "sample_category",
+        "asm_snp",
         "tf_motifs",
     ]:
         dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
