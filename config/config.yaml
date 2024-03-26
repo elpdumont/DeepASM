@@ -23,7 +23,6 @@ VARS_TO_REMOVE:
   - cpg_pos
   - cpg_cov
   - cpg_dist
-  - cpg_fm
   - genomic_picture
   - global_cpg_fm
   - tot_nb_reads

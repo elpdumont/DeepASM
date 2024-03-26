@@ -85,7 +85,7 @@ def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
     return schema_fields + [record_field]
 
 
-def upload_dataframe(bq_client, dataframe, table_id, schema=None):
+def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
     logging.info(f"Uploading dataframe to {table_id}")
     if not schema:
         job_config = bigquery.LoadJobConfig(autodetect=True)
@@ -364,6 +364,29 @@ def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
     )
 
 
+def extract_vectors_with_non_zero_cpg_states(arr):
+    # Sort the entire array by 'pos'
+    sorted_arr = sorted(arr, key=lambda x: x["pos"])
+
+    # Initialize the sequence of vectors
+    sequence_of_vectors = []
+
+    # Iterate over each sorted element by 'pos'
+    for item in sorted_arr:
+        # Check if there's at least one non-zero 'cpg_state'
+        if any(read["cpg_state"] != 0 for read in item["reads"]):
+            # Since we found a non-zero 'cpg_state', sort all 'reads' by 'read_nb'
+            sorted_reads = sorted(item["reads"], key=lambda x: x["read_nb"])
+
+            # Extract the whole vector of 'read_nb', since we don't filter by 'cpg_state' here
+            reads_vector = [read["cpg_state"] for read in sorted_reads]
+
+            # Add the vector to the sequence
+            sequence_of_vectors.append(reads_vector)
+
+    return sequence_of_vectors
+
+
 def generate_sequence_cpg_cov_and_methyl_over_reads(
     row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg
 ):
@@ -545,7 +568,13 @@ def main():
 
     logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
-    # Store the different datasets into a hash table.
+    logging.info("Create the same sequence but keep the nucleotides with CpGs only.")
+
+    df_filtered["sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
+        "sequence_cpg_cov_and_methyl"
+    ].apply(extract_vectors_with_non_zero_cpg_states)
+
+    logging.info("Storing the different datasets into a hash table.")
     dic_data = {}
 
     df_filtered = df_filtered.drop(
@@ -583,15 +612,32 @@ def main():
         vars_to_keep + ["sequence_cpg_fm"]
     ].copy(deep=True)
 
+    dic_data["sequence_cpg_fm_nonzeros"] = dic_data["clean"][
+        vars_to_keep + ["cpg_fm"]
+    ].copy(deep=True)
+
     # logging.info("Creating the  dataset with the methylation matrix")
     dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
         vars_to_keep + ["sequence_cpg_cov_and_methyl"]
     ].copy(deep=True)
 
+    # logging.info("Creating the  dataset with the methylation matrix")
+    dic_data["sequence_cpg_cov_and_methyl_nonzeros"] = dic_data["clean"][
+        vars_to_keep + ["sequence_cpg_cov_and_methyl_nonzeros"]
+    ].copy(deep=True)
+
     # logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
         dic_data["clean"]
-        .drop(columns=["sequence_cpg_fm", "sequence_cpg_cov_and_methyl"], axis=1)
+        .drop(
+            columns=[
+                "sequence_cpg_fm",
+                "sequence_cpg_cov_and_methyl",
+                "cpg_fm",
+                "sequence_cpg_cov_and_methyl_nonzeros",
+            ],
+            axis=1,
+        )
         .copy(deep=True)
     )
 
@@ -632,26 +678,42 @@ def main():
         record_fields_sequence_cpg_cov_and_methyl,
     )
 
-    upload_dataframe(
+    upload_dataframe_to_bq(
         bq_client,
         dic_data["sequence_cpg_fm"],
         f"{ml_dataset_id}.sequence_cpg_fm",
         schema_sequence_cpg_fm,
     )
 
-    upload_dataframe(
+    upload_dataframe_to_bq(
         bq_client,
         dic_data["sequence_cpg_cov_and_methyl"],
         f"{ml_dataset_id}.sequence_cpg_cov_and_methyl",
         schema_sequence_cpg_cov_and_methyl,
     )
 
-    # For tabular data with autodetection
-    upload_dataframe(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
+    # For datasets with autodetection
+    upload_dataframe_to_bq(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
+    upload_dataframe_to_bq(
+        bq_client,
+        dic_data["sequence_cpg_fm_nonzeros"],
+        f"{ml_dataset_id}.sequence_cpg_fm_nonzeros",
+    )
+    upload_dataframe_to_bq(
+        bq_client,
+        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
+        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
+    )
 
     logging.info("Uploading the dataframes as JSONs on Cloud Storage")
 
-    for dataset_type in ["sequence_cpg_fm", "sequence_cpg_cov_and_methyl", "tabular"]:
+    for dataset_type in [
+        "sequence_cpg_fm",
+        "sequence_cpg_cov_and_methyl",
+        "tabular",
+        "sequence_cpg_fm_nonzeros",
+        "sequence_cpg_cov_and_methyl_nonzeros",
+    ]:
         export_dataframe_to_gcs_as_json(
             dic_data[dataset_type],
             bucket_name,
