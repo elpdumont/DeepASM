@@ -678,6 +678,12 @@ def main():
         record_fields_sequence_cpg_cov_and_methyl,
     )
 
+    schema_sequence_cpg_cov_and_methyl_nonzeros = add_record_field(
+        schema_fields,
+        "sequence_cpg_cov_and_methyl_nonzeros",
+        record_fields_sequence_cpg_cov_and_methyl,
+    )
+
     upload_dataframe_to_bq(
         bq_client,
         dic_data["sequence_cpg_fm"],
@@ -696,7 +702,7 @@ def main():
         bq_client,
         dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
         f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
-        schema_sequence_cpg_cov_and_methyl,
+        schema_sequence_cpg_cov_and_methyl_nonzeros,
     )
 
     # For datasets with autodetection
