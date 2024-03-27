@@ -692,17 +692,19 @@ def main():
         schema_sequence_cpg_cov_and_methyl,
     )
 
+    upload_dataframe_to_bq(
+        bq_client,
+        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
+        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
+        schema_sequence_cpg_cov_and_methyl,
+    )
+
     # For datasets with autodetection
     upload_dataframe_to_bq(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
     upload_dataframe_to_bq(
         bq_client,
         dic_data["sequence_cpg_fm_nonzeros"],
         f"{ml_dataset_id}.sequence_cpg_fm_nonzeros",
-    )
-    upload_dataframe_to_bq(
-        bq_client,
-        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
-        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
     )
 
     logging.info("Uploading the dataframes as JSONs on Cloud Storage")
