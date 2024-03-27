@@ -364,29 +364,6 @@ def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
     )
 
 
-def extract_vectors_with_non_zero_cpg_states(arr):
-    # Sort the entire array by 'pos'
-    sorted_arr = sorted(arr, key=lambda x: x["pos"])
-
-    # Initialize the sequence of vectors
-    sequence_of_vectors = []
-
-    # Iterate over each sorted element by 'pos'
-    for item in sorted_arr:
-        # Check if there's at least one non-zero 'cpg_state'
-        if any(read["cpg_state"] != 0 for read in item["reads"]):
-            # Since we found a non-zero 'cpg_state', sort all 'reads' by 'read_nb'
-            sorted_reads = sorted(item["reads"], key=lambda x: x["read_nb"])
-
-            # Extract the whole vector of 'read_nb', since we don't filter by 'cpg_state' here
-            reads_vector = [read["cpg_state"] for read in sorted_reads]
-
-            # Add the vector to the sequence
-            sequence_of_vectors.append(reads_vector)
-
-    return sequence_of_vectors
-
-
 def generate_sequence_cpg_cov_and_methyl_over_reads(
     row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg
 ):
@@ -472,6 +449,29 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     return pos_reads_array
 
 
+def extract_vectors_with_non_zero_cpg_states(arr):
+    # Sort the entire array by 'pos'
+    sorted_arr = sorted(arr, key=lambda x: x["pos"])
+
+    # Initialize the sequence of vectors
+    sequence_of_vectors = []
+
+    # Iterate over each sorted element by 'pos'
+    for item in sorted_arr:
+        # Check if there's at least one non-zero 'cpg_state'
+        if any(read["cpg_state"] != 0 for read in item["reads"]):
+            # Since we found a non-zero 'cpg_state', sort all 'reads' by 'read_nb'
+            sorted_reads = sorted(item["reads"], key=lambda x: x["read_nb"])
+
+            # Extract the whole vector of 'read_nb', since we don't filter by 'cpg_state' here
+            reads_vector = [read["cpg_state"] for read in sorted_reads]
+
+            # Add the vector to the sequence
+            sequence_of_vectors.append(reads_vector)
+
+    return sequence_of_vectors
+
+
 # Define main script
 def main():
 
@@ -552,7 +552,7 @@ def main():
     # Remove rows where the specified column contains an empty list
     df_filtered = df_filtered[
         df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
-    ]
+    ].copy(deep=True)
 
     # Count the number of rows after removing rows with empty lists
     final_row_count = len(df_filtered)
@@ -570,7 +570,7 @@ def main():
 
     logging.info("Create the same sequence but keep the nucleotides with CpGs only.")
 
-    df_filtered["sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
+    df_filtered.loc[:, "sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
         "sequence_cpg_cov_and_methyl"
     ].apply(extract_vectors_with_non_zero_cpg_states)
 
