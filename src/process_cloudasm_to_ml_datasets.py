@@ -469,7 +469,7 @@ def extract_vectors_with_non_zero_cpg_states(arr):
             # Add the vector to the sequence
             sequence_of_vectors.append(reads_vector)
 
-    return sequence_of_vectors
+    return str(sequence_of_vectors)
 
 
 # Define main script
@@ -678,11 +678,11 @@ def main():
         record_fields_sequence_cpg_cov_and_methyl,
     )
 
-    schema_sequence_cpg_cov_and_methyl_nonzeros = add_record_field(
-        schema_fields,
-        "sequence_cpg_cov_and_methyl_nonzeros",
-        record_fields_sequence_cpg_cov_and_methyl,
-    )
+    # schema_sequence_cpg_cov_and_methyl_nonzeros = add_record_field(
+    #     schema_fields,
+    #     "sequence_cpg_cov_and_methyl_nonzeros",
+    #     record_fields_sequence_cpg_cov_and_methyl,
+    # )
 
     upload_dataframe_to_bq(
         bq_client,
@@ -698,12 +698,12 @@ def main():
         schema_sequence_cpg_cov_and_methyl,
     )
 
-    upload_dataframe_to_bq(
-        bq_client,
-        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
-        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
-        schema_sequence_cpg_cov_and_methyl_nonzeros,
-    )
+    # upload_dataframe_to_bq(
+    #     bq_client,
+    #     dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
+    #     f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
+    #     schema_sequence_cpg_cov_and_methyl_nonzeros,
+    # )
 
     # For datasets with autodetection
     upload_dataframe_to_bq(bq_client, dic_data["tabular"], f"{ml_dataset_id}.tabular")
@@ -711,6 +711,11 @@ def main():
         bq_client,
         dic_data["sequence_cpg_fm_nonzeros"],
         f"{ml_dataset_id}.sequence_cpg_fm_nonzeros",
+    )
+    upload_dataframe_to_bq(
+        bq_client,
+        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
+        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
     )
 
     logging.info("Uploading the dataframes as JSONs on Cloud Storage")
