@@ -26,8 +26,8 @@ NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | 
 #sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 echo "Number of JSON files: ${NUM_JSON_FILES}"
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/5/g" jobs/process_json.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
-#sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
+#sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 # Echo the count for demonstration
 
 #---------------------------------------------------------------
@@ -47,7 +47,9 @@ gsutil -m rm gs://"${BUCKET_NAME}"/"${ML_DATASET}"/*
 
 JOB_NAME="process-json-${SHORT_SHA}"
 
-gcloud batch jobs submit "${JOB_NAME}" \
+# "${JOB_NAME}"
+
+gcloud batch jobs submit test7da \
 	--location "${REGION}" \
 	--config jobs/process_json.json
 
