@@ -52,6 +52,7 @@ categorical_vars_ohe = config["CAT_VARS_OHE"]
 genomic_length = config["GENOMICS"]["GENOMIC_LENGTH"]
 min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
 min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
+sort_reads_randomly = config["GENOMICS"]["SORT_READS_RANDOMLY"]
 
 # Feature prep (Kernel functions)
 kernel_fm_nb_values = config["FEATURE_PREP"]["KERNEL_FM_NB_VALUES"]
@@ -365,7 +366,7 @@ def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
 
 
 def generate_sequence_cpg_cov_and_methyl_over_reads(
-    row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg
+    row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg, sort_randomly
 ):
     """
     Generates a genomic-length wide list of dictionaries.
@@ -413,17 +414,29 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
     if len(profiles) >= nb_reads_in_sequence:
 
-        # Randomly sample profiles if more are available than the minimum required
-        sampled_profiles = (
-            random.sample(profiles, nb_reads_in_sequence)
-            if len(profiles) > nb_reads_in_sequence
-            else profiles
-        )
+        sorted_all_profiles = sorted(profiles, key=lambda d: d["read_fm"])
 
-        # Sort the sampled profiles by read FM, descending
-        sorted_profiles = sorted(
-            sampled_profiles, key=lambda d: d["read_fm"], reverse=True
-        )
+        if sort_randomly:
+            # Randomly sample profiles if more are available than the minimum required
+            sampled_profiles = (
+                random.sample(sorted_all_profiles, nb_reads_in_sequence)
+                if len(sorted_all_profiles) > nb_reads_in_sequence
+                else sorted_all_profiles
+            )
+
+            # Assuming you still want them sorted in descending order for this path
+            sorted_profiles = sorted(
+                sampled_profiles, key=lambda d: d["read_fm"], reverse=True
+            )
+        else:
+            # Select profiles with the smallest and largest read_fm until reaching nb_reads_in_sequence
+            half_size = (
+                nb_reads_in_sequence // 2
+            )  # Even number ensures this is always an integer
+            # Grab half from the start (smallest) and half from the end (largest)
+            sorted_profiles = (
+                sorted_all_profiles[:half_size] + sorted_all_profiles[-half_size:]
+            )
 
         # Extract the CpG methylation profiles
         methylation_matrix = np.array(
@@ -540,7 +553,11 @@ def main():
     ddf = dd.from_pandas(df_filtered, npartitions=10)
     result = ddf.apply(
         lambda x: generate_sequence_cpg_cov_and_methyl_over_reads(
-            x, genomic_length, min_nb_reads_in_sequence, min_fraction_of_nb_cpg_in_read
+            x,
+            genomic_length,
+            min_nb_reads_in_sequence,
+            min_fraction_of_nb_cpg_in_read,
+            sort_reads_randomly,
         ),
         axis=1,
         meta=("x", "object"),
@@ -631,10 +648,10 @@ def main():
         dic_data["clean"]
         .drop(
             columns=[
-                # "sequence_cpg_fm",
-                # "sequence_cpg_cov_and_methyl",
-                "cpg_fm",
-                "sequence_cpg_cov_and_methyl_nonzeros",
+                "sequence_cpg_fm",
+                "sequence_cpg_cov_and_methyl",
+                # "cpg_fm",
+                # "sequence_cpg_cov_and_methyl_nonzeros",
             ],
             axis=1,
         )
