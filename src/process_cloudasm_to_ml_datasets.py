@@ -631,8 +631,8 @@ def main():
         dic_data["clean"]
         .drop(
             columns=[
-                "sequence_cpg_fm",
-                "sequence_cpg_cov_and_methyl",
+                # "sequence_cpg_fm",
+                # "sequence_cpg_cov_and_methyl",
                 "cpg_fm",
                 "sequence_cpg_cov_and_methyl_nonzeros",
             ],

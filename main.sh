@@ -5,7 +5,7 @@
 
 
 # List of table names to be used for ML
-TABLE_NAMES=("tabular" "sequence_cpg_fm" "sequence_cpg_cov_and_methyl")
+TABLE_NAMES=("tabular" "sequence_cpg_fm" "sequence_cpg_fm_nonzeros" "sequence_cpg_cov_and_methyl" "sequence_cpg_cov_and_methyl_nonzeros")
 
 #---------------------------------------------------------------
 # Export CloudASM output to bucket into JSON shards
@@ -26,8 +26,8 @@ NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | 
 #sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 echo "Number of JSON files: ${NUM_JSON_FILES}"
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/5/g" jobs/process_json.json
-#sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
+#sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 # Echo the count for demonstration
 
 #---------------------------------------------------------------
@@ -49,12 +49,13 @@ JOB_NAME="process-json-${SHORT_SHA}"
 
 # "${JOB_NAME}"
 
-gcloud batch jobs submit test7da \
+gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
 	--config jobs/process_json.json
 
 
 
+#---- For debugging
 # To obtain failed jobs
 gcloud batch tasks list --job="${JOB_NAME}" --location "${REGION}" --filter="STATE=FAILED"
 
@@ -62,3 +63,10 @@ gcloud batch tasks describe 69 \
   --location="${REGION}" \
   --job=process23 \
   --task_group=group0
+
+
+# Count the number of regions excluded from the analysis.
+bq show --format=prettyjson ${PROJECT_ID}:${ML_DATASET}.tabular | jq '.numRows'
+bq show --format=prettyjson ${PROJECT_ID}:${CLOUDASM_DATASET}.hg_19_250_all_samples | jq '.numRows'
+
+
