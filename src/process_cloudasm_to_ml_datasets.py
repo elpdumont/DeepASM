@@ -93,7 +93,7 @@ def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
     else:
         job_config = bigquery.LoadJobConfig(schema=schema)
 
-    for attempt in range(1, 6):  # Retry up to 5 times
+    for attempt in range(1, 7):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
                 dataframe, table_id, job_config=job_config
@@ -116,7 +116,7 @@ def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
             raise
 
         # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
-        if attempt < 5:
+        if attempt < 6:
             base_sleep = 2**attempt  # Exponential backoff formula
             random_sleep = random.uniform(
                 0, 4
