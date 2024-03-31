@@ -410,6 +410,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
         pos_reads_array = []
         cpg_frac_array = []
+        cpg_states_array = []
 
         for pos in range(genomic_length):
 
@@ -429,6 +430,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
                 # Append the calculation result to its array
                 cpg_frac_array.append(fractional_methylation_of_cpg)
+                cpg_states_array.append(cpg_states)
 
             reads_info = []
             for read_nb, cpg_state in enumerate(cpg_states, start=1):
@@ -438,8 +440,9 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     else:
         pos_reads_array = []
         cpg_frac_array = []
+        cpg_states_array = []
 
-    return pos_reads_array, cpg_frac_array
+    return pos_reads_array, cpg_frac_array, cpg_states_array
 
 
 def extract_vectors_with_non_zero_cpg_states(arr):
@@ -544,9 +547,9 @@ def main():
         meta=("x", "object"),
     )
 
-    df_filtered[["sequence_cpg_cov_and_methyl", "directional_cpg_frac"]] = (
-        result.compute().apply(pd.Series)
-    )
+    df_filtered[
+        ["sequence_cpg_cov_and_methyl", "directional_cpg_frac", "cpg_states_array"]
+    ] = result.compute().apply(pd.Series)
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list
