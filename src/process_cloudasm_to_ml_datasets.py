@@ -365,6 +365,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     nb_cpg_found_in_region = int(row_df["nb_cpg_found"])
     min_cpg_to_keep_in_read = int(nb_cpg_found_in_region * min_fraction_of_nb_cpg)
 
+    half_reads = nb_reads_in_sequence // 2
+
     # Generate the 1D CpG methylation profile for each read
     profiles = [
         generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
@@ -394,13 +396,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
                 sampled_profiles, key=lambda d: d["read_fm"], reverse=True
             )
         else:
-            # Select profiles with the smallest and largest read_fm until reaching nb_reads_in_sequence
-            half_size = (
-                nb_reads_in_sequence // 2
-            )  # Even number ensures this is always an integer
-            # Grab half from the start (smallest) and half from the end (largest)
             sorted_profiles = (
-                sorted_all_profiles[:half_size] + sorted_all_profiles[-half_size:]
+                sorted_all_profiles[:half_reads] + sorted_all_profiles[-half_reads:]
             )
 
         # Extract the CpG methylation profiles
@@ -415,24 +412,26 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
         cpg_frac_array = []
 
         for pos in range(genomic_length):
+
+            # Extract the methylation state for all reads at the current position
+            cpg_states = methylation_matrix[pos, :]
+
+            # Calculate the sum of CpG states that are equal to 2 in each half
+            sum_first_half = np.sum(cpg_states[:half_reads] == 2)
+            sum_second_half = np.sum(cpg_states[half_reads:] == 2)
+
+            # Perform the specified calculation
+            fractional_methylation_of_cpg = (
+                sum_first_half - sum_second_half
+            ) / nb_reads_in_sequence
+
+            # Append the calculation result to its array
+            cpg_frac_array.append(fractional_methylation_of_cpg)
+
             reads_info = []
-            cpg_state_2_count = 0
-            cpg_present = False  # Flag to check if there's at least one CpG
-            for read_nb in range(nb_reads_in_sequence):
-                cpg_state = methylation_matrix[pos, read_nb]
-                if cpg_state > 0:
-                    cpg_present = True
-                    if cpg_state == 2:
-                        cpg_state_2_count += 1  # Increment count if state is 2
-                reads_info.append({"read_nb": read_nb + 1, "cpg_state": cpg_state})
-
+            for read_nb, cpg_state in enumerate(cpg_states, start=1):
+                reads_info.append({"read_nb": read_nb, "cpg_state": cpg_state})
             pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
-
-            if cpg_present:
-                percentage_cpg_2 = np.round(
-                    (cpg_state_2_count / nb_reads_in_sequence) * 100, 2
-                )
-                cpg_frac_array += [percentage_cpg_2]
 
     else:
         pos_reads_array = []
@@ -543,8 +542,8 @@ def main():
         meta=("x", "object"),
     )
 
-    df_filtered["sequence_cpg_cov_and_methyl"], df_filtered["cpg_frac_mod"] = (
-        result.compute()
+    df_filtered[["sequence_cpg_cov_and_methyl", "directional_cpg_frac"]] = (
+        result.compute().apply(pd.Series)
     )
 
     initial_row_count = len(df_filtered)
