@@ -4,7 +4,6 @@ import logging
 import os
 import random
 import sys
-import time
 
 import dask.dataframe as dd
 
@@ -12,13 +11,13 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import yaml
-from google.api_core.exceptions import Forbidden, TooManyRequests
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
 
 from gcp_utils import (
     create_df_from_json_for_index_file,
     export_dataframe_to_gcs_as_json,
+    upload_dataframe_to_bq,
 )
 
 # Initialize random seed (for selecting the reads used in the matrix)
@@ -84,49 +83,6 @@ def add_record_field(schema_fields, record_name, fields, mode="REPEATED"):
     """Add a record field to an existing schema."""
     record_field = bigquery.SchemaField(record_name, "RECORD", mode=mode, fields=fields)
     return schema_fields + [record_field]
-
-
-def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
-    logging.info(f"Uploading dataframe to {table_id}")
-    if not schema:
-        job_config = bigquery.LoadJobConfig(autodetect=True)
-    else:
-        job_config = bigquery.LoadJobConfig(schema=schema)
-
-    for attempt in range(1, 7):  # Retry up to 5 times
-        try:
-            job = bq_client.load_table_from_dataframe(
-                dataframe, table_id, job_config=job_config
-            )
-            result = job.result()  # Wait for the job to complete
-            logging.info(f"Load job result for {table_id}: {result}")
-            break  # Success, exit the retry loop
-        except TooManyRequests:
-            logging.warning("Caught TooManyRequests; applying backoff.")
-        except Forbidden as e:
-            if "rateLimitExceeded" in str(e):
-                logging.warning(
-                    "Caught Forbidden with rateLimitExceeded; applying backoff."
-                )
-            else:
-                logging.error("Forbidden error not related to rate limits.")
-                raise
-        except Exception as e:
-            logging.error(f"An unexpected error occurred: {e}")
-            raise
-
-        # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
-        if attempt < 6:
-            base_sleep = 2**attempt  # Exponential backoff formula
-            random_sleep = random.uniform(
-                0, 4
-            )  # Add randomness between 0 and 3 seconds
-            sleep_time = base_sleep + random_sleep
-            logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
-            time.sleep(sleep_time)
-        else:
-            logging.error("Maximum retry attempts reached. Job failed.")
-            raise Exception("Maximum retry attempts reached.")
 
 
 def compute_counts_and_percentages(column):
@@ -369,31 +325,40 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg, sort_randomly
 ):
     """
-    Generates a genomic-length wide list of dictionaries.
-    Each dictionary is a dictionary with 2 keys: nucleotide position, and reads.
-    Each "reads" is also dictionary with 2 keys: read number and CpG status:
-       - 0 if there is no CpG at that position,
-       - 1 if there is a CpG with no methylation, and
-       - 2 if there is a CpG with methylation.
+    Generates a genomic-length wide list of dictionaries, along with the percentage of
+    methylated CpGs over the total number of reads for each genomic position where CpG is present.
 
-    Reads are ordered by fractional methylation (FM) in descending order..
-    If the minimum coverage is not met, an empty list is returned.
+    Each dictionary within the primary list represents a nucleotide position and contains
+    information about the reads at that position. The "reads" are described by a dictionary with
+    keys indicating the read number and the CpG status:
+       - 0 if there is no CpG at that position,
+       - 1 if there is a CpG without methylation, and
+       - 2 if there is a methylated CpG.
+
+    Reads are sorted by fractional methylation (FM) in descending order. The function also
+    calculates the percentage of reads with a CpG state of 2 (methylated CpGs) for each CpG
+    position, excluding positions with no CpGs. This calculation only includes positions where
+    a CpG (state 1 or 2) is present, ignoring those with a state of 0.
+
+    If the minimum coverage (number of reads) criterion is not met, an empty list and an empty
+    array are returned.
 
     Parameters:
     - row_df (pd.Series): A row from a DataFrame, representing data for a specific genomic window.
-    - genomic_interval (int): The length of the genomic window to be considered.
+    - genomic_length (int): The length of the genomic window to be considered.
     - nb_reads_in_sequence (int): The minimum number of reads required to generate the matrix.
-    - min_fraction_of_nb_cpg (float): The minimum fraction of CpGs required to select a read to be considered.
+    - min_fraction_of_nb_cpg (float): The minimum fraction of CpGs required to select a read for consideration.
+    - sort_randomly (bool): Whether to sort the profiles randomly or not. If false, profiles are
+      sorted to select an even distribution across the FM spectrum.
 
     Returns:
-    - list: A list of dictionaries with 2 keys: nucleotide position, and reads.
-            Each "reads" is a list of dictionaries with 2 keys: read number and CpG status:
-               - 0 if there is no CpG at that position,
-               - 1 if there is a CpG with no methylation, and
-               - 2 if there is a CpG with methylation.
-            Reads are ordered by fractional methylation (FM) in descending order across the genomic sequence.
-            If the minimum nb of reads in sequence is not met, an empty list is returned.
-
+    - Tuple of (list, list):
+      - First list: A genomic-length wide list of dictionaries, each containing nucleotide position
+        and reads information. Each "reads" entry is a list of dictionaries with read number and
+        CpG status.
+      - Second list: A list of the percentages of methylated CpGs (state 2) over total reads for
+        each genomic position where a CpG is present, rounded to two decimal places. Positions
+        with no CpGs present are excluded from this list.
     """
 
     genomic_array = row_df["genomic_picture"]
@@ -447,19 +412,33 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
         methylation_matrix = np.transpose(methylation_matrix)
 
         pos_reads_array = []
+        cpg_frac_array = []
 
         for pos in range(genomic_length):
             reads_info = []
+            cpg_state_2_count = 0
+            cpg_present = False  # Flag to check if there's at least one CpG
             for read_nb in range(nb_reads_in_sequence):
                 cpg_state = methylation_matrix[pos, read_nb]
+                if cpg_state > 0:
+                    cpg_present = True
+                    if cpg_state == 2:
+                        cpg_state_2_count += 1  # Increment count if state is 2
                 reads_info.append({"read_nb": read_nb + 1, "cpg_state": cpg_state})
 
             pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
 
+            if cpg_present:
+                percentage_cpg_2 = np.round(
+                    (cpg_state_2_count / nb_reads_in_sequence) * 100, 2
+                )
+                cpg_frac_array += [percentage_cpg_2]
+
     else:
         pos_reads_array = []
+        cpg_frac_array = []
 
-    return pos_reads_array
+    return pos_reads_array, cpg_frac_array
 
 
 def extract_vectors_with_non_zero_cpg_states(arr):
@@ -488,6 +467,7 @@ def extract_vectors_with_non_zero_cpg_states(arr):
 # Define main script
 def main():
 
+    logging.info(f"Sorting method: {sort_reads_randomly}")
     logging.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
@@ -563,7 +543,9 @@ def main():
         meta=("x", "object"),
     )
 
-    df_filtered["sequence_cpg_cov_and_methyl"] = result.compute()
+    df_filtered["sequence_cpg_cov_and_methyl"], df_filtered["cpg_frac_mod"] = (
+        result.compute()
+    )
 
     initial_row_count = len(df_filtered)
     # Remove rows where the specified column contains an empty list

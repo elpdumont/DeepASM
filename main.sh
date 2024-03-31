@@ -49,7 +49,7 @@ JOB_NAME="process-json-${SHORT_SHA}"
 
 # "${JOB_NAME}"
 
-gcloud batch jobs submit "${JOB_NAME}"-2 \
+gcloud batch jobs submit "${JOB_NAME}"-3 \
 	--location "${REGION}" \
 	--config jobs/process_json.json
 
@@ -66,15 +66,11 @@ gcloud batch tasks describe 69 \
 
 
 # Count the number of regions excluded from the analysis.
-bq show --format=prettyjson ${PROJECT_ID}:${ML_DATASET}.tabular | jq '.numRows'
-bq show --format=prettyjson ${PROJECT_ID}:${CLOUDASM_DATASET}.hg_19_250_all_samples | jq '.numRows'
+# Fetch the number of rows in each table as strings but formatted as numeric values
+numRowsML=$(bq show --format=prettyjson ${PROJECT_ID}:${ML_DATASET}.tabular | jq -r '.numRows')
+numRowsCloudASM=$(bq show --format=prettyjson ${PROJECT_ID}:${CLOUDASM_DATASET}.hg_19_250_all_samples | jq -r '.numRows')
 
-
-
-# Calculate the percentage difference
-percentageDifference=$(echo "scale=2; (100 * ($numRowsML - $numRowsCloudASM) / (($numRowsML + $numRowsCloudASM) / 2))" | bc -l)
-
-# Absolute value to handle negative values
-percentageDifference=$(echo $percentageDifference | tr -d '-')
+# The `-r` option with `jq` ensures the output is raw, making it suitable for numeric calculations in `bc`
+percentageDifference=$(echo "scale=2; ($numRowsML - $numRowsCloudASM) / (($numRowsML + $numRowsCloudASM) / 2) * 100" | bc -l | tr -d '-')
 
 echo "The percentage difference in the number of rows is ${percentageDifference}%."

@@ -3,13 +3,16 @@ import logging
 
 # File and variable management
 import os
+import random
 
 # import re
 import sys
+import time
 
 # Python packages for data, stats
 import pandas as pd
 import pandas_gbq
+from google.api_core.exceptions import Forbidden, TooManyRequests
 from google.cloud import bigquery, storage
 from google.cloud.exceptions import NotFound
 
@@ -17,58 +20,23 @@ bq_client = bigquery.Client()
 storage_client = storage.Client()
 
 
-def delete_bq_table(bq_dataset_id, bq_table_id):
-    """Deletes the BigQuery table if it exists."""
-    table_id = f"{bq_client.project}.{bq_dataset_id}.{bq_table_id}"
-    try:
-        bq_client.delete_table(table_id)
-        logging.info(f"Deleted table '{table_id}'.")
-    except NotFound:
-        logging.info(f"Table {table_id} not found, no deletion performed.")
+# def delete_bq_table(bq_dataset_id, bq_table_id):
+#     """Deletes the BigQuery table if it exists."""
+#     table_id = f"{bq_client.project}.{bq_dataset_id}.{bq_table_id}"
+#     try:
+#         bq_client.delete_table(table_id)
+#         logging.info(f"Deleted table '{table_id}'.")
+#     except NotFound:
+#         logging.info(f"Table {table_id} not found, no deletion performed.")
 
 
-def append_df_to_bq_table(df, bq_dataset_id, bq_table_id):
-    pandas_gbq.to_gbq(
-        df,
-        f"{bq_dataset_id}.{bq_table_id}",
-        if_exists="append",
-        progress_bar=True,
-    )
-
-
-# def export_df_to_gcs_json(df, data_type, bucket_name, bucket_path, file_name):
-#     # Convert DataFrame to JSON format
-#     json_data = df.to_json(orient="records", lines=True)
-
-#     file_name = data_type + "_" + file_name
-#     logging.info(f"Saving JSON data as {file_name}")
-#     with open(file_name, "w") as file:
-#         file.write(json_data)
-
-#     # Cloud filename includes the bucket_path
-#     cloud_filename = os.path.join(bucket_path, file_name)
-
-#     # Initialize a Google Cloud Storage client
-#     storage_client = storage.Client()
-
-#     # Get the bucket
-#     bucket = storage_client.bucket(bucket_name)
-
-#     # Create a blob (GCS object) and upload the file
-#     blob = bucket.blob(cloud_filename)
-#     blob.upload_from_filename(file_name)
-
-#     logging.info(f"File {file_name} uploaded to {cloud_filename}.")
-
-
-# def list_json_files_in_bucket_folder(bucket_name, folder_path):
-#     """Lists all the JSON files in the specified bucket folder."""
-#     prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
-#     files = storage_client.list_blobs(bucket_name, prefix=prefix)
-#     pattern = re.compile(rf"{re.escape(prefix)}.*\.json$")
-#     return [
-#         f"gs://{bucket_name}/{file.name}" for file in files if pattern.match(file.name)
-#     ]
+# def append_df_to_bq_table(df, bq_dataset_id, bq_table_id):
+#     pandas_gbq.to_gbq(
+#         df,
+#         f"{bq_dataset_id}.{bq_table_id}",
+#         if_exists="append",
+#         progress_bar=True,
+#     )
 
 
 def create_df_from_json_for_index_file(
@@ -157,41 +125,44 @@ def export_dataframe_to_gcs_as_json(
     print(f"DataFrame exported to: gs://{bucket_name}/{file_name}")
 
 
-# def create_df_from_json_for_index_file(bucket_name, folder_path, task_index):
-#     # Initialize the GCP Storage client
-#     storage_client = storage.Client()
+def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
+    logging.info(f"Uploading dataframe to {table_id}")
+    if not schema:
+        job_config = bigquery.LoadJobConfig(autodetect=True)
+    else:
+        job_config = bigquery.LoadJobConfig(schema=schema)
 
-#     # Define the prefix to search within a specific folder, ensuring it ends with '/'
-#     prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
+    for attempt in range(1, 7):  # Retry up to 5 times
+        try:
+            job = bq_client.load_table_from_dataframe(
+                dataframe, table_id, job_config=job_config
+            )
+            result = job.result()  # Wait for the job to complete
+            logging.info(f"Load job result for {table_id}: {result}")
+            break  # Success, exit the retry loop
+        except TooManyRequests:
+            logging.warning("Caught TooManyRequests; applying backoff.")
+        except Forbidden as e:
+            if "rateLimitExceeded" in str(e):
+                logging.warning(
+                    "Caught Forbidden with rateLimitExceeded; applying backoff."
+                )
+            else:
+                logging.error("Forbidden error not related to rate limits.")
+                raise
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise
 
-#     # List all blobs in the specified folder
-#     blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
-
-#     # Filter blobs that match the '*.json' pattern and sort them
-#     filtered_blobs = sorted(
-#         (blob for blob in blobs if blob.name.endswith(".json")),
-#         key=lambda blob: blob.name,
-#     )
-#     # Ensure task_index is within the range of available files
-#     if 0 <= task_index < len(filtered_blobs):
-#         # Get the Blob object at the specified index
-#         selected_blob = filtered_blobs[task_index]
-#     else:
-#         logging.info(f"Task index {task_index} is out of range.")
-#         sys.exit(1)
-
-#     # Log the processing info
-#     logging.info(
-#         f"Processing the bucket {bucket_name} with the folder path {folder_path} and the file name {selected_blob.name}"
-#     )
-
-#     logging.info("Download the file as bytes and decode it to a string")
-#     file_contents = selected_blob.download_as_bytes().decode("utf-8")
-
-#     logging.info("Process each line as a separate JSON object")
-#     processed_data = []
-#     for line in file_contents.splitlines():
-#         data = json.loads(line)  # Parse each line as JSON
-#         processed_data.append(data)
-
-#     return pd.DataFrame(processed_data), os.path.basename(selected_blob.name)
+        # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
+        if attempt < 6:
+            base_sleep = 2**attempt  # Exponential backoff formula
+            random_sleep = random.uniform(
+                0, 4
+            )  # Add randomness between 0 and 3 seconds
+            sleep_time = base_sleep + random_sleep
+            logging.info(f"Rate limit exceeded. Retrying in {sleep_time} seconds.")
+            time.sleep(sleep_time)
+        else:
+            logging.error("Maximum retry attempts reached. Job failed.")
+            raise Exception("Maximum retry attempts reached.")
