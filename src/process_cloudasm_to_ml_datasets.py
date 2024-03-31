@@ -416,17 +416,19 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             # Extract the methylation state for all reads at the current position
             cpg_states = methylation_matrix[pos, :]
 
-            # Calculate the sum of CpG states that are equal to 2 in each half
-            sum_first_half = np.sum(cpg_states[:half_reads] == 2)
-            sum_second_half = np.sum(cpg_states[half_reads:] == 2)
+            # Check if there are any CpG states with values 1 or 2
+            if np.any((cpg_states == 1) | (cpg_states == 2)):
+                # Calculate the sum of CpG states that are equal to 2 in each half
+                sum_first_half = np.sum(cpg_states[:half_reads] == 2)
+                sum_second_half = np.sum(cpg_states[half_reads:] == 2)
 
-            # Perform the specified calculation
-            fractional_methylation_of_cpg = (
-                sum_first_half - sum_second_half
-            ) / nb_reads_in_sequence
+                # Perform the specified calculation
+                fractional_methylation_of_cpg = (
+                    sum_first_half - sum_second_half
+                ) / nb_reads_in_sequence
 
-            # Append the calculation result to its array
-            cpg_frac_array.append(fractional_methylation_of_cpg)
+                # Append the calculation result to its array
+                cpg_frac_array.append(fractional_methylation_of_cpg)
 
             reads_info = []
             for read_nb, cpg_state in enumerate(cpg_states, start=1):
