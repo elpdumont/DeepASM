@@ -447,6 +447,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
         cpg_states_array_padding = []
         nb_cpg_qualified = len(cpg_states_array)
 
+        logging.info(f"cpg_states_array: {cpg_states_array}")
+
         if nb_cpg_qualified < min_cpg_for_padding:
             logging.info("Need to add padding")
             # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
@@ -454,6 +456,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             left_padding_size = total_zeros_needed // 2
             logging.info(f"Left padding {left_padding_size}")
             right_padding_size = total_zeros_needed - left_padding_size
+            logging.info(f"Right padding {right_padding_size}")
 
             # Create padding
             padding_vector = str([0] * genomic_length)
@@ -559,6 +562,7 @@ def main():
         meta=("x", "object"),
     )
 
+    logging.info("Adding the new columns to the dataframe")
     df_filtered[
         [
             "sequence_cpg_cov_and_methyl",
