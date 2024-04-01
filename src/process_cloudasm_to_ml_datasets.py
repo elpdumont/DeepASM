@@ -447,31 +447,31 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
         cpg_states_array_padding = []
         nb_cpg_qualified = len(cpg_states_array)
 
-        logging.info(f"cpg_states_array: {cpg_states_array}")
+        # logging.info(f"cpg_states_array: {cpg_states_array}")
 
         if nb_cpg_qualified < min_cpg_for_padding:
-            logging.info("Need to add padding")
+            # logging.info("Need to add padding")
             # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
             total_zeros_needed = min_cpg_for_padding - nb_cpg_qualified
             left_padding_size = total_zeros_needed // 2
-            logging.info(f"Left padding {left_padding_size}")
+            # logging.info(f"Left padding {left_padding_size}")
             right_padding_size = total_zeros_needed - left_padding_size
-            logging.info(f"Right padding {right_padding_size}")
+            # logging.info(f"Right padding {right_padding_size}")
 
             # Create padding
             padding_vector = str([0] * nb_reads_in_sequence)
-            logging.info(f"padding vector: {padding_vector}")
+            # logging.info(f"padding vector: {padding_vector}")
             left_padding = [padding_vector for _ in range(left_padding_size)]
             right_padding = [padding_vector for _ in range(right_padding_size)]
 
-            logging.info(f"left_padding: {left_padding}")
-            logging.info(f"right_padding: {right_padding}")
+            # logging.info(f"left_padding: {left_padding}")
+            # logging.info(f"right_padding: {right_padding}")
             # Apply padding
             cpg_states_array_padding = left_padding + cpg_states_array + right_padding
         else:
             cpg_states_array_padding = cpg_states_array
 
-        logging.info(f"cpg_states_array_padding: {cpg_states_array_padding}")
+        # logging.info(f"cpg_states_array_padding: {cpg_states_array_padding}")
 
     else:
         pos_reads_array = []
@@ -493,7 +493,8 @@ def main():
         bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
     )
 
-    df_raw = df_raw.head(10)
+    # Uncomment this for testing
+    # df_raw = df_raw.head(10)
 
     logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
