@@ -5,7 +5,7 @@
 
 
 # List of table names to be used for ML
-TABLE_NAMES=("tabular" "sequence_cpg_fm" "sequence_cpg_fm_nonzeros" "sequence_cpg_cov_and_methyl" "sequence_cpg_cov_and_methyl_nonzeros")
+TABLE_NAMES=("tabular" "sequence_cpg_cov_and_methyl")
 
 #---------------------------------------------------------------
 # Export CloudASM output to bucket into JSON shards
@@ -31,11 +31,7 @@ sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 # Echo the count for demonstration
 
 #---------------------------------------------------------------
-# Prepare 3 datasets
-# tabular
-# methylation-sequence (nucleotide x 2 variables: Cpg presence, methylation presence)
-# methylation-matrix (nucleotide x depth x 2 variables: Cpg presence, methylation presence)
-#!/bin/bash
+
 
 # Delete the tables if they exist
 for TABLE_NAME in "${TABLE_NAMES[@]}"; do
@@ -49,7 +45,7 @@ JOB_NAME="process-json-${SHORT_SHA}"
 
 # "${JOB_NAME}"
 
-gcloud batch jobs submit "${JOB_NAME}"-3 \
+gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
 	--config jobs/process_json.json
 
