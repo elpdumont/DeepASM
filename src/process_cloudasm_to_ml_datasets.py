@@ -402,7 +402,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
                 sampled_profiles, key=lambda d: d["read_fm"], reverse=True
             )
         else:
-            logging.info("Not sorting randomly")
+            # logging.info("Not sorting randomly")
             sorted_profiles = (
                 sorted_all_profiles[:half_reads] + sorted_all_profiles[-half_reads:]
             )
