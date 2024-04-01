@@ -430,7 +430,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
                 # Append the calculation result to its array
                 cpg_frac_array.append(fractional_methylation_of_cpg)
-                cpg_states_array.append([cpg_states])
+                cpg_states_array.append(json.dumps(cpg_states.tolist()))
 
             reads_info = []
             for read_nb, cpg_state in enumerate(cpg_states, start=1):
