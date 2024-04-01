@@ -449,6 +449,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
         for cpg_states_str in cpg_states_array:
             # Convert the JSON string back to a Python list
             cpg_states = json.loads(cpg_states_str)
+            logging.info(f"CpG states: {cpg_states}")
 
             current_length = len(cpg_states)
             logging.info(f"Current length: {current_length}")
