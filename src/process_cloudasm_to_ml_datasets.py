@@ -463,6 +463,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             left_padding = [padding_vector] * left_padding_size
             right_padding = [padding_vector] * right_padding_size
 
+            logging.info(f"left_padding: {left_padding}")
+            logging.info(f"right_padding: {right_padding}")
             # Apply padding
             cpg_states_array_padding = left_padding + cpg_states + right_padding
         else:
