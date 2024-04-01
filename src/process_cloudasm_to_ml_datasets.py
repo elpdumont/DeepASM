@@ -445,27 +445,27 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
     return pos_reads_array, cpg_frac_array, cpg_states_array
 
 
-def extract_vectors_with_non_zero_cpg_states(arr):
-    # Sort the entire array by 'pos'
-    sorted_arr = sorted(arr, key=lambda x: x["pos"])
+# def extract_vectors_with_non_zero_cpg_states(arr):
+#     # Sort the entire array by 'pos'
+#     sorted_arr = sorted(arr, key=lambda x: x["pos"])
 
-    # Initialize the sequence of vectors
-    sequence_of_vectors = []
+#     # Initialize the sequence of vectors
+#     sequence_of_vectors = []
 
-    # Iterate over each sorted element by 'pos'
-    for item in sorted_arr:
-        # Check if there's at least one non-zero 'cpg_state'
-        if any(read["cpg_state"] != 0 for read in item["reads"]):
-            # Since we found a non-zero 'cpg_state', sort all 'reads' by 'read_nb'
-            sorted_reads = sorted(item["reads"], key=lambda x: x["read_nb"])
+#     # Iterate over each sorted element by 'pos'
+#     for item in sorted_arr:
+#         # Check if there's at least one non-zero 'cpg_state'
+#         if any(read["cpg_state"] != 0 for read in item["reads"]):
+#             # Since we found a non-zero 'cpg_state', sort all 'reads' by 'read_nb'
+#             sorted_reads = sorted(item["reads"], key=lambda x: x["read_nb"])
 
-            # Extract the whole vector of 'read_nb', since we don't filter by 'cpg_state' here
-            reads_vector = [read["cpg_state"] for read in sorted_reads]
+#             # Extract the whole vector of 'read_nb', since we don't filter by 'cpg_state' here
+#             reads_vector = [read["cpg_state"] for read in sorted_reads]
 
-            # Add the vector to the sequence
-            sequence_of_vectors.append(reads_vector)
+#             # Add the vector to the sequence
+#             sequence_of_vectors.append(reads_vector)
 
-    return str(sequence_of_vectors)
+#     return str(sequence_of_vectors)
 
 
 # Define main script
@@ -573,9 +573,9 @@ def main():
 
     logging.info("Create the same sequence but keep the nucleotides with CpGs only.")
 
-    df_filtered.loc[:, "sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
-        "sequence_cpg_cov_and_methyl"
-    ].apply(extract_vectors_with_non_zero_cpg_states)
+    # df_filtered.loc[:, "sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
+    #     "sequence_cpg_cov_and_methyl"
+    # ].apply(extract_vectors_with_non_zero_cpg_states)
 
     logging.info("Storing the different datasets into a hash table.")
     dic_data = {}
@@ -625,9 +625,9 @@ def main():
     ].copy(deep=True)
 
     # logging.info("Creating the  dataset with the methylation matrix")
-    dic_data["sequence_cpg_cov_and_methyl_nonzeros"] = dic_data["clean"][
-        vars_to_keep + ["sequence_cpg_cov_and_methyl_nonzeros"]
-    ].copy(deep=True)
+    # dic_data["sequence_cpg_cov_and_methyl_nonzeros"] = dic_data["clean"][
+    #     vars_to_keep + ["sequence_cpg_cov_and_methyl_nonzeros"]
+    # ].copy(deep=True)
 
     # logging.info("Creating the tabular dataset")
     dic_data["tabular"] = (
@@ -715,11 +715,11 @@ def main():
         dic_data["sequence_cpg_fm_nonzeros"],
         f"{ml_dataset_id}.sequence_cpg_fm_nonzeros",
     )
-    upload_dataframe_to_bq(
-        bq_client,
-        dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
-        f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
-    )
+    # upload_dataframe_to_bq(
+    #     bq_client,
+    #     dic_data["sequence_cpg_cov_and_methyl_nonzeros"],
+    #     f"{ml_dataset_id}.sequence_cpg_cov_and_methyl_nonzeros",
+    # )
 
     logging.info("Uploading the dataframes as JSONs on Cloud Storage")
 
@@ -727,8 +727,8 @@ def main():
         "sequence_cpg_fm",
         "sequence_cpg_cov_and_methyl",
         "tabular",
-        "sequence_cpg_fm_nonzeros",
-        "sequence_cpg_cov_and_methyl_nonzeros",
+        # "sequence_cpg_fm_nonzeros",
+        # "sequence_cpg_cov_and_methyl_nonzeros",
     ]:
         export_dataframe_to_gcs_as_json(
             dic_data[dataset_type],
