@@ -459,7 +459,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             logging.info(f"Right padding {right_padding_size}")
 
             # Create padding
-            padding_vector = str([0] * genomic_length)
+            padding_vector = str([0] * nb_reads_in_sequence)
+            logging.info(f"padding vector: {padding_vector}")
             left_padding = [padding_vector for _ in range(left_padding_size)]
             right_padding = [padding_vector for _ in range(right_padding_size)]
 
