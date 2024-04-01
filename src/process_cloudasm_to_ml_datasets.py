@@ -460,8 +460,8 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
 
             # Create padding
             padding_vector = str([0] * genomic_length)
-            left_padding = [padding_vector] * left_padding_size
-            right_padding = [padding_vector] * right_padding_size
+            left_padding = [padding_vector for _ in range(left_padding_size)]
+            right_padding = [padding_vector for _ in range(right_padding_size)]
 
             logging.info(f"left_padding: {left_padding}")
             logging.info(f"right_padding: {right_padding}")
@@ -574,23 +574,23 @@ def main():
         ]
     ] = result.compute().apply(pd.Series)
 
-    # initial_row_count = len(df_filtered)
-    # # Remove rows where the specified column contains an empty list
-    # df_filtered = df_filtered[
-    #     df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
-    # ].copy(deep=True)
+    initial_row_count = len(df_filtered)
+    # Remove rows where the specified column contains an empty list
+    df_filtered = df_filtered[
+        df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
+    ].copy(deep=True)
 
-    # # Count the number of rows after removing rows with empty lists
-    # final_row_count = len(df_filtered)
+    # Count the number of rows after removing rows with empty lists
+    final_row_count = len(df_filtered)
 
-    # # Calculate the number of rows removed
-    # rows_removed = initial_row_count - final_row_count
+    # Calculate the number of rows removed
+    rows_removed = initial_row_count - final_row_count
 
-    # logging.info(
-    #     f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
-    # )
-    # percentage_removed = (rows_removed / initial_row_count) * 100
-    # logging.info(f"{percentage_removed:.2f}% of the rows were removed")
+    logging.info(
+        f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
+    )
+    percentage_removed = (rows_removed / initial_row_count) * 100
+    logging.info(f"{percentage_removed:.2f}% of the rows were removed")
 
     logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
