@@ -443,34 +443,30 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
                 reads_info.append({"read_nb": read_nb, "cpg_state": cpg_state})
             pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
 
-        # Create an array with padding
         cpg_states_array_padding = []
 
         for cpg_states_str in cpg_states_array:
             # Convert the JSON string back to a Python list
             cpg_states = json.loads(cpg_states_str)
 
-            # Calculate the total number of zeros needed for padding to reach min_cpg_for_padding
-            total_zeros_needed = max(min_cpg_for_padding - len(cpg_states), 0)
-            # Split the total needed zeros into half for symmetric padding
-            left_padding_size = total_zeros_needed // 2
-            right_padding_size = (
-                total_zeros_needed - left_padding_size
-            )  # This ensures handling of odd numbers
+            current_length = len(cpg_states)
+            # If the current array length is less than min_cpg_for_padding, calculate padding
+            if current_length < min_cpg_for_padding:
+                # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
+                total_zeros_needed = min_cpg_for_padding - current_length
+                left_padding_size = total_zeros_needed // 2
+                right_padding_size = total_zeros_needed - left_padding_size
 
-            # Create the padding arrays
-            left_padding = [0] * left_padding_size
-            right_padding = [0] * right_padding_size
+                # Create padding
+                left_padding = [0] * left_padding_size
+                right_padding = [0] * right_padding_size
 
-            # Apply padding to the original array
-            padded_cpg_states = left_padding + cpg_states + right_padding
+                # Apply padding
+                padded_cpg_states = left_padding + cpg_states + right_padding
+            else:
+                padded_cpg_states = cpg_states
 
-            # Ensure the padded array does not exceed nb_reads_in_sequence in length
-            # This step may need to be adjusted based on specific requirements, such as whether to trim excess or not
-            if len(padded_cpg_states) > nb_reads_in_sequence:
-                padded_cpg_states = padded_cpg_states[:nb_reads_in_sequence]
-
-            # Convert the padded list back to a JSON string for compatibility with BigQuery import
+            # Convert the padded list back to a JSON string and append to cpg_states_array_padding
             cpg_states_array_padding.append(json.dumps(padded_cpg_states))
 
     else:
