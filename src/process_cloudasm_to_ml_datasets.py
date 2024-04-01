@@ -52,6 +52,7 @@ genomic_length = config["GENOMICS"]["GENOMIC_LENGTH"]
 min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
 min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
 sort_reads_randomly = config["GENOMICS"]["SORT_READS_RANDOMLY"]
+nb_cpg_for_padding = config["GENOMICS"]["NB_CPG_FOR_PADDING"]
 
 # Feature prep (Kernel functions)
 kernel_fm_nb_values = config["FEATURE_PREP"]["KERNEL_FM_NB_VALUES"]
@@ -240,40 +241,40 @@ def expand_array_elements(df, column_name):
     # Note: This function modifies the DataFrame in place and does not return anything.
 
 
-def generate_nucleotide_sequence_of_cpg_fm(row, genomic_length):
-    """
-    Generates a sequence representation of a genomic region, detailing the presence of CpG sites and their
-    fractional methylation status. It creates a list of dictionaries, each representing a genomic position.
-    The presence of a CpG site at a position is marked with 1, otherwise 0, and the fractional methylation value
-    is specified for positions with CpG sites. For positions without CpG sites, the fractional methylation is
-    represented as None, indicating the absence of data.
+# def generate_nucleotide_sequence_of_cpg_fm(row, genomic_length):
+#     """
+#     Generates a sequence representation of a genomic region, detailing the presence of CpG sites and their
+#     fractional methylation status. It creates a list of dictionaries, each representing a genomic position.
+#     The presence of a CpG site at a position is marked with 1, otherwise 0, and the fractional methylation value
+#     is specified for positions with CpG sites. For positions without CpG sites, the fractional methylation is
+#     represented as None, indicating the absence of data.
 
-    Parameters:
-    - row (pd.Series): A Pandas Series object containing 'cpg_pos' and 'cpg_fm' keys/columns. 'cpg_pos' should be
-                       a list of 1-indexed positions indicating where CpG sites are located, and 'cpg_fm' should
-                       be a corresponding list of fractional methylation values for these positions.
-    - genomic_length (int): The total length of the genomic region to be analyzed, indicating the number of positions.
+#     Parameters:
+#     - row (pd.Series): A Pandas Series object containing 'cpg_pos' and 'cpg_fm' keys/columns. 'cpg_pos' should be
+#                        a list of 1-indexed positions indicating where CpG sites are located, and 'cpg_fm' should
+#                        be a corresponding list of fractional methylation values for these positions.
+#     - genomic_length (int): The total length of the genomic region to be analyzed, indicating the number of positions.
 
-    Returns:
-    - list of dict: A list of dictionaries where each dictionary represents a genomic position. Each dictionary
-                    has the following keys:
-                    'pos' (int): The genomic position, 1-indexed.
-                    'cpg' (int): Indicates the presence of a CpG site at the position (1 for presence, 0 for absence).
-                    'cpg_fm' (float or None): The fractional methylation value at positions with a CpG site; None
-                                              for positions without CpG sites.
-    """
+#     Returns:
+#     - list of dict: A list of dictionaries where each dictionary represents a genomic position. Each dictionary
+#                     has the following keys:
+#                     'pos' (int): The genomic position, 1-indexed.
+#                     'cpg' (int): Indicates the presence of a CpG site at the position (1 for presence, 0 for absence).
+#                     'cpg_fm' (float or None): The fractional methylation value at positions with a CpG site; None
+#                                               for positions without CpG sites.
+#     """
 
-    # Initialize the list to hold dictionaries for each genomic position
-    result = [{"pos": k + 1, "cpg": 0, "cpg_fm": None} for k in range(genomic_length)]
+#     # Initialize the list to hold dictionaries for each genomic position
+#     result = [{"pos": k + 1, "cpg": 0, "cpg_fm": None} for k in range(genomic_length)]
 
-    # Update dictionaries in the result list for positions with CpGs
-    for pos, fm in zip(row["cpg_pos"], row["cpg_fm"]):
-        # Adjust for 0-based indexing and update only the necessary keys
-        index = pos - 1  # Adjusting for 0-based indexing
-        result[index]["cpg"] = 1
-        result[index]["cpg_fm"] = np.round(fm, 3)
+#     # Update dictionaries in the result list for positions with CpGs
+#     for pos, fm in zip(row["cpg_pos"], row["cpg_fm"]):
+#         # Adjust for 0-based indexing and update only the necessary keys
+#         index = pos - 1  # Adjusting for 0-based indexing
+#         result[index]["cpg"] = 1
+#         result[index]["cpg_fm"] = np.round(fm, 3)
 
-    return result
+#     return result
 
 
 def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
@@ -322,7 +323,12 @@ def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
 
 
 def generate_sequence_cpg_cov_and_methyl_over_reads(
-    row_df, genomic_length, nb_reads_in_sequence, min_fraction_of_nb_cpg, sort_randomly
+    row_df,
+    genomic_length,
+    nb_reads_in_sequence,
+    min_fraction_of_nb_cpg,
+    sort_randomly,
+    min_cpg_for_padding,
 ):
     """
     Generates a genomic-length wide list of dictionaries, along with the percentage of
@@ -437,12 +443,43 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
                 reads_info.append({"read_nb": read_nb, "cpg_state": cpg_state})
             pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
 
+        # Create an array with padding
+        cpg_states_array_padding = []
+
+        for cpg_states_str in cpg_states_array:
+            # Convert the JSON string back to a Python list
+            cpg_states = json.loads(cpg_states_str)
+
+            # Calculate the total number of zeros needed for padding to reach min_cpg_for_padding
+            total_zeros_needed = max(min_cpg_for_padding - len(cpg_states), 0)
+            # Split the total needed zeros into half for symmetric padding
+            left_padding_size = total_zeros_needed // 2
+            right_padding_size = (
+                total_zeros_needed - left_padding_size
+            )  # This ensures handling of odd numbers
+
+            # Create the padding arrays
+            left_padding = [0] * left_padding_size
+            right_padding = [0] * right_padding_size
+
+            # Apply padding to the original array
+            padded_cpg_states = left_padding + cpg_states + right_padding
+
+            # Ensure the padded array does not exceed nb_reads_in_sequence in length
+            # This step may need to be adjusted based on specific requirements, such as whether to trim excess or not
+            if len(padded_cpg_states) > nb_reads_in_sequence:
+                padded_cpg_states = padded_cpg_states[:nb_reads_in_sequence]
+
+            # Convert the padded list back to a JSON string for compatibility with BigQuery import
+            cpg_states_array_padding.append(json.dumps(padded_cpg_states))
+
     else:
         pos_reads_array = []
         cpg_frac_array = []
         cpg_states_array = []
+        cpg_states_array_padding = []
 
-    return pos_reads_array, cpg_frac_array, cpg_states_array
+    return pos_reads_array, cpg_frac_array, cpg_states_array, cpg_states_array_padding
 
 
 # Define main script
@@ -500,12 +537,12 @@ def main():
     for col in dic_kernel.keys():
         expand_array_elements(df_filtered, col + "_kd")
 
-    logging.info(
-        "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
-    )
-    df_filtered["sequence_cpg_fm"] = df_filtered.apply(
-        lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
-    )
+    # logging.info(
+    #     "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
+    # )
+    # df_filtered["sequence_cpg_fm"] = df_filtered.apply(
+    #     lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
+    # )
 
     logging.info(
         "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
@@ -519,40 +556,42 @@ def main():
             min_nb_reads_in_sequence,
             min_fraction_of_nb_cpg_in_read,
             sort_reads_randomly,
+            nb_cpg_for_padding,
         ),
         axis=1,
         meta=("x", "object"),
     )
 
     df_filtered[
-        ["sequence_cpg_cov_and_methyl", "directional_cpg_frac", "cpg_states_array"]
+        [
+            "sequence_cpg_cov_and_methyl",
+            "directional_cpg_frac",
+            "cpg_states_array",
+            "cpg_states_array_padding",
+        ]
     ] = result.compute().apply(pd.Series)
 
-    initial_row_count = len(df_filtered)
-    # Remove rows where the specified column contains an empty list
-    df_filtered = df_filtered[
-        df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
-    ].copy(deep=True)
+    # initial_row_count = len(df_filtered)
+    # # Remove rows where the specified column contains an empty list
+    # df_filtered = df_filtered[
+    #     df_filtered["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)
+    # ].copy(deep=True)
 
-    # Count the number of rows after removing rows with empty lists
-    final_row_count = len(df_filtered)
+    # # Count the number of rows after removing rows with empty lists
+    # final_row_count = len(df_filtered)
 
-    # Calculate the number of rows removed
-    rows_removed = initial_row_count - final_row_count
+    # # Calculate the number of rows removed
+    # rows_removed = initial_row_count - final_row_count
 
-    logging.info(
-        f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
-    )
-    percentage_removed = (rows_removed / initial_row_count) * 100
-    logging.info(f"{percentage_removed:.2f}% of the rows were removed")
+    # logging.info(
+    #     f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
+    # )
+    # percentage_removed = (rows_removed / initial_row_count) * 100
+    # logging.info(f"{percentage_removed:.2f}% of the rows were removed")
 
     logging.info(compute_counts_and_percentages(df_filtered["asm_snp"]))
 
     logging.info("Create the same sequence but keep the nucleotides with CpGs only.")
-
-    # df_filtered.loc[:, "sequence_cpg_cov_and_methyl_nonzeros"] = df_filtered[
-    #     "sequence_cpg_cov_and_methyl"
-    # ].apply(extract_vectors_with_non_zero_cpg_states)
 
     logging.info("Storing the different datasets into a hash table.")
     dic_data = {}
@@ -597,7 +636,7 @@ def main():
         dic_data["clean"]
         .drop(
             columns=[
-                "sequence_cpg_fm",
+                # "sequence_cpg_fm",
                 "sequence_cpg_cov_and_methyl",
                 # "cpg_fm",
                 # "sequence_cpg_cov_and_methyl_nonzeros",
