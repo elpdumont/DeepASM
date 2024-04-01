@@ -445,34 +445,27 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
 
         cpg_states_array_padding = []
+        nb_cpg_qualified = len(cpg_states_array)
 
-        for cpg_states_str in cpg_states_array:
-            # Convert the JSON string back to a Python list
-            cpg_states = json.loads(cpg_states_str)
-            logging.info(f"CpG states: {cpg_states}")
+        if nb_cpg_qualified < min_cpg_for_padding:
+            logging.info("Need to add padding")
+            # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
+            total_zeros_needed = min_cpg_for_padding - nb_cpg_qualified
+            left_padding_size = total_zeros_needed // 2
+            logging.info(f"Left padding {left_padding_size}")
+            right_padding_size = total_zeros_needed - left_padding_size
 
-            current_length = len(cpg_states)
-            logging.info(f"Current length: {current_length}")
-            # If the current array length is less than min_cpg_for_padding, calculate padding
-            if current_length < min_cpg_for_padding:
-                logging.info("Need to add padding")
-                # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
-                total_zeros_needed = min_cpg_for_padding - current_length
-                left_padding_size = total_zeros_needed // 2
-                logging.info(f"Left padding {left_padding_size}")
-                right_padding_size = total_zeros_needed - left_padding_size
+            # Create padding
+            padding_vector = [0] * genomic_length
+            left_padding = [padding_vector] * left_padding_size
+            right_padding = [padding_vector] * right_padding_size
 
-                # Create padding
-                left_padding = [0] * left_padding_size
-                right_padding = [0] * right_padding_size
+            # Apply padding
+            cpg_states_array_padding = left_padding + cpg_states + right_padding
+        else:
+            cpg_states_array_padding = cpg_states_array
 
-                # Apply padding
-                padded_cpg_states = left_padding + cpg_states + right_padding
-            else:
-                padded_cpg_states = cpg_states
-
-            # Convert the padded list back to a JSON string and append to cpg_states_array_padding
-            cpg_states_array_padding.append(json.dumps(padded_cpg_states))
+        logging.info(f"cpg_states_array_padding: {cpg_states_array_padding}")
 
     else:
         pos_reads_array = []
@@ -494,7 +487,7 @@ def main():
         bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
     )
 
-    df_raw = df_raw.head(100)
+    df_raw = df_raw.head(10)
 
     logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
