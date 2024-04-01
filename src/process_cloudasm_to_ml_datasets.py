@@ -402,6 +402,7 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
                 sampled_profiles, key=lambda d: d["read_fm"], reverse=True
             )
         else:
+            logging.info("Not sorting randomly")
             sorted_profiles = (
                 sorted_all_profiles[:half_reads] + sorted_all_profiles[-half_reads:]
             )
@@ -450,11 +451,14 @@ def generate_sequence_cpg_cov_and_methyl_over_reads(
             cpg_states = json.loads(cpg_states_str)
 
             current_length = len(cpg_states)
+            logging.info(f"Current length: {current_length}")
             # If the current array length is less than min_cpg_for_padding, calculate padding
             if current_length < min_cpg_for_padding:
+                logging.info("Need to add padding")
                 # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
                 total_zeros_needed = min_cpg_for_padding - current_length
                 left_padding_size = total_zeros_needed // 2
+                logging.info(f"Left padding {left_padding_size}")
                 right_padding_size = total_zeros_needed - left_padding_size
 
                 # Create padding
@@ -488,6 +492,9 @@ def main():
     df_raw, file_name = create_df_from_json_for_index_file(
         bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
     )
+
+    df_raw = df_raw.head(100)
+
     logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df_raw)}")
 
