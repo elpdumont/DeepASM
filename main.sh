@@ -26,8 +26,8 @@ NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | 
 #sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 echo "Number of JSON files: ${NUM_JSON_FILES}"
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/5/g" jobs/process_json.json
-#sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/220/g" jobs/process_json.json
+#sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 # Echo the count for demonstration
 
 #---------------------------------------------------------------
@@ -39,7 +39,7 @@ for TABLE_NAME in "${TABLE_NAMES[@]}"; do
 done
 
 # Delete the JSON files on the bucket
-gsutil -m rm gs://"${BUCKET_NAME}"/"${ML_DATASET}"/*
+gsutil -m rm gs://"${BUCKET_NAME}"/"${ML_DATASET}"/*.json
 
 JOB_NAME="process-json-${SHORT_SHA}"
 
@@ -70,3 +70,14 @@ numRowsCloudASM=$(bq show --format=prettyjson ${PROJECT_ID}:${CLOUDASM_DATASET}.
 percentageDifference=$(echo "scale=2; ($numRowsML - $numRowsCloudASM) / (($numRowsML + $numRowsCloudASM) / 2) * 100" | bc -l | tr -d '-')
 
 echo "The percentage difference in the number of rows is ${percentageDifference}%."
+
+
+
+#---------------------------------------------------------------
+# Run HMM and split the dataset into train, validation, and test.
+
+JOB_NAME="run-hmm-${SHORT_SHA}"
+
+gcloud batch jobs submit "${JOB_NAME}" \
+	--location "${REGION}" \
+	--config jobs/run_hmm.json

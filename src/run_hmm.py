@@ -7,16 +7,17 @@ import sys
 import numpy as np
 import pandas as pd
 import yaml
-from gcp.utils import (
-    export_dataframe_to_gcs_as_json,
-    upload_blob,
-    upload_dataframe_to_bq,
-)
 from google.cloud import bigquery, storage
 from hmmlearn.hmm import GaussianHMM
 from joblib import dump
 from scipy.stats import entropy
 from sklearn.utils import check_random_state
+
+from gcp_utils import (
+    export_dataframe_to_gcs_as_json,
+    upload_blob,
+    upload_dataframe_to_bq,
+)
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()

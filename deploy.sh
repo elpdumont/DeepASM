@@ -18,7 +18,7 @@ export BUCKET_NAME=$(yq e '.GCP.BUCKET_NAME' config/config.yaml)
 export REFERENCE_GENOME=$(yq e '.GENOMICS.REFERENCE_GENOME' config/config.yaml)
 
 export CLOUDASM_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_cloudasm"
-export ML_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_ml"
+export ML_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}_ml_test"
 
 echo "CloudASM dataset: ${CLOUDASM_DATASET}"
 echo "ML dataset: ${ML_DATASET}"
@@ -32,6 +32,12 @@ cp jobs_templates/* jobs/
 sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" jobs/process_json.json
 sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" jobs/process_json.json
 sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" jobs/process_json.json
+
+sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" jobs/run_hmm.json
+sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" jobs/run_hmm.json
+sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" jobs/run_hmm.json
+
+
 sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" jobs/process_json.json
 
 
