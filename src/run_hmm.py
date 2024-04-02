@@ -237,11 +237,16 @@ def main():
 
     dic_data = {}
 
+    logging.info(f"Dataset types: {dataset_types}")
+    logging.info(f"Samples dictionary: {samples_dic}")
+    logging.info(f"{project_id}.{ml_dataset_id}")
+
     for dataset_name in dataset_types:
         logging.info(f"Importing dataset {dataset_name}")
         quoted_samples = ",".join(
             [f"'{sample}'" for sample in samples_dic[dataset_name]]
         )
+        logging.info(f"Quotes samples: {quoted_samples}")
 
         query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
 
