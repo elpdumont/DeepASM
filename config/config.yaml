@@ -3,6 +3,7 @@ GCP:
   REGION: us-east1
   IMAGE: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
   BUCKET_NAME: hmh_deepasm
+  MODEL_FOLDER: models
 
 GENOMICS:
   GENOMIC_LENGTH: 250
@@ -19,6 +20,32 @@ FEATURE_PREP:
   KERNEL_COV_NB_STEP: 10
   KERNEL_COV_BANDWIDTH: 5
   KERNEL_TYPE: gaussian
+
+HMM:
+  N_STATES: 5
+  COVARIANCE: tied
+  N_ITERATIONS: 200
+  ALGORITHM: viterbi
+  VAR_NAME: directional_cpg_frac
+
+
+SAMPLES:
+  TRAINING:
+    - gm12878
+    - CD14
+    - fibroblast
+    - A549
+    - spleen_female_adult
+    - HeLa_S3
+  VALIDATION:
+    - mammary_epithelial
+    - sk_n_sh
+    - CD34
+  TEST:
+    - HepG2
+    - righ_lobe_liver
+    - t_cell_male_adult
+
 
 VARS_TO_REMOVE:
   - read_fm

@@ -11,10 +11,12 @@ import time
 
 # Python packages for data, stats
 import pandas as pd
-import pandas_gbq
+
+# import pandas_gbq
 from google.api_core.exceptions import Forbidden, TooManyRequests
 from google.cloud import bigquery, storage
-from google.cloud.exceptions import NotFound
+
+# from google.cloud.exceptions import NotFound
 
 bq_client = bigquery.Client()
 storage_client = storage.Client()
@@ -37,6 +39,35 @@ storage_client = storage.Client()
 #         if_exists="append",
 #         progress_bar=True,
 #     )
+
+
+def upload_blob(bucket_name, source_file_name, folder_path):
+    """
+    Uploads a file to a specified folder within a Google Cloud Storage bucket, keeping the original file name.
+
+    Parameters:
+    - bucket_name: str. The name of the bucket to upload to.
+    - source_file_name: str. The path to the file to upload.
+    - folder_path: str. The folder path within the bucket where the file will be uploaded.
+
+    Returns:
+    None
+    """
+
+    # Get the bucket object
+    bucket = storage_client.bucket(bucket_name)
+    # Extract the file name from the source file path
+    file_name = os.path.basename(source_file_name)
+    # Create the full destination path
+    destination_blob_name = (
+        os.path.join(folder_path, file_name) if folder_path else file_name
+    )
+    # Create a new blob and upload the file's content
+    blob = bucket.blob(destination_blob_name)
+
+    blob.upload_from_filename(source_file_name)
+
+    print(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
 
 def create_df_from_json_for_index_file(
