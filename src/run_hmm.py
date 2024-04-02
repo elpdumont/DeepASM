@@ -53,7 +53,6 @@ algorithm = config["HMM"]["ALGORITHM"]
 hhm_var = config["HMM"]["VAR_NAME"]
 
 # Retrieve Job-defined env vars
-BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 ml_dataset_id = os.getenv("ML_DATASET_ID")
 
 
@@ -250,7 +249,12 @@ def main():
 
         query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
 
-        dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
+        try:
+            dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
+        except Exception as e:
+            print(f"Error executing query: {e}")
+
+        # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.array(
@@ -310,7 +314,7 @@ def main():
             df,
             bucket_name,
             ml_dataset_id,
-            BATCH_TASK_INDEX,
+            0,
             dataset_type,
         )
 
@@ -322,7 +326,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as err:
-        message = f"Task #{BATCH_TASK_INDEX} failed: {str(err)}"
+        message = f"Script failed: {str(err)}"
 
         print(json.dumps({"message": message, "severity": "ERROR"}))
         sys.exit(1)  # Retry Job Task by exiting the process
