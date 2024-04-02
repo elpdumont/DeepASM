@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -234,7 +235,7 @@ def save_HMM_model_to_bucket(model):
 
 def main():
 
-    dic_data = {}
+    dic_data = defaultdict(lambda: defaultdict(dict))
 
     logging.info(f"Dataset types: {dataset_types}")
     logging.info(f"Samples dictionary: {samples_dic}")
