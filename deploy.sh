@@ -29,13 +29,11 @@ mkdir jobs
 cp jobs_templates/* jobs/
 
 # Replace placeholders with actual values
-sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" jobs/process_json.json
-sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" jobs/process_json.json
-sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" jobs/process_json.json
-
-sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" jobs/run_hmm.json
-sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" jobs/run_hmm.json
-sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" jobs/run_hmm.json
+for file in jobs/process_json.json jobs/run_hmm.json; do
+    sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" "${file}"
+    sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" "${file}"
+    sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" "${file}"
+done
 
 
 sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" jobs/process_json.json
