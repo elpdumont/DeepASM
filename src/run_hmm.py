@@ -243,7 +243,7 @@ def main():
             [f"'{sample}'" for sample in samples_dic[dataset_name]]
         )
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMI 100"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
