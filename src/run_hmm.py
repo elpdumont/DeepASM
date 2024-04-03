@@ -132,21 +132,40 @@ def predict_hidden_states_for_sequences(model, sequences, log_frequency=100000):
 
 def extract_features(hidden_states_sequences):
     """
-    Extracts a comprehensive set of features from sequences of hidden states in a Hidden Markov Model (HMM).
-
-    This function processes each sequence of hidden states to extract various features such as counts, proportions, transitions between states, start and end states, the number of state changes, durations in each state, and transition probabilities. It also calculates the mean and variance of the durations spent in each state and the entropy of the state distribution across each sequence.
+    Extracts a comprehensive set of features from sequences of hidden states in a Hidden Markov Model (HMM) and provides descriptive names for each feature.
 
     Parameters:
     - hidden_states_sequences (list of list of int): A list of sequences, where each sequence is a list of integers representing the hidden states visited by the HMM.
 
     Returns:
-    - np.array: A 2D NumPy array where each row represents the extracted features for a single sequence. The features include counts and proportions of each state, transitions between states, the start and end state of each sequence, the number of state changes within the sequence, the mean and variance of durations spent in each state, transition probabilities between each pair of states, and the entropy of the state distribution.
+    - Tuple: A tuple containing a 2D NumPy array of extracted features for each sequence and a list of descriptive names for each feature.
     """
 
     features = []
+    feature_names = []  # To store names of the features
 
     # Determine all unique states across sequences for consistent ordering
     unique_states = sorted({state for seq in hidden_states_sequences for state in seq})
+
+    for state in unique_states:
+        feature_names.append(f"Count of State {state}")
+        feature_names.append(f"Proportion of State {state}")
+
+    for i, state_i in enumerate(unique_states):
+        for j, state_j in enumerate(unique_states):
+            feature_names.append(f"Transition from {state_i} to {state_j}")
+
+    feature_names.extend(["Start State", "End State", "Number of State Changes"])
+
+    for state in unique_states:
+        feature_names.append(f"Mean Duration in State {state}")
+        feature_names.append(f"Variance of Duration in State {state}")
+
+    for i, state_i in enumerate(unique_states):
+        for j, state_j in enumerate(unique_states):
+            feature_names.append(f"Transition Probability from {state_i} to {state_j}")
+
+    feature_names.append("Entropy of State Distribution")
 
     for seq in hidden_states_sequences:
         seq = np.array(seq)
@@ -224,7 +243,7 @@ def extract_features(hidden_states_sequences):
 
         features.append(sequence_features)
 
-    return np.round(np.array(features), 2)
+    return np.round(np.array(features), 2), feature_names
 
 
 def save_HMM_model_to_bucket(model):
@@ -249,7 +268,7 @@ def main():
         )
         # logging.info(f"Quotes samples: {quoted_samples}")
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples})"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 1000"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
@@ -289,20 +308,14 @@ def main():
             f"Compiling features based on the hidden state for dataset {dataset_name}"
         )
 
-        dic_data[dataset_name]["hs_features"] = extract_features(
+        features, feature_names = extract_features(
             dic_data[dataset_name]["hidden_states"]
         )
 
-        # Determine the number of features dynamically from the shape of the hs_features array
-        num_features = dic_data[dataset_name]["hs_features"].shape[1]
+        # Use feature_names directly for column naming in the DataFrame
+        hs_features_df = pd.DataFrame(features, columns=feature_names)
 
-        # Convert the N x num_features NumPy array to a DataFrame with dynamic column naming
-        hs_features_df = pd.DataFrame(
-            dic_data[dataset_name]["hs_features"],
-            columns=[f"hs_{i+1}" for i in range(num_features)],
-        )
-
-        # Create dataframe to export to BigQuery
+        # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
         dic_data[dataset_name]["to_export"] = pd.concat(
             [dic_data[dataset_name]["imported"], hs_features_df], axis=1
         )
