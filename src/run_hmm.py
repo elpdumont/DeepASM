@@ -231,6 +231,7 @@ def save_HMM_model_to_bucket(model):
     file_name = "hmm_model.joblib"
     dump(model, file_name)
     upload_blob(bucket_name, file_name, model_folder)
+    return None
 
 
 def main():
@@ -278,6 +279,7 @@ def main():
     logging.info("Saving model in the bucket")
     save_HMM_model_to_bucket(model)
 
+    logging.info("Hi")
     for dataset_type in dataset_types:
         logging(f"Computing hidden states for dataset: {dataset_type}")
         dic_data[dataset_type]["hidden_states"] = predict_hidden_states_for_sequences(
