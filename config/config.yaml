@@ -41,7 +41,7 @@ SAMPLES:
     - mammary_epithelial
     - sk_n_sh
     - CD34
-  TEST:
+  TESTING:
     - HepG2
     - righ_lobe_liver
     - t_cell_male_adult

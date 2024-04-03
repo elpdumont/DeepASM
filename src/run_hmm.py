@@ -254,11 +254,11 @@ def main():
 
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
-    logging.info(f"Columns: {dic_data['TRAIN']['imported'].columns}")
+    logging.info(f"Columns: {dic_data['TRAINING']['imported'].columns}")
     logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.array(
-        np.concatenate(dic_data["TRAIN"]["imported"][hmm_var].values)
+        np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].values)
     )
 
     logging.info("Reshaping training data")
