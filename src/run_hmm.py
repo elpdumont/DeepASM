@@ -280,45 +280,45 @@ def main():
     save_HMM_model_to_bucket(model)
 
     logging.info("Hi")
-    for dataset_type in dataset_types:
-        logging(f"Computing hidden states for dataset: {dataset_type}")
-        dic_data[dataset_type]["hidden_states"] = predict_hidden_states_for_sequences(
-            model, dic_data[dataset_type]["imported"][hmm_var]
+    for dataset_name in dataset_types:
+        logging(f"Computing hidden states for dataset: {dataset_name}")
+        dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
+            model, dic_data[dataset_name]["imported"][hmm_var]
         )
 
         logging.info(
-            f"Compiling features based on the hidden state for dataset {dataset_type}"
+            f"Compiling features based on the hidden state for dataset {dataset_name}"
         )
 
-        dic_data[dataset_type]["hs_features"] = extract_features(
-            dic_data[dataset_type]["hidden_states"]
+        dic_data[dataset_name]["hs_features"] = extract_features(
+            dic_data[dataset_name]["hidden_states"]
         )
 
         # Determine the number of features dynamically from the shape of the hs_features array
-        num_features = dic_data[dataset_type]["hs_features"].shape[1]
+        num_features = dic_data[dataset_name]["hs_features"].shape[1]
 
         # Convert the N x num_features NumPy array to a DataFrame with dynamic column naming
         hs_features_df = pd.DataFrame(
-            dic_data[dataset_type]["hs_features"],
+            dic_data[dataset_name]["hs_features"],
             columns=[f"hs_{i+1}" for i in range(num_features)],
         )
 
         # Create dataframe to export to BigQuery
-        dic_data[dataset_type]["to_export"] = pd.concat(
-            [dic_data[dataset_type]["imported"], hs_features_df], axis=1
+        dic_data[dataset_name]["to_export"] = pd.concat(
+            [dic_data[dataset_name]["imported"], hs_features_df], axis=1
         )
 
     logging.info("Exporting dataset to BigQuery")
-    for dataset_type in dataset_types:
+    for dataset_name in dataset_types:
 
-        df = dic_data[dataset_type]["to_export"]
-        upload_dataframe_to_bq(bq_client, df, f"{ml_dataset_id}.{dataset_type}")
+        df = dic_data[dataset_name]["to_export"]
+        upload_dataframe_to_bq(bq_client, df, f"{ml_dataset_id}.{dataset_name}")
         export_dataframe_to_gcs_as_json(
             df,
             bucket_name,
             ml_dataset_id,
             0,
-            dataset_type,
+            dataset_name,
         )
 
     logging.info("END OF SCRIPT")
