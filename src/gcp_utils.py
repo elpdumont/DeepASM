@@ -21,6 +21,9 @@ from google.cloud import bigquery, storage
 bq_client = bigquery.Client()
 storage_client = storage.Client()
 
+# Create a handler for Google Cloud Logging.
+logging.basicConfig(level=logging.INFO)
+
 
 # def delete_bq_table(bq_dataset_id, bq_table_id):
 #     """Deletes the BigQuery table if it exists."""
@@ -153,7 +156,7 @@ def export_dataframe_to_gcs_as_json(
     # Upload the JSON string
     blob.upload_from_string(json_string, content_type="application/json")
 
-    print(f"DataFrame exported to: gs://{bucket_name}/{file_name}")
+    logging.info(f"DataFrame exported to: gs://{bucket_name}/{file_name}")
 
 
 def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
