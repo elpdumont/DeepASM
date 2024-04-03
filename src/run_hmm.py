@@ -279,9 +279,8 @@ def main():
     logging.info("Saving model in the bucket")
     save_HMM_model_to_bucket(model)
 
-    logging.info("Hi")
     for dataset_name in dataset_types:
-        logging(f"Computing hidden states for dataset: {dataset_name}")
+        logging.info(f"Computing hidden states for dataset: {dataset_name}")
         dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
             model, dic_data[dataset_name]["imported"][hmm_var]
         )
