@@ -254,7 +254,7 @@ def main():
 
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
-    logging.info(f"Columns: {dic_data["train"]["imported"].columns}")
+    logging.info(f"Columns: {dic_data['train']['imported'].columns}")
     logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.array(
