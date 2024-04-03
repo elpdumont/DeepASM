@@ -51,7 +51,7 @@ n_states = config["HMM"]["N_STATES"]
 covariance = config["HMM"]["COVARIANCE"]
 n_iterations = config["HMM"]["N_ITERATIONS"]
 algorithm = config["HMM"]["ALGORITHM"]
-hhm_var = config["HMM"]["VAR_NAME"]
+hmm_var = config["HMM"]["VAR_NAME"]
 
 # Retrieve Job-defined env vars
 ml_dataset_id = os.getenv("ML_DATASET_ID")
@@ -246,22 +246,22 @@ def main():
         quoted_samples = ",".join(
             [f"'{sample}'" for sample in samples_dic[dataset_name]]
         )
-        logging.info(f"Quotes samples: {quoted_samples}")
+        # logging.info(f"Quotes samples: {quoted_samples}")
 
         query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
 
-        try:
-            dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
-        except Exception as e:
-            print(f"Error executing query: {e}")
+        dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
+    logging.info(f"Columns: {dic_data["train"]["imported"].columns}")
+    logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.array(
-        np.concatenate(dic_data["train"]["imported"][hhm_var].values)
+        np.concatenate(dic_data["train"]["imported"][hmm_var].values)
     )
 
+    logging.info("Reshaping training data")
     reshaped_data, lengths = prepare_data_for_hmm(training_seq)
 
     model = GaussianHMM(
