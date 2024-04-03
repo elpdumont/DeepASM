@@ -224,7 +224,7 @@ def extract_features(hidden_states_sequences):
 
         features.append(sequence_features)
 
-    return np.array(features)
+    return np.round(np.array(features), 2)
 
 
 def save_HMM_model_to_bucket(model):
@@ -249,7 +249,7 @@ def main():
         )
         # logging.info(f"Quotes samples: {quoted_samples}")
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples})"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
