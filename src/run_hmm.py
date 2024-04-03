@@ -230,7 +230,7 @@ def extract_features(hidden_states_sequences):
 def save_HMM_model_to_bucket(model):
     file_name = "hmm_model.joblib"
     dump(model, file_name)
-    upload_blob(bucket_name, model_folder, file_name)
+    upload_blob(bucket_name, file_name, model_folder)
 
 
 def main():
@@ -254,8 +254,8 @@ def main():
 
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
-    logging.info(f"Columns: {dic_data['TRAINING']['imported'].columns}")
-    logging.info(f"HMH var: {hmm_var}")
+    # logging.info(f"Columns: {dic_data['TRAINING']['imported'].columns}")
+    # logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.array(
         np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].values)
