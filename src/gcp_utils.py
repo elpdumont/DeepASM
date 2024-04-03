@@ -61,10 +61,14 @@ def upload_blob(bucket_name, source_file_name, folder_path):
     bucket = storage_client.bucket(bucket_name)
     # Extract the file name from the source file path
     file_name = os.path.basename(source_file_name)
+
+    logging.info(f"File name {file_name}")
     # Create the full destination path
     destination_blob_name = (
         os.path.join(folder_path, file_name) if folder_path else file_name
     )
+
+    logging.info(f"Destination blob name: {destination_blob_name}")
     # Create a new blob and upload the file's content
     blob = bucket.blob(destination_blob_name)
 
