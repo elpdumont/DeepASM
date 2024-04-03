@@ -125,7 +125,7 @@ def predict_hidden_states_for_sequences(model, sequences, log_frequency=100000):
 
         # Log progress
         if (i + 1) % log_frequency == 0:
-            logging(f"Processed sequence number: {i + 1}")
+            logging.info(f"Processed sequence number: {i + 1}")
 
     return predicted_states
 
