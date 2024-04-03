@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -140,6 +139,7 @@ def extract_features(hidden_states_sequences):
     Returns:
     - Tuple: A tuple containing a 2D NumPy array of extracted features for each sequence and a list of descriptive names for each feature.
     """
+    logging.info(f"Hidden states: {hidden_states_sequences}")
 
     features = []
     feature_names = []  # To store names of the features
@@ -243,6 +243,8 @@ def extract_features(hidden_states_sequences):
 
         features.append(sequence_features)
 
+    logging.info(f"features: {features}")
+
     return np.round(np.array(features), 2), feature_names
 
 
@@ -268,7 +270,7 @@ def main():
         )
         # logging.info(f"Quotes samples: {quoted_samples}")
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples})"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples} LIMIT 1000"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
