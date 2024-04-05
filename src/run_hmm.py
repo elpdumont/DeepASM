@@ -148,24 +148,24 @@ def extract_features(hidden_states_sequences):
     unique_states = sorted({state for seq in hidden_states_sequences for state in seq})
 
     for state in unique_states:
-        feature_names.append(f"Count of State {state}")
-        feature_names.append(f"Proportion of State {state}")
+        feature_names.append(f"count_state_{state}")
+        feature_names.append(f"proportion_state_{state}")
 
     for i, state_i in enumerate(unique_states):
         for j, state_j in enumerate(unique_states):
-            feature_names.append(f"Transition from {state_i} to {state_j}")
+            feature_names.append(f"transition_from_{state_i}_to_{state_j}")
 
-    feature_names.extend(["Start State", "End State", "Number of State Changes"])
+    feature_names.extend(["start_state", "end_state", "nb_state_changes"])
 
     for state in unique_states:
-        feature_names.append(f"Mean Duration in State {state}")
-        feature_names.append(f"Variance of Duration in State {state}")
+        feature_names.append(f"mean_duration_state_{state}")
+        feature_names.append(f"variance_duration_state_{state}")
 
     for i, state_i in enumerate(unique_states):
         for j, state_j in enumerate(unique_states):
-            feature_names.append(f"Transition Probability from {state_i} to {state_j}")
+            feature_names.append(f"transition_probability_from_{state_i}_to_{state_j}")
 
-    feature_names.append("Entropy of State Distribution")
+    feature_names.append("entropy_state_distribution")
 
     for seq in hidden_states_sequences:
         seq = np.array(seq)
@@ -281,9 +281,7 @@ def main():
     # logging.info(f"Columns: {dic_data['TRAINING']['imported'].columns}")
     # logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
-    training_seq = np.array(
-        np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].values)
-    )
+    training_seq = np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].tolist())
 
     logging.info("Reshaping training data")
     reshaped_data, lengths = prepare_data_for_hmm(training_seq)
@@ -325,14 +323,14 @@ def main():
 
         hs_features_df = hs_features_df.astype(float)
 
-        logging.info(f"Columns of hs_features_df: {hs_features_df.columns.tolist()}")
+        # logging.info(f"Columns of hs_features_df: {hs_features_df.columns.tolist()}")
 
-        logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
+        # logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
 
-        logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
+        # logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
 
-        logging.info(f"Number of rows for original df: {len(df_imported)}")
-        logging.info(f"Head of original df: {df_imported.head()}")
+        # logging.info(f"Number of rows for original df: {len(df_imported)}")
+        # logging.info(f"Head of original df: {df_imported.head()}")
         # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
         df_export = pd.concat(
             [df_imported, hs_features_df],
@@ -342,22 +340,20 @@ def main():
         # for var in feature_names:
         #     df_export[var] = df_export[var].astype(pd.Float32Dtype())
 
-        schema = [
-            bigquery.SchemaField(name, "FLOAT32", mode="NULLABLE")
-            for name in feature_names
-        ]
+        # schema = [
+        #     bigquery.SchemaField(name, "FLOAT32", mode="NULLABLE")
+        #     for name in feature_names
+        # ]
 
-        logging.info(f"Schema: {schema}")
+        # logging.info(f"Schema: {schema}")
 
-        logging.info(hs_features_df.dtypes)
-        logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
+        # logging.info(hs_features_df.dtypes)
+        # logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
 
         logging.info("Exportind dataset to BQ and Bucket")
-        upload_dataframe_to_bq(
-            bq_client, hs_features_df, f"{ml_dataset_id}.{dataset_name}", schema
-        )
+        upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
         export_dataframe_to_gcs_as_json(
-            hs_features_df,
+            df_export,
             bucket_name,
             ml_dataset_id,
             0,
