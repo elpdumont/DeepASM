@@ -325,6 +325,8 @@ def main():
 
         hs_features_df = hs_features_df.astype(float)
 
+        logging.info(f"Columns of hs_features_df: {hs_features_df.columns.tolist()}")
+
         logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
 
         logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
@@ -344,6 +346,8 @@ def main():
             bigquery.SchemaField(name, "FLOAT32", mode="REQUIRED")
             for name in feature_names
         ]
+
+        logging.info(f"Schema: {schema}")
 
         logging.info(hs_features_df.dtypes)
         logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
