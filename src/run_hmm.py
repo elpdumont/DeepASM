@@ -340,12 +340,17 @@ def main():
         # for var in feature_names:
         #     df_export[var] = df_export[var].astype(pd.Float32Dtype())
 
+        schema = [
+            bigquery.SchemaField(name, "FLOAT32", mode="REQUIRED")
+            for name in feature_names
+        ]
+
         logging.info(hs_features_df.dtypes)
         logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
 
         logging.info("Exportind dataset to BQ and Bucket")
         upload_dataframe_to_bq(
-            bq_client, hs_features_df, f"{ml_dataset_id}.{dataset_name}"
+            bq_client, hs_features_df, f"{ml_dataset_id}.{dataset_name}", schema
         )
         export_dataframe_to_gcs_as_json(
             hs_features_df,
