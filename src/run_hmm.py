@@ -343,7 +343,7 @@ def main():
         #     df_export[var] = df_export[var].astype(pd.Float32Dtype())
 
         schema = [
-            bigquery.SchemaField(name, "FLOAT32", mode="REQUIRED")
+            bigquery.SchemaField(name, "FLOAT32", mode="NULLABLE")
             for name in feature_names
         ]
 
