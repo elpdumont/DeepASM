@@ -270,7 +270,7 @@ def main():
         )
         # logging.info(f"Quotes samples: {quoted_samples}")
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples} LIMIT 1000"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 1000"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
