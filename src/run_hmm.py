@@ -139,7 +139,7 @@ def extract_features(hidden_states_sequences):
     Returns:
     - Tuple: A tuple containing a 2D NumPy array of extracted features for each sequence and a list of descriptive names for each feature.
     """
-    logging.info(f"Hidden states: {hidden_states_sequences}")
+    # logging.info(f"Hidden states: {hidden_states_sequences}")
 
     features = []
     feature_names = []  # To store names of the features
@@ -243,7 +243,7 @@ def extract_features(hidden_states_sequences):
 
         features.append(sequence_features)
 
-    logging.info(f"features: {features}")
+    # logging.info(f"features: {features}")
 
     return np.round(np.array(features), 2), feature_names
 
@@ -272,7 +272,7 @@ def main():
 
         # query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 1000"
 
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 10"
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
@@ -318,6 +318,8 @@ def main():
 
         # Use feature_names directly for column naming in the DataFrame
         hs_features_df = pd.DataFrame(features, columns=feature_names)
+
+        logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
 
         # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
         dic_data[dataset_name]["to_export"] = pd.concat(
