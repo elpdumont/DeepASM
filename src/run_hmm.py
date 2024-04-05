@@ -272,6 +272,8 @@ def main():
 
         # query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 1000"
 
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 100"
+
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
         # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
