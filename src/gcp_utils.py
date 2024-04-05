@@ -157,6 +157,11 @@ def export_dataframe_to_gcs_as_json(
     # Create a blob (GCS object) for the file
     blob = bucket.blob(file_name)
 
+    if blob.exists():
+        logging.info(
+            f"File gs://{bucket_name}/{file_name} already exists and will be overwritten."
+        )
+
     # Upload the JSON string
     blob.upload_from_string(json_string, content_type="application/json")
 
