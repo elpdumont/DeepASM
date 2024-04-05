@@ -76,6 +76,12 @@ echo "The percentage difference in the number of rows is ${percentageDifference}
 #---------------------------------------------------------------
 # Run HMM and split the dataset into train, validation, and test.
 
+DATASET_NAMES=("TRAINING" "VALIDATION" "TESTING")
+
+for TABLE_NAME in "${DATASET_NAMES[@]}"; do
+	bq rm -f -t "${PROJECT_ID}:${ML_DATASET}.${TABLE_NAME}"
+done
+
 JOB_NAME="run-hmm-${SHORT_SHA}"
 
 gcloud batch jobs submit "${JOB_NAME}" \
