@@ -323,6 +323,8 @@ def main():
             drop=True
         )
 
+        hs_features_df = hs_features_df.astype(float)
+
         logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
 
         logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
@@ -335,8 +337,8 @@ def main():
             axis=1,
         )
 
-        for var in feature_names:
-            df_export[var] = df_export[var].astype(pd.Float32Dtype())
+        # for var in feature_names:
+        #     df_export[var] = df_export[var].astype(pd.Float32Dtype())
 
         logging.info(hs_features_df.dtypes)
         logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
