@@ -303,9 +303,11 @@ def main():
     save_HMM_model_to_bucket(model)
 
     for dataset_name in dataset_types:
+
+        df_imported = dic_data[dataset_name]["imported"].copy(deep=True)
         logging.info(f"Computing hidden states for dataset: {dataset_name}")
         dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
-            model, dic_data[dataset_name]["imported"][hmm_var]
+            model, df_imported[hmm_var]
         )
 
         logging.info(
@@ -323,19 +325,17 @@ def main():
 
         logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
 
+        logging.info(f"Head of original df: {df_imported.head()}")
         # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
-        dic_data[dataset_name]["to_export"] = pd.concat(
-            [dic_data[dataset_name]["imported"].reset_index(drop=True), hs_features_df],
+        df_export = pd.concat(
+            [df_imported, hs_features_df],
             axis=1,
         )
 
-    logging.info("Exporting dataset to BigQuery")
-    for dataset_name in dataset_types:
-
-        df = dic_data[dataset_name]["to_export"]
-        upload_dataframe_to_bq(bq_client, df, f"{ml_dataset_id}.{dataset_name}")
+        logging.info("Exportind dataset to BQ and Bucket")
+        upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
         export_dataframe_to_gcs_as_json(
-            df,
+            df_export,
             bucket_name,
             ml_dataset_id,
             0,
