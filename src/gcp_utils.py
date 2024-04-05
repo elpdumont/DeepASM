@@ -166,9 +166,13 @@ def export_dataframe_to_gcs_as_json(
 def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
     logging.info(f"Uploading dataframe to {table_id}")
     if not schema:
-        job_config = bigquery.LoadJobConfig(autodetect=True)
+        job_config = bigquery.LoadJobConfig(
+            autodetect=True, writeDisposition="WRITE_APPEND"
+        )
     else:
-        job_config = bigquery.LoadJobConfig(schema=schema)
+        job_config = bigquery.LoadJobConfig(
+            schema=schema, writeDisposition="WRITE_APPEND"
+        )
 
     for attempt in range(1, 7):  # Retry up to 5 times
         try:
