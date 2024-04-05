@@ -317,13 +317,16 @@ def main():
         )
 
         # Use feature_names directly for column naming in the DataFrame
-        hs_features_df = pd.DataFrame(features, columns=feature_names)
+        hs_features_df = pd.DataFrame(features, columns=feature_names).reset_index(
+            drop=True
+        )
 
         logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
 
         # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
         dic_data[dataset_name]["to_export"] = pd.concat(
-            [dic_data[dataset_name]["imported"], hs_features_df], axis=1
+            [dic_data[dataset_name]["imported"].reset_index(drop=True), hs_features_df],
+            axis=1,
         )
 
     logging.info("Exporting dataset to BigQuery")
