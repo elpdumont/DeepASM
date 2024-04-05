@@ -245,7 +245,7 @@ def extract_features(hidden_states_sequences):
 
     # logging.info(f"features: {features}")
 
-    return np.round(np.array(features), 2), feature_names
+    return np.array(features), feature_names
 
 
 def save_HMM_model_to_bucket(model):
