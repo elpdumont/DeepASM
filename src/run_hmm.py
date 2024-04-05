@@ -139,7 +139,6 @@ def extract_features(hidden_states_sequences):
     Returns:
     - Tuple: A tuple containing a 2D NumPy array of extracted features for each sequence and a list of descriptive names for each feature.
     """
-    # logging.info(f"Hidden states: {hidden_states_sequences}")
 
     features = []
     feature_names = []  # To store names of the features
@@ -243,8 +242,6 @@ def extract_features(hidden_states_sequences):
 
         features.append(sequence_features)
 
-    # logging.info(f"features: {features}")
-
     return np.array(features), feature_names
 
 
@@ -276,10 +273,6 @@ def main():
 
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
 
-        # dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
-
-    # logging.info(f"Columns: {dic_data['TRAINING']['imported'].columns}")
-    # logging.info(f"HMH var: {hmm_var}")
     logging.info("Creating a unique sequence for training the HMM")
     training_seq = np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].tolist())
 
@@ -321,34 +314,14 @@ def main():
             drop=True
         )
 
-        hs_features_df = hs_features_df.astype(float)
+        # Round float values
+        hs_features_df = np.round(hs_features_df.astype(float), 4)
 
-        # logging.info(f"Columns of hs_features_df: {hs_features_df.columns.tolist()}")
-
-        # logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
-
-        # logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
-
-        # logging.info(f"Number of rows for original df: {len(df_imported)}")
-        # logging.info(f"Head of original df: {df_imported.head()}")
-        # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
+        # Form final dataframe
         df_export = pd.concat(
             [df_imported, hs_features_df],
             axis=1,
         )
-
-        # for var in feature_names:
-        #     df_export[var] = df_export[var].astype(pd.Float32Dtype())
-
-        # schema = [
-        #     bigquery.SchemaField(name, "FLOAT32", mode="NULLABLE")
-        #     for name in feature_names
-        # ]
-
-        # logging.info(f"Schema: {schema}")
-
-        # logging.info(hs_features_df.dtypes)
-        # logging.info(f" DF EXPORT DTYPES: {df_export.dtypes}")
 
         logging.info("Exportind dataset to BQ and Bucket")
         upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
