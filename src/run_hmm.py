@@ -323,8 +323,11 @@ def main():
             drop=True
         )
 
+        logging.info(f"Number of rows for hs_features: {len(hs_features_df)}")
+
         logging.info(f"Dataframe of the HS features: {hs_features_df.head()}")
 
+        logging.info(f"Number of rows for original df: {len(df_imported)}")
         logging.info(f"Head of original df: {df_imported.head()}")
         # Assuming 'imported' is a DataFrame you want to concatenate with the features DataFrame
         df_export = pd.concat(
