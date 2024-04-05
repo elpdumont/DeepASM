@@ -339,7 +339,9 @@ def main():
             df_export[var] = df_export[var].astype(pd.Float32Dtype())
 
         logging.info("Exportind dataset to BQ and Bucket")
-        upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
+        upload_dataframe_to_bq(
+            bq_client, hs_features_df, f"{ml_dataset_id}.{dataset_name}"
+        )
         export_dataframe_to_gcs_as_json(
             df_export,
             bucket_name,
