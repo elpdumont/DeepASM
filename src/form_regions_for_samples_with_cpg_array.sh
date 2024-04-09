@@ -5,30 +5,34 @@
 # (specified as a variable)
 bq query \
     --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR} \
+    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_asm_over_regions \
     --replace=true \
     "
     WITH 
         CPG_REGIONS AS (
             SELECT 
-                chr AS chr_region, 
+                chr,
                 region_inf, 
-                region_sup, 
-                region_nb_cpg
-            FROM ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp_clean_annotated
-            WHERE chr = '${CHR}'
+                region_sup,
+                region_center,
+                region_nb_cpg,
+                clustering_index
+            FROM ${REFG_FOLDER}.regions_w_cpg_wo_blacklisted_regions
         ),
         CONTEXT_ASM AS (
             SELECT *
-            FROM ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
+            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm
             -- Note: we do not require that there is a min coverage because that was done by CloudASM
-            WHERE chr = '${CHR}' AND (ref_cov + alt_cov < ${MAX_CPG_COV})
+            WHERE (ref_cov + alt_cov < ${MAX_CPG_COV})
         ),
         REGION_CPG_JOINED AS(
             SELECT 
-                chr,
+                sample,
+                c.clustering_index,
+                c.chr,
                 region_inf,
                 region_sup,
+                region_center,
                 region_nb_cpg,
                 pos, 
                 snp_id, 
@@ -38,15 +42,18 @@ bq query \
                 alt_cov, 
                 alt_meth, 
                 fisher_pvalue
-            FROM CPG_REGIONS
-            INNER JOIN CONTEXT_ASM
-            ON pos >= region_inf AND pos <= region_sup
+            FROM CPG_REGIONS p
+            INNER JOIN CONTEXT_ASM c
+            ON pos >= region_inf AND pos <= region_sup AND c.chr = p.chr AND c.clustering_index = p.clustering_index
         ),
         GROUP_BY_SNPID AS (
             SELECT
+                sample,
+                clustering_index,
                 chr,
                 region_inf,
                 region_sup,
+                region_center,
                 region_nb_cpg,
                 snp_id,
                 snp_pos,
@@ -64,19 +71,21 @@ bq query \
                         ORDER BY pos
                     ) AS cpg_asm
             FROM REGION_CPG_JOINED
-            GROUP BY chr, snp_id, snp_pos, region_inf, region_sup, region_nb_cpg
+            GROUP BY sample, clustering_index, chr, snp_id, snp_pos, region_inf, region_sup, region_center, region_nb_cpg
         ),
         GROUP_BY_SNPID_MIN_CPG AS (
         SELECT * 
         FROM GROUP_BY_SNPID
-        WHERE nb_cpg >= ${CPG_PER_ASM_REGION}
+        WHERE nb_cpg >= ${MIN_NB_CPG_FOR_ASM}
         )
-        SELECT 
-            chr AS chr_asm_region,
+        SELECT
+            sample,
+            clustering_index,
+            chr,
             region_inf,
             region_sup,
             region_nb_cpg,
-            snp_id AS snp_id_asm_region, 
+            snp_id,
             snp_pos,
             nb_cpg,
             (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE}) AS nb_sig_cpg, 
@@ -88,5 +97,4 @@ bq query \
             (SELECT MAX(pos) FROM UNNEST(cpg_asm)) AS max_cpg,
             cpg_asm
         FROM GROUP_BY_SNPID_MIN_CPG
-        ORDER BY region_inf
     "

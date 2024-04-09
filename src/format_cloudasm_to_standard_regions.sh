@@ -7,19 +7,15 @@
 # - ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
 # - ${DATASET_CONTEXT}.${SAMPLE}_cpg_read_genotype
 
+source src/import_env_variables.sh
 
 #--------------------------------------------------------------------------
 # Variables
 #--------------------------------------------------------------------------
 
-# Where scripts are located
-SCRIPTS="/Users/em/code/DeepASM/asm_annotation"
 
 # BQ dataset where the epigenetic windows are defined
 DATASET_EPI="hg19"
-
-# Size of genomic regions:
-GENOMIC_INTERVAL="250" # must be the same that in hg19_preparation.sh
 
 # BQ dataset where the output of CloudASM is located
 DATASET_PRED="deepasm_feb2022" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
@@ -30,45 +26,31 @@ DATASET_CONTEXT="cloudasm_encode_2019" # T-cells: "tcells_2020" ENCODE: "cloudas
 # Bucket where to put the txt files for Python analysis
 OUTPUT_B="deepasm"
 
-# Cloud Storage location of the logs
-LOG="gs://cloudasm-encode/logging/deepasm"
-
-# Docker file required to run the scripts
-DOCKER_GCP="google/cloud-sdk:255.0.0"
-
-# Light-weight python Docker image with statistical packages.
-DOCKER_PYTHON="gcr.io/hackensack-tyco/python"
-
-# GCP global variables
-PROJECT_ID="hackensack-tyco"
-REGION_ID="us-central1"
-ZONE_ID="us-central1-b"
-
 
 #--------------------------------------------------------------------------
 # ASM Variables
 #--------------------------------------------------------------------------
 
-# Minimum number of CpGs we require near a SNP for it to be considered for an ASM region
-CPG_PER_ASM_REGION="3"
+# # Minimum number of CpGs we require near a SNP for it to be considered for an ASM region
+# CPG_PER_ASM_REGION="3"
 
-# Max CpG coverage (to get rid off abherent regions with dozens of thousands of reads overlap.)
-MAX_CPG_COV="200"
+# # Max CpG coverage (to get rid off abherent regions with dozens of thousands of reads overlap.)
+# MAX_CPG_COV="200"
 
-# p-value cut-off used in all tests for significance
-P_VALUE="0.05"
+# # p-value cut-off used in all tests for significance
+# P_VALUE="0.05"
 
-# Benjamin-Hochberg threshold
-BH_THRESHOLD="0.05"
+# # Benjamin-Hochberg threshold
+# BH_THRESHOLD="0.05"
 
-# Effect size required at the ASM region level.
-ASM_REGION_EFFECT="0.2"
+# # Effect size required at the ASM region level.
+# ASM_REGION_EFFECT="0.2"
 
-# In an ASM region, minimum bumber of CpGs with significant ASM in the same direction
-CPG_SAME_DIRECTION_ASM="3"
+# # In an ASM region, minimum bumber of CpGs with significant ASM in the same direction
+# CPG_SAME_DIRECTION_ASM="3"
 
-# Number of consecutive CpGs with significant ASM in the same direction (among all well-covered CpGs)
-CONSECUTIVE_CPG="2" 
+# # Number of consecutive CpGs with significant ASM in the same direction (among all well-covered CpGs)
+# CONSECUTIVE_CPG="2" 
 
 
 #--------------------------------------------------------------------------
@@ -79,47 +61,58 @@ CONSECUTIVE_CPG="2"
 # This creates a row for each (snp id, region) combination with at least 3 CpGs 
 # All CpGs have 10x coverage and were evaluated for ASM
 
-echo -e "--env SAMPLE\t--env CHR" > all_chr.tsv
+# Check if the table exists
+if bq show --format=none "${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm" 2>/dev/null; then
+    echo "Table exists. Deleting table ${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm..."
+    bq rm -f -t "${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm"
+    echo "Table deleted."
+else
+    echo "Table ${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm does not exist. No action taken."
+fi
 
-# Create a file of job parameters for finding SNPs and their reads.
-while read SAMPLE ; do
-    for CHR in `seq 1 22` X Y ; do
-        echo -e "${SAMPLE}\t${CHR}" >> all_chr.tsv
-    done
-done < sample_id.txt
-
-# Launch the 288 jobs in parallele (100 at most at the same time)
-dsub \
-    --project $PROJECT_ID \
-    --zones $ZONE_ID \
-    --image ${DOCKER_GCP} \
-    --logging $LOG \
-    --env DATASET_PRED="${DATASET_PRED}" \
-    --env DATASET_EPI="${DATASET_EPI}" \
-    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
-    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-    --env CPG_PER_ASM_REGION="${CPG_PER_ASM_REGION}" \
-    --env P_VALUE="${P_VALUE}" \
-    --env MAX_CPG_COV="${MAX_CPG_COV}" \
-    --script ${SCRIPTS}/cpg_asm.sh \
-    --tasks all_chr.tsv \
-    --wait
-
-# Delete previous tables
-while read SAMPLE ; do
-    echo "Deleting the table for sample " ${SAMPLE}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
-done < sample_id.txt
 
 # Append to a new table for each sample
-{ read
-while read SAMPLE CHR ; do 
-    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
+# Loop over all samples
+for sample in "${SAMPLE_LIST[@]}"; do
+    echo "Processing sample: ${sample}"
+
+    TEMP_TABLE="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_cpg_asm_temp"
+
+    # Create and populate the temporary table, adding the 'sample' column
+    bq query \
+        --use_legacy_sql=false \
+        --destination_table="${TEMP_TABLE}" \
+        --clustering_fields=sample,chr,clustering_index \
+        "
+        SELECT 
+            '${sample}' AS sample,
+            CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
+            CAST(p.chr AS INT64) AS chr,
+            p.pos,
+            p.snp_id,
+            p.snp_pos,
+            p.ref_cov,
+            p.ref_meth,
+            p.alt_cov,
+            p.alt_meth,
+            p.fisher_pvalue
+        FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_cpg_asm p
+        JOIN ${REFG_FOLDER}.chr_length c 
+        ON SAFE_CAST(p.chr AS INT64) = c.chr
+        WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
+        "
+    # Append table
     bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR} \
-        ${DATASET_PRED}.${SAMPLE}_cpg_asm_${GENOMIC_INTERVAL}bp
-done 
-} < all_chr.tsv
+        "${TEMP_TABLE}" \
+        "${PROJECT_ID}":"${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_asm
+
+    # Delete temp table
+    bq rm -f -t "${TEMP_TABLE}"
+done
+
+echo "Form regions for samples with an array of CpG details"
+src/form_regions_for_samples_with_cpg_array
+
 
 # Check tables
 bq query \
@@ -128,20 +121,13 @@ bq query \
     SELECT 
         TABLE_NAME, 
         ROUND(TOTAL_ROWS/1000,0) AS thousand_rows 
-    FROM ${DATASET_PRED}.INFORMATION_SCHEMA.PARTITIONS
-    WHERE TABLE_NAME LIKE '%cpg_asm%_${GENOMIC_INTERVAL}bp'
+    FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.INFORMATION_SCHEMA.PARTITIONS
+    WHERE TABLE_NAME LIKE 'cpg_asm_over_regions'
     "
 
-# Erase intermediary files.
-{ read
-while read SAMPLE CHR ; do 
-    echo "Sample is:" ${SAMPLE} ", Chromosome is " ${CHR}
-    bq rm -f -t ${DATASET_PRED}.${SAMPLE}_cpg_asm_${CHR}
-done 
-} < all_chr.tsv
 
 
-#### Create a dataset of (region, snp_ip) and arrays of fractional methylation of reads
+echo "Create a dataset of (region, snp_ip) and arrays of fractional methylation of reads"
 
 dsub \
     --project $PROJECT_ID \

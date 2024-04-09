@@ -4,9 +4,10 @@
 source src/import_env_variables.sh
 
 echo "Preparing standard genomic regions using the reference genome"
-chmod +x src/prepare_regions_using_ref_genome.sh
-src/prepare_regions_using_ref_genome.sh
+src/prepare_regions_w_cpg_using_refg.sh
 
+echo "Formatting CloudASM output to standard genomic regions"
+src/format_cloudasm_to_standard_regions.sh
 
 # Update the jobs file
 # Copy the template to a new file that can be safely modified

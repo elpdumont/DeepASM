@@ -3,20 +3,13 @@
 # Requirements
 # CpG bed file in bucket/ref_genomes/reference_genome
 
-echo "Creating the dataset with an expiration"
-if bq ls --project_id="${PROJECT_ID}" | grep -w "${REFG_FOLDER}"; then
-	echo "Dataset ${REFG_FOLDER} already exists in project ${PROJECT_ID}."
-else
-	# Create the dataset since it does not exist
-	bq mk --project_id="${PROJECT_ID}" --dataset --default_table_expiration="${REF_GENOME_DATASET_EXPIRATION_SEC}" "${PROJECT_ID}:${REFG_FOLDER}"
-	echo "Dataset ${REFG_FOLDER} created in project ${PROJECT_ID}."
-fi
-
-chmod +x src/make_chr_info_for_ref_genome.sh
+echo "Create a file with all the lengths of all chromosomes"
 src/make_chr_info_for_ref_genome.sh
 
+echo "Copying this file to Cloud Storage"
 gsutil cp chr_length.txt gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_length.txt
 
+echo "Importing this file to BigQuery"
 bq --location=US load \
                --replace=true \
                --source_format=CSV \
@@ -72,8 +65,7 @@ echo "Number of CpGs in reference genome ${TABLE}: ${F_ROW_COUNT}"
 # Prepare some files related to chromosomes
 #--------------------------------------------------------------------------
 
-chmod +x src/make_genomic_regions_for_ref_genome.sh
-src/make_genomic_regions_for_ref_genome.sh
+src/make_regions_for_ref_genome.sh
 
 echo "Uploading chromosome regions to the bucket"
 gzip -f chr_regions.txt
@@ -107,7 +99,6 @@ echo "BEFORE FILTERING, found ${NB_REGIONS} regions with a min of ${MIN_NB_CPG_P
 #--------------------------------------------------------------------------
 
 echo "Creating the genomic regions with a min number of CpGs for the ref genome"
-chmod +x src/find_regions_w_cpg.sh
 src/find_regions_in_ref_genome_w_cpg.sh
 
 # Construct the query to count rows in the table
@@ -187,6 +178,7 @@ echo "Create a table of genomic regions that do not overlap with ENCODE blacklis
 bq query \
     --use_legacy_sql=false \
     --destination_table "${REFG_FOLDER}".regions_w_cpg_wo_blacklisted_regions \
+    --clustering_fields=chr,clustering_index \
     --replace=true \
     "
     WITH ALL_DATA AS (
