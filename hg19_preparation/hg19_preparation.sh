@@ -1,52 +1,51 @@
+#!/bin/bash
+
 # Here we prepare the ref genome with where at least 3 CpGs are present.
 # Then we annotate the windows with at least 3 CpGs present.
 
-
-#--------------------------------------------------------------------------
-# Python environment for DSUB
-#--------------------------------------------------------------------------
+# Requirements
+# CpG bed file in bucket/ref_genomes/reference_genome
 
 
-python3 -m venv dsub_libs
-source dsub_libs/bin/activate
+export LC_NUMERIC="en_US.UTF-8"
+function format_number_with_comma() {
+    local number_string=$1
+    # Remove existing non-numeric characters (e.g., commas) to ensure the input is a valid integer
+    local clean_number=$(echo "$number_string" | sed 's/[^0-9]//g')
+    printf "%'d\n" "${clean_number}"
+}
 
-# Once done type "deactivate"
+source src/env_variables.sh
+export FOLDER="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
+echo "Folder name: ${FOLDER}"
 
-#--------------------------------------------------------------------------
-# Variables
-#--------------------------------------------------------------------------
+echo "Creating the dataset with an expiration"
+if bq ls --project_id="${PROJECT_ID}" | grep -w "${FOLDER}"; then
+	echo "Dataset ${FOLDER} already exists in project ${PROJECT_ID}."
+else
+	# Create the dataset since it does not exist
+	bq mk --project_id="${PROJECT_ID}" --dataset --default_table_expiration="${REF_GENOME_DATASET_EXPIRATION_SEC}" "${PROJECT_ID}:${FOLDER}"
+	echo "Dataset ${FOLDER} created in project ${PROJECT_ID}."
+fi
 
-SCRIPTS="/Users/em/code/DeepASM/hg19_preparation"
 
-# Dataset where the ref genome and the epigenetic signals will be located
-DATASET_EPI="hg19"
+chmod +x src/make_chr_info_for_ref_genome.sh
+src/make_chr_info_for_ref_genome.sh
 
-# Size of genomic regions:
-GENOMIC_INTERVAL="1000" # 250, 500 or 1000
+gsutil cp chr_length.txt gs://"${BUCKET_NAME}"/"${FOLDER}"/chr_length.txt
 
-# Desired window for annotation analysis (needs to be half of INTERVAL)
-EPI_REGION=$(( ${GENOMIC_INTERVAL} / 2 ))
-
-# Cloud Storage location of the logs
-LOG="gs://cloudasm-encode/logging/deepasm"
-
-# Storage bucket for hg19-related files.
-BUCKET="cloudasm-encode"
-
-# Docker file required to run the scripts
-DOCKER_GCP="google/cloud-sdk:255.0.0"
-
-# GCP global variables
-PROJECT_ID="hackensack-tyco"
-REGION_ID="us-central1"
-ZONE_ID="us-central1-b"
-
+bq --location=US load \
+               --replace=true \
+               --source_format=CSV \
+               --field_delimiter "\t" \
+               --skip_leading_rows 1 \
+                "${FOLDER}".chr_length \
+               gs://"${BUCKET_NAME}"/"${FOLDER}"/chr_length.txt \
+               chr:INT64,chr_length:INT64,absolute_nucleotide_pos:INT64
 
 #--------------------------------------------------------------------------
 # Upload a file of the CpG positions in the reference genome
 #--------------------------------------------------------------------------
-
-# Provided by Tycko lab @ gs://ref_genomes/grc37/hg19_CpG_pos.bed
 
 # Transfer the CpG positions to the dataset
 bq --location=US load \
@@ -54,51 +53,47 @@ bq --location=US load \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                ${DATASET_EPI}.hg19_CpG_pos \
-               gs://ref_genomes/grc37/hg19_CpG_pos.bed \
-               chr_region:STRING,region_inf:INT64,region_sup:INT64
+                "${FOLDER}".CpG_pos_imported \
+               gs://"${BUCKET_NAME}"/ref_genomes/"${REFERENCE_GENOME}"/"${REFERENCE_GENOME}"_CpG_pos.bed \
+               chr:STRING,region_inf:INT64,region_sup:INT64
 
+# Converting chr to INT for easy partitioning
+bq query \
+    --use_legacy_sql=false \
+    "
+    CREATE OR REPLACE TABLE ${FOLDER}.CpG_pos
+    CLUSTER BY clustering_index AS
+    SELECT
+        CAST(p.chr AS INT64) AS chr,
+        p.region_inf,
+        p.region_sup,
+        CAST(FLOOR((c.absolute_nucleotide_pos + p.region_inf) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index
+    FROM ${FOLDER}.CpG_pos_imported p
+    JOIN ${FOLDER}.chr_length c ON SAFE_CAST(p.chr AS INT64) = c.chr
+    WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
+    "
+
+# Construct the query to count rows in the table
+QUERY="SELECT COUNT(*) as row_count FROM \`${PROJECT_ID}.${FOLDER}.CpG_pos\`"
+
+# Run the query and store the output
+OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
+
+# Parse the JSON output to extract the number of rows
+ROW_COUNT=$(echo ${OUTPUT} | jq '.[0].row_count')
+
+echo "Number of CpGs in reference genome ${TABLE}: ${ROW_COUNT}"
 
 #--------------------------------------------------------------------------
-# Split the human genome into windows with the same number of basepairs.
+# Prepare some files related to chromosomes
 #--------------------------------------------------------------------------
 
-# We enter all the chromosome lengths in base pairs for humans
+chmod +x src/make_geomic_regions_for_ref_genome.sh
+src/make_geomic_regions_for_ref_genome.sh
 
-echo -e "chr\tlength" > chr_length.txt
-echo -e "1\t249250621" > chr_length.txt && echo -e "2\t243199373" >> chr_length.txt && echo -e "3\t198022430" >> chr_length.txt \
-&& echo -e "4\t191154276" >> chr_length.txt && echo -e "5\t180915260" >> chr_length.txt && echo -e "6\t171115067" >> chr_length.txt \
-&& echo -e "7\t159138663" >> chr_length.txt && echo -e "8\t146364022" >> chr_length.txt && echo -e "9\t141213431" >> chr_length.txt \
-&& echo -e "10\t135534747" >> chr_length.txt && echo -e "11\t135006516" >> chr_length.txt && echo -e "12\t133851895" >> chr_length.txt \
-&& echo -e "13\t115169878" >> chr_length.txt && echo -e "14\t107349540" >> chr_length.txt && echo -e "15\t102531392" >> chr_length.txt \
-&& echo -e "16\t90354753" >> chr_length.txt && echo -e "17\t81195210" >> chr_length.txt && echo -e "18\t78077248" >> chr_length.txt \
-&& echo -e "19\t59128983" >> chr_length.txt && echo -e "20\t63025520" >> chr_length.txt && echo -e "21\t48129895" >> chr_length.txt \
-&& echo -e "22\t51304566" >> chr_length.txt && echo -e "X\t155270560 " >> chr_length.txt && echo -e "Y\t59373566" >> chr_length.txt
-
-
-# Prepare TSV file per chromosome (used for many jobs)
-echo -e "chr\tregion_inf\tregion_sup\tannotate_ref" > chr_regions.txt
-
-# Create the windows with $GENOMIC_INTERVALS base pairs in it
-for CHR in `seq 1 22` X Y ; do
-    echo "Processing chromosome" ${CHR}
-    NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
-    INF="1"
-    SUP=$(( $NUCLEOTIDES_IN_CHR<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR: $GENOMIC_INTERVAL ))
-    ANNOTATE_REF=$(( ($INF + $SUP)/2 ))
-    echo -e "${CHR}\t$INF\t$SUP\t$ANNOTATE_REF" >> chr_regions.txt # for jobs
-    while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-        INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$GENOMIC_INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $GENOMIC_INTERVAL ))
-        INF=$(( ${SUP} + 1 ))
-        SUP=$(( ${SUP} + $INCREMENT ))
-        ANNOTATE_REF=$(( ($INF + $SUP)/2 ))
-        echo -e "${CHR}\t$INF\t$SUP\t$ANNOTATE_REF" >> chr_regions.txt
-
-    done
-done
-
-# Upload the file to a bucket
-gsutil cp chr_regions.txt gs://${BUCKET}/chr_regions_${GENOMIC_INTERVAL}bp.txt
+echo "Uploading chromosome regions to the bucket"
+gzip -f chr_regions.txt
+gsutil cp chr_regions.txt.gz gs://"${BUCKET_NAME}"/"${FOLDER}"/chr_regions.txt.gz
 
 # Import the file in BigQuery
 bq --location=US load \
@@ -106,68 +101,41 @@ bq --location=US load \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                ${DATASET_EPI}.hg19_regions_${GENOMIC_INTERVAL}bp \
-               gs://${BUCKET}/chr_regions_${GENOMIC_INTERVAL}bp.txt \
-               chr_region:STRING,region_inf:INT64,region_sup:INT64,annotate_ref:INT64
+                "${FOLDER}".genomic_regions_imported \
+               gs://"${BUCKET_NAME}"/"${FOLDER}"/chr_regions.txt.gz \
+               chr:INT64,region_inf:INT64,region_sup:INT64,region_center:INT64,clustering_index:INT64
+
+
+# Cluster the table
+bq query --use_legacy_sql=false \
+    --location=US \
+    "CREATE OR REPLACE TABLE ${FOLDER}.genomic_regions \
+    CLUSTER BY clustering_index AS \
+    SELECT * FROM ${FOLDER}.genomic_regions_imported"
 
 
 #--------------------------------------------------------------------------
-# Keep regions that have CpGs (we use hg19 reference genome)
+# Keep regions in the ref genome that have CpGs
 #--------------------------------------------------------------------------
 
-# Create genomic regions used to split jobs per chromosome 
-INTERVAL="100000000"
-
-# Prepare TSV file per chromosome (used for many jobs)
-echo -e "CHR\tLOWER_B\tUPPER_B" > chr_split_hg19.tsv
-
-for CHR in `seq 1 22` X Y ; do
-        echo "Processing chromosome" ${CHR}
-        NUCLEOTIDES_IN_CHR=$(awk -v CHR="${CHR}" -F"\t" '{ if ($1 == CHR) print $2}' chr_length.txt)
-        INF="1"
-        SUP=$(( $NUCLEOTIDES_IN_CHR<$INTERVAL ? $NUCLEOTIDES_IN_CHR: $INTERVAL ))
-        echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv # for jobs
-        while [ $NUCLEOTIDES_IN_CHR -gt $SUP ] ; do
-            INCREMENT=$(( $NUCLEOTIDES_IN_CHR-$SUP<$INTERVAL ? $NUCLEOTIDES_IN_CHR-$SUP: $INTERVAL ))
-            INF=$(( ${SUP} + 1 ))
-            SUP=$(( ${SUP} + $INCREMENT ))
-            echo -e "${CHR}\t$INF\t$SUP" >> chr_split_hg19.tsv
-
-        done
-    done
-
-# Launch parallel jobs to establish hg19 regions with CpGs
-dsub \
---project $PROJECT_ID \
---zones $ZONE_ID \
---image ${DOCKER_GCP} \
---logging $LOG \
---env DATASET_EPI="${DATASET_EPI}" \
---env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
---script ${SCRIPTS}/hg19_cpg_regions.sh \
---tasks chr_split_hg19.tsv \
---wait
+echo "Creating the genomic regions with a min number of CpGs for the ref genome"
+chmod +x src/find_regions_w_cpg.sh
+src/find_regions_in_ref_genome_w_cpg.sh
 
 
-# Concatenate in a single table all hg19 regions with CpGs
-bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
+# Construct the query to count rows in the table
+QUERY="SELECT SUM(region_nb_cpg) FROM \`${PROJECT_ID}.${FOLDER}.regions_w_cpg\`"
 
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
-    bq cp --append_table \
-        ${DATASET_EPI}.hg19_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} \
-        ${DATASET_EPI}.hg19_cpg_regions_${GENOMIC_INTERVAL}bp
-done 
-} < chr_split_hg19.tsv
+# Run the query and store the output
+OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
 
-# Delete intermediary tables
-{ read
-while read CHR LOWER_B UPPER_B ; do 
-    echo "Chromosome is " ${CHR} ", lower:" ${LOWER_B} ", and upper:" ${UPPER_B}
-    bq rm -f -t ${DATASET_EPI}.hg19_cpg_regions_${CHR}_${LOWER_B}_${UPPER_B} 
-done 
-} < chr_split_hg19.tsv
+# Parse the JSON output to extract the number of rows
+NB_CPG=$(echo "${OUTPUT}" | jq '.[0].f0_')
+
+F_NB_CPG=$(format_number_with_comma "${NB_CPG}")
+echo "Number of CpGs in reference genome when each region must have ${MIN_NB_CPG_PER_REGION}: ${F_NB_CPG}"
+
+# 20M CpG found.
 
 
 #--------------------------------------------------------------------------

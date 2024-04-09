@@ -11,3 +11,5 @@
 .trunk/
 jobs/
 notebooks/*.json
+*chr_length*
+*chr_regions*

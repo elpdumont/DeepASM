@@ -1,11 +1,43 @@
 #!/bin/bash
 
 
-#---------------------------------------------------------------
+# Import environmental variables
+source src/import_env_variables.sh
 
+
+# Update the jobs file
+# Copy the template to a new file that can be safely modified
+mkdir jobs
+cp jobs_templates/* jobs/
+
+# Replace placeholders with actual values
+for file in jobs/process_json.json jobs/run_hmm.json; do
+    sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" "${file}"
+    sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" "${file}"
+    sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" "${file}"
+done
+
+sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" jobs/process_json.json
+
+
+
+# Create respective folders in BigQuery and Cloud Storage if they do not exist
+
+if bq ls --project_id="${PROJECT_ID}" | grep -w "${ML_DATASET}"; then
+	echo "Dataset ${ML_DATASET} already exists in project ${PROJECT_ID}."
+else
+	# Create the dataset since it does not exist
+	bq mk --project_id="${PROJECT_ID}" --dataset "${PROJECT_ID}:${ML_DATASET}"
+	echo "Dataset ${ML_DATASET} created in project ${PROJECT_ID}."
+fi
 
 # List of table names to be used for ML
 TABLE_NAMES=("tabular" "sequence_cpg_cov_and_methyl")
+
+
+#---------------------------------------------------------------
+# Prepare reference genome annotation
+
 
 #---------------------------------------------------------------
 # Export CloudASM output to bucket into JSON shards
