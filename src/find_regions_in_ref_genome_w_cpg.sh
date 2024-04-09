@@ -44,5 +44,5 @@ bq query \
         -- Keep the regions where there are at least MIN_NB_CPG_PER_REGION CpGs in the reference genome
         SELECT * 
         FROM REGION_CPG_COUNT
-        WHERE region_nb_cpg >= ${MIN_NB_CPG_PER_REGION}
+        WHERE region_nb_cpg >= ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME}
     "

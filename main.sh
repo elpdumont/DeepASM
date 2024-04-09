@@ -1,8 +1,11 @@
 #!/bin/bash
 
-
 # Import environmental variables
 source src/import_env_variables.sh
+
+echo "Preparing standard genomic regions using the reference genome"
+chmod +x src/prepare_regions_using_ref_genome.sh
+src/prepare_regions_using_ref_genome.sh
 
 
 # Update the jobs file
