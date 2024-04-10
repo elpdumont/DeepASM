@@ -38,7 +38,7 @@ bh_threshold = config["ASM"]["BH_THRESHOLD"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
-nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
+# nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
 
 
 # def consecutive_cpg(row, direction):
@@ -116,9 +116,8 @@ def main():
     logging.info(f"bucket name: {bucket_name}")
     logging.info(f"dataset name: {dataset_name}")
     logging.info(f"batch task index: {BATCH_TASK_INDEX}")
-    logging.info(f"nb files per task: {nb_files_per_task}")
     df, file_name = create_df_from_json_for_index_file(
-        storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, nb_files_per_task
+        storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, 1
     )
 
     logging.info(f"Head of dataframe: {df.head()}")

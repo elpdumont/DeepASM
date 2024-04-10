@@ -88,6 +88,8 @@ def create_df_from_json_for_index_file(
         key=lambda blob: blob.name,
     )
 
+    # logging.info(f"Filtered blobs: {filtered_blobs}")
+
     # Calculate start and end index for files to download
     start_index = task_index * num_files_to_download
     end_index = start_index + num_files_to_download
