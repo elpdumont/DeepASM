@@ -104,7 +104,7 @@ def wilcoxon_pvalue(row):
             json_normalize(row["alt"]),
             alternative="two-sided",
         )
-        return round(pvalue, 5)
+        return np.round(pvalue, 5)
     # If the ref and alt datasets are equal or one is included in the other one:
     except ValueError:
         return 1
