@@ -134,7 +134,8 @@ bq query \
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/*.json | wc -l)
 
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
+# sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
 
 JOB_NAME="calculate-wilcoxon-${SHORT_SHA}"
 

@@ -248,7 +248,7 @@ def extract_features(hidden_states_sequences):
 def save_HMM_model_to_bucket(model):
     file_name = "hmm_model.joblib"
     dump(model, file_name)
-    upload_blob(bucket_name, file_name, model_folder)
+    upload_blob(storage_client, bucket_name, file_name, model_folder)
     return None
 
 
@@ -326,6 +326,7 @@ def main():
         logging.info("Exportind dataset to BQ and Bucket")
         upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
         export_dataframe_to_gcs_as_json(
+            storage_client,
             df_export,
             bucket_name,
             ml_dataset_id,

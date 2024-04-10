@@ -12,7 +12,7 @@ import scipy.stats as stats
 # from pandas.io.json import json_normalize
 import statsmodels.stats.multitest as mt
 import yaml
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 from pandas import json_normalize
 
 from gcp_utils import (  # export_dataframe_to_gcs_as_json,
@@ -22,6 +22,7 @@ from gcp_utils import (  # export_dataframe_to_gcs_as_json,
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client()
+bq_storage = storage.Client()
 
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
@@ -65,7 +66,7 @@ nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
 #         return 0
 
 
-def consecutive_cpg_enhanced(row, p_value):
+def consecutive_cpg(row, p_value):
     if int(row["nb_sig_cpg"]) > 1:
         flat_cpg = json_normalize(row["cpg"])
         max_nb_consec = {"positive": 0, "negative": 0}
@@ -112,8 +113,12 @@ def wilcoxon_pvalue(row):
 def main():
 
     logging.info("Importing the JSON file as a dataframe")
+    logging.info(f"bucket name: {bucket_name}")
+    logging.info(f"dataset name: {dataset_name}")
+    logging.info(f"batch task index: {batch_task_index}")
+    logging.info(f"nb files per task: {nb_files_per_task}")
     df, file_name = create_df_from_json_for_index_file(
-        bucket_name, dataset_name, BATCH_TASK_INDEX, nb_files_per_task
+        storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, nb_files_per_task
     )
 
     logging.info(f"Head of dataframe: {df.head()}")
@@ -143,7 +148,7 @@ def main():
         "Calculate number of significant consecutive CpGs in the same direction."
     )
 
-    results = df.apply(lambda row: consecutive_cpg_enhanced(row, p_value), axis=1)
+    results = df.apply(lambda row: consecutive_cpg(row, p_value), axis=1)
 
     df["nb_consec_pos_sig_asm"] = results.apply(lambda x: x["positive"])
     df["nb_consec_neg_sig_asm"] = results.apply(lambda x: x["negative"])

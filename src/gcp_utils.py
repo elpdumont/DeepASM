@@ -14,12 +14,7 @@ import pandas as pd
 
 # import pandas_gbq
 from google.api_core.exceptions import Forbidden, TooManyRequests
-from google.cloud import bigquery, storage
-
-# from google.cloud.exceptions import NotFound
-
-bq_client = bigquery.Client()
-storage_client = storage.Client()
+from google.cloud import bigquery
 
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 #     )
 
 
-def upload_blob(bucket_name, source_file_name, folder_path):
+def upload_blob(storage_client, bucket_name, source_file_name, folder_path):
     """
     Uploads a file to a specified folder within a Google Cloud Storage bucket, keeping the original file name.
 
@@ -78,10 +73,8 @@ def upload_blob(bucket_name, source_file_name, folder_path):
 
 
 def create_df_from_json_for_index_file(
-    bucket_name, folder_path, task_index, num_files_to_download
+    storage_client, bucket_name, folder_path, task_index, num_files_to_download
 ):
-    # Initialize the GCP Storage client
-    storage_client = storage.Client()
 
     # Define the prefix to search within a specific folder, ensuring it ends with '/'
     prefix = folder_path if folder_path.endswith("/") else f"{folder_path}/"
@@ -101,7 +94,7 @@ def create_df_from_json_for_index_file(
 
     # Handle the case for the last task index if we have less than the number of files to download
     if start_index >= len(filtered_blobs):
-        # logging.info("Task index is out of range.")
+        logging.info("Task index is out of range.")
         sys.exit(1)
     if end_index > len(filtered_blobs):
         end_index = len(filtered_blobs)
@@ -110,7 +103,7 @@ def create_df_from_json_for_index_file(
     all_data = []
     file_names = []
     for blob in filtered_blobs[start_index:end_index]:
-        # logging.info(f"Processing file: {blob.name}")
+        logging.info(f"Processing file: {blob.name}")
 
         # Download the file as bytes and decode it to a string
         file_contents = blob.download_as_bytes().decode("utf-8")
@@ -126,7 +119,7 @@ def create_df_from_json_for_index_file(
 
 
 def export_dataframe_to_gcs_as_json(
-    df, bucket_name, folder_path, index, file_name_base
+    storage_client, df, bucket_name, folder_path, index, file_name_base
 ):
     """
     Export a pandas DataFrame to a Google Cloud Storage bucket as a JSON file.

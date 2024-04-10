@@ -490,7 +490,11 @@ def main():
 
     # Store the JSON file into a dataframe
     df_raw, file_name = create_df_from_json_for_index_file(
-        bucket_name, raw_data_bucket_folder, BATCH_TASK_INDEX, nb_files_per_task
+        storage_client,
+        bucket_name,
+        raw_data_bucket_folder,
+        BATCH_TASK_INDEX,
+        nb_files_per_task,
     )
 
     # Uncomment this for testing
@@ -701,6 +705,7 @@ def main():
         # "sequence_cpg_cov_and_methyl_nonzeros",
     ]:
         export_dataframe_to_gcs_as_json(
+            storage_client,
             dic_data[dataset_type],
             bucket_name,
             ml_dataset_id,
