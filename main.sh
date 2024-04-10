@@ -9,21 +9,6 @@ src/prepare_regions_w_cpg_using_refg.sh
 echo "Formatting CloudASM output to standard genomic regions"
 src/format_cloudasm_to_standard_regions.sh
 
-# Update the jobs file
-# Copy the template to a new file that can be safely modified
-mkdir jobs
-cp jobs_templates/* jobs/
-
-# Replace placeholders with actual values
-for file in jobs/process_json.json jobs/run_hmm.json; do
-    sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" "${file}"
-    sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" "${file}"
-    sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" "${file}"
-done
-
-sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" jobs/process_json.json
-
-
 
 # Create respective folders in BigQuery and Cloud Storage if they do not exist
 
@@ -57,7 +42,6 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON \
 
 # List, filter, and count JSON files
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_DATASET}"/*.json | wc -l)
-
 
 #sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/process_json.json
 echo "Number of JSON files: ${NUM_JSON_FILES}"

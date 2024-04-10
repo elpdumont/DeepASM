@@ -62,56 +62,61 @@ OUTPUT_B="deepasm"
 # All CpGs have 10x coverage and were evaluated for ASM
 
 # Check if the table exists
-if bq show --format=none "${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm" 2>/dev/null; then
-    echo "Table exists. Deleting table ${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm..."
-    bq rm -f -t "${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm"
-    echo "Table deleted."
-else
-    echo "Table ${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm does not exist. No action taken."
-fi
+# List of tables you want to check and possibly delete
+tables=("cpg_asm" "cpg_read_genotype")
+
+# Loop through each table in the list
+for table in "${tables[@]}"; do
+    full_table_name="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${table}"
+
+    # Check if the table exists
+    if bq show --format=none "${full_table_name}" 2>/dev/null; then
+        echo "Table exists. Deleting table ${full_table_name}..."
+        bq rm -f -t "${full_table_name}"
+        echo "Table deleted."
+    else
+        echo "Table ${full_table_name} does not exist. No action taken."
+    fi
+done
 
 
 # Append to a new table for each sample
 # Loop over all samples
-for sample in "${SAMPLE_LIST[@]}"; do
-    echo "Processing sample: ${sample}"
+for table in "${tables[@]}"; do
+    echo "Processing table: ${table}"
+    for sample in "${SAMPLE_LIST[@]}"; do
+        echo "Processing sample: ${sample}"
 
-    TEMP_TABLE="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_cpg_asm_temp"
+        TEMP_TABLE="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp"
 
-    # Create and populate the temporary table, adding the 'sample' column
-    bq query \
-        --use_legacy_sql=false \
-        --destination_table="${TEMP_TABLE}" \
-        --clustering_fields=sample,chr,clustering_index \
-        "
-        SELECT 
-            '${sample}' AS sample,
-            CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
-            CAST(p.chr AS INT64) AS chr,
-            p.pos,
-            p.snp_id,
-            p.snp_pos,
-            p.ref_cov,
-            p.ref_meth,
-            p.alt_cov,
-            p.alt_meth,
-            p.fisher_pvalue
-        FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_cpg_asm p
-        JOIN ${REFG_FOLDER}.chr_length c 
-        ON SAFE_CAST(p.chr AS INT64) = c.chr
-        WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
-        "
-    # Append table
-    bq cp --append_table \
-        "${TEMP_TABLE}" \
-        "${PROJECT_ID}":"${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_asm
+        # Create and populate the temporary table, adding the 'sample' column
+        bq query \
+            --use_legacy_sql=false \
+            --destination_table="${TEMP_TABLE}" \
+            --clustering_fields=sample,chr,clustering_index \
+            "
+            SELECT
+                '${sample}' AS sample,
+                CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
+                CAST(p.chr AS INT64) AS chr,
+                * EXCEPT(chr)
+            FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_${table} p
+            JOIN ${REFG_FOLDER}.chr_length c
+            ON SAFE_CAST(p.chr AS INT64) = c.chr
+            WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
+            "
+        # Append table
+        bq cp --append_table \
+            "${TEMP_TABLE}" \
+            "${PROJECT_ID}":"${CLOUDASM_STANDARD_REGIONS_DATASET}"."${table}"
 
-    # Delete temp table
-    bq rm -f -t "${TEMP_TABLE}"
+        # Delete temp table
+        bq rm -f -t "${TEMP_TABLE}"
+    done
 done
 
 echo "Form regions for samples with an array of CpG details"
-src/form_regions_for_samples_with_cpg_array
+src/form_regions_for_samples_with_cpg_and_reads.sh
 
 
 # Check tables
@@ -126,45 +131,20 @@ bq query \
     "
 
 
+NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/*.json | wc -l)
 
-echo "Create a dataset of (region, snp_ip) and arrays of fractional methylation of reads"
+sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
 
-dsub \
-    --project $PROJECT_ID \
-    --zones $ZONE_ID \
-    --image ${DOCKER_GCP} \
-    --logging $LOG \
-    --env DATASET_PRED="${DATASET_PRED}" \
-    --env DATASET_CONTEXT="${DATASET_CONTEXT}" \
-    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-    --script ${SCRIPTS}/read_asm.sh \
-    --tasks all_samples.tsv \
-    --wait
+JOB_NAME="calculate-wilcoxon-${SHORT_SHA}"
 
-##### Merge the 2 datasets of CpG array and read array
+gcloud batch jobs submit "${JOB_NAME}" \
+	--location "${REGION}" \
+	--config jobs/calculate_wilcoxon_for_regions.json
 
-dsub \
-    --project $PROJECT_ID \
-    --zones $ZONE_ID \
-    --image ${DOCKER_GCP} \
-    --logging $LOG \
-    --env DATASET_PRED="${DATASET_PRED}" \
-    --env OUTPUT_B="${OUTPUT_B}" \
-    --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-    --script ${SCRIPTS}/cpg_read_asm.sh \
-    --tasks all_samples.tsv \
-    --wait
 
 
 ###### Calculate Wilcoxon p-value for regions
-
-# Prepare TSV file
-echo -e "--input ASM_REGION\t--output ASM_REGION_PVALUE" > asm_regions.tsv
-
-while read SAMPLE ; do
-    echo -e "gs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_snp_for_asm_region.json\tgs://$OUTPUT_B/${GENOMIC_INTERVAL}bp/$SAMPLE/asm/${SAMPLE}_asm_region_pvalue.json" >> asm_regions.tsv
-done < sample_id.txt
-
 
 dsub \
   --project $PROJECT_ID \

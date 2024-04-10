@@ -94,5 +94,24 @@ function execute_query() {
     format_number_with_comma "${NUMBER}"
 }
 
+
+# Update the jobs file
+# Copy the template to a new file that can be safely modified
+mkdir jobs
+cp jobs_templates/* jobs/
+
+# Replace placeholders with actual values
+for file in jobs/process_json.json jobs/run_hmm.json jobs/calculate_wilcoxon_for_regions.json; do
+    echo "Processing file ${file}"
+    sed -i '' "s#PYTHON_IMAGE_PLACEHOLDER#${PYTHON_IMAGE}#g" "${file}"
+    sed -i '' "s/IMAGE_TAG_PLACEHOLDER/${SHORT_SHA}/g" "${file}"
+    sed -i '' "s/ML_DATASET_ID_PLACEHOLDER/${ML_DATASET}/g" "${file}"
+    sed -i '' "s/CLOUDASM_DATASET_ID_PLACEHOLDER/${CLOUDASM_DATASET}/g" "${file}"
+    sed -i '' "s/CLOUDASM_STANDARD_REGIONS_DATASET_PLACEHOLDER/${CLOUDASM_STANDARD_REGIONS_DATASET}/g" "${file}"
+done
+
+
+
+
 # Make all files executable
 chmod +x src/*.sh
