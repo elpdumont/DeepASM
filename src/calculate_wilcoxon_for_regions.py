@@ -22,7 +22,7 @@ from gcp_utils import (  # export_dataframe_to_gcs_as_json,
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client()
-bq_storage = storage.Client()
+storage_client = storage.Client()
 
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
@@ -115,7 +115,7 @@ def main():
     logging.info("Importing the JSON file as a dataframe")
     logging.info(f"bucket name: {bucket_name}")
     logging.info(f"dataset name: {dataset_name}")
-    logging.info(f"batch task index: {batch_task_index}")
+    logging.info(f"batch task index: {BATCH_TASK_INDEX}")
     logging.info(f"nb files per task: {nb_files_per_task}")
     df, file_name = create_df_from_json_for_index_file(
         storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, nb_files_per_task
