@@ -69,6 +69,7 @@ BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 def consecutive_cpg(row, p_value):
     if int(row["nb_sig_cpg"]) > 1:
         flat_cpg = json_normalize(row["cpg"])
+        logging.info(f"Flat CpG: {flat_cpg}")
         max_nb_consec = {"positive": 0, "negative": 0}
         current_nb_consec = {"positive": 0, "negative": 0}
 
@@ -98,6 +99,9 @@ def consecutive_cpg(row, p_value):
 
 
 def wilcoxon_pvalue(row):
+    logging.info(f"row ref {row['ref']}")
+    logging.info(f"row ref {row['alt']}")
+    logging.info(f"JSON nromalized row ref {json_normalize(row['ref'])}")
     try:
         _, pvalue = stats.mannwhitneyu(
             json_normalize(row["ref"]),
@@ -120,7 +124,9 @@ def main():
         storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, 1
     )
 
-    logging.info(f"Head of dataframe: {df.head()}")
+    df = df.head(5).copy()
+
+    logging.info(f"Number of rows in DF: {len(df)}")
 
     # # load from file-like objects
     # with open(INPUT_FILE) as f:
