@@ -39,6 +39,13 @@ logging.basicConfig(level=logging.INFO)
 #     )
 
 
+def convert_types(d, type_map):
+    return {
+        key: type_map[key](value) if key in type_map else value
+        for key, value in d.items()
+    }
+
+
 def upload_blob(storage_client, bucket_name, source_file_name, folder_path):
     """
     Uploads a file to a specified folder within a Google Cloud Storage bucket, keeping the original file name.

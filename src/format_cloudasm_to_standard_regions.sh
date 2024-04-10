@@ -9,23 +9,6 @@
 
 source src/import_env_variables.sh
 
-#--------------------------------------------------------------------------
-# Variables
-#--------------------------------------------------------------------------
-
-
-# BQ dataset where the epigenetic windows are defined
-DATASET_EPI="hg19"
-
-# BQ dataset where the output of CloudASM is located
-DATASET_PRED="deepasm_feb2022" # T-cells: "tcells_2020" ENCODE: "deepasm_june2020"
- 
-# BQ dataset where the sample's context files are located (naming defined by CloudASM)
-DATASET_CONTEXT="cloudasm_encode_2019" # T-cells: "tcells_2020" ENCODE: "cloudasm_encode_2019" 
-
-# Bucket where to put the txt files for Python analysis
-OUTPUT_B="deepasm"
-
 
 #--------------------------------------------------------------------------
 # ASM Variables
@@ -63,20 +46,13 @@ OUTPUT_B="deepasm"
 
 # Check if the table exists
 # List of tables you want to check and possibly delete
-tables=("cpg_asm" "cpg_read_genotype")
+tables=("cpg_asm" "cpg_read_genotype" "wilcoxon")
 
 # Loop through each table in the list
 for table in "${tables[@]}"; do
     full_table_name="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${table}"
+    bq rm -t -f "${full_table_name}"
 
-    # Check if the table exists
-    if bq show --format=none "${full_table_name}" 2>/dev/null; then
-        echo "Table exists. Deleting table ${full_table_name}..."
-        bq rm -f -t "${full_table_name}"
-        echo "Table deleted."
-    else
-        echo "Table ${full_table_name} does not exist. No action taken."
-    fi
 done
 
 
@@ -132,6 +108,9 @@ bq query \
 
 
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/*.json | wc -l)
+
+
+source src/import_env_variables.sh
 
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
 # sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
