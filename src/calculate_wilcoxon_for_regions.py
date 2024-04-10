@@ -15,9 +15,8 @@ import yaml
 from google.cloud import bigquery
 from pandas import json_normalize
 
-from gcp_utils import (
+from gcp_utils import (  # export_dataframe_to_gcs_as_json,
     create_df_from_json_for_index_file,
-    export_dataframe_to_gcs_as_json,
     upload_dataframe_to_bq,
 )
 
@@ -41,29 +40,60 @@ BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
 
 
-def consecutive_cpg(row, direction):
+# def consecutive_cpg(row, direction):
+#     if int(row["nb_sig_cpg"]) > 1:
+#         flat_cpg = json_normalize(row["cpg"])
+#         max_nb_consec = 0
+#         current_nb_consec = 0
+#         for index, row in flat_cpg.iterrows():
+#             if index > 0:
+#                 if (
+#                     flat_cpg.iloc[index - 1].fisher_pvalue < p_value
+#                     and row.fisher_pvalue < p_value
+#                     and np.sign(flat_cpg.iloc[index - 1].effect) == direction
+#                     and np.sign(row.effect) == direction
+#                 ):
+#                     if current_nb_consec == 0:
+#                         current_nb_consec = 2
+#                     else:
+#                         current_nb_consec = current_nb_consec + 1
+#                     max_nb_consec = max(max_nb_consec, current_nb_consec)
+#                 else:
+#                     current_nb_consec = 0
+#         return max_nb_consec
+#     else:
+#         return 0
+
+
+def consecutive_cpg_enhanced(row, p_value):
     if int(row["nb_sig_cpg"]) > 1:
         flat_cpg = json_normalize(row["cpg"])
-        max_nb_consec = 0
-        current_nb_consec = 0
+        max_nb_consec = {"positive": 0, "negative": 0}
+        current_nb_consec = {"positive": 0, "negative": 0}
+
         for index, row in flat_cpg.iterrows():
             if index > 0:
-                if (
-                    flat_cpg.iloc[index - 1].fisher_pvalue < p_value
-                    and row.fisher_pvalue < p_value
-                    and np.sign(flat_cpg.iloc[index - 1].effect) == direction
-                    and np.sign(row.effect) == direction
-                ):
-                    if current_nb_consec == 0:
-                        current_nb_consec = 2
+                prev_row = flat_cpg.iloc[index - 1]
+                for direction, sign in [("positive", 1), ("negative", -1)]:
+                    if (
+                        prev_row.fisher_pvalue < p_value
+                        and row.fisher_pvalue < p_value
+                        and np.sign(prev_row.effect) == sign
+                        and np.sign(row.effect) == sign
+                    ):
+                        if current_nb_consec[direction] == 0:
+                            current_nb_consec[direction] = 2
+                        else:
+                            current_nb_consec[direction] += 1
+                        max_nb_consec[direction] = max(
+                            max_nb_consec[direction], current_nb_consec[direction]
+                        )
                     else:
-                        current_nb_consec = current_nb_consec + 1
-                    max_nb_consec = max(max_nb_consec, current_nb_consec)
-                else:
-                    current_nb_consec = 0
+                        current_nb_consec[direction] = 0
+
         return max_nb_consec
     else:
-        return 0
+        return {"positive": 0, "negative": 0}
 
 
 def wilcoxon_pvalue(row):
@@ -109,16 +139,17 @@ def main():
     )[1]
     df["wilcoxon_corr_pvalue"] = df["wilcoxon_corr_pvalue"].round(5)
 
-    ################################## Calculate number of significant consecutive CpGs in the same direction.
+    logging.info(
+        "Calculate number of significant consecutive CpGs in the same direction."
+    )
 
-    # Find consecutive significant ASM CpGs that are negative
+    results = df.apply(lambda row: consecutive_cpg_enhanced(row, p_value), axis=1)
 
-    # Find consecutive significant ASM CpGs that are negative
+    df["nb_consec_pos_sig_asm"] = results.apply(lambda x: x["positive"])
+    df["nb_consec_neg_sig_asm"] = results.apply(lambda x: x["negative"])
 
-    # Create a column with the number of consecutive CpGs that have significant ASM in the same direction
-    df["nb_consec_pos_sig_asm"] = df.apply(lambda x: consecutive_cpg(x, 1), axis=1)
-    df["nb_consec_neg_sig_asm"] = df.apply(lambda x: consecutive_cpg(x, -1), axis=1)
-
+    logging.info("Saving table to BigQuery")
+    upload_dataframe_to_bq(bq_client, df, "wilcoxon")
     # Save to BigQuery table
     # df.to_json(OUTPUT_FILE, orient="records", lines=True)
 
