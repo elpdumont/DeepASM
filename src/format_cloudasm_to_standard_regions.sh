@@ -4,8 +4,12 @@
 # for the ENCODE samples
 
 # Requires the following files from CloudASM:
-# - ${DATASET_CONTEXT}.${SAMPLE}_cpg_asm
-# - ${DATASET_CONTEXT}.${SAMPLE}_cpg_read_genotype
+
+# SO WE PROBABLY DO NOT NEED CONTEXT_FILTERED
+
+# - context_filtered: all cpgs across all reads (~1B rows per sample with CpG pos, methylation status, and read ID)
+# - cpg_asm: cpgs near a SNP with the corresponding SNP, allele methylation, coverage, and fisher p-value. (~2M CpGs per sample)
+# - cpg_read_genotype: all cpgs across all reads with corresponding allele (REF OR ALT). ~100M CpGs per sample (50x coverage on average)
 
 source src/import_env_variables.sh
 
@@ -46,19 +50,20 @@ source src/import_env_variables.sh
 
 # Check if the table exists
 # List of tables you want to check and possibly delete
-tables=("cpg_asm" "cpg_read_genotype" "wilcoxon")
+tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon")
 
 # Loop through each table in the list
-for table in "${tables[@]}"; do
+for table in "${tables_to_delete[@]}"; do
     full_table_name="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${table}"
     bq rm -t -f "${full_table_name}"
 
 done
 
+tables_to_append=("cpg_asm" "cpg_read_genotype" "context_filtered")
 
 # Append to a new table for each sample
 # Loop over all samples
-for table in "${tables[@]}"; do
+for table in "${tables_to_append[@]}"; do
     echo "Processing table: ${table}"
     for sample in "${SAMPLE_LIST[@]}"; do
         echo "Processing sample: ${sample}"
@@ -75,7 +80,7 @@ for table in "${tables[@]}"; do
                 '${sample}' AS sample,
                 CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
                 CAST(p.chr AS INT64) AS chr,
-                * EXCEPT(chr)
+                p.* EXCEPT(chr)
             FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_${table} p
             JOIN ${REFG_FOLDER}.chr_length c
             ON SAFE_CAST(p.chr AS INT64) = c.chr
@@ -113,8 +118,8 @@ NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DA
 source src/import_env_variables.sh
 
 sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
-# sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
+sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
+#sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
 
 JOB_NAME="calculate-wilcoxon-${SHORT_SHA}"
 
@@ -124,39 +129,9 @@ gcloud batch jobs submit "${JOB_NAME}" \
 
 
 
-###### Calculate Wilcoxon p-value for regions
-
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --disk-size 100 \
-  --machine-type n1-highmem-4 \
-  --image ${DOCKER_PYTHON} \
-  --logging $LOG \
-  --env P_VALUE="${P_VALUE}" \
-  --env BH_THRESHOLD="${BH_THRESHOLD}" \
-  --script ${SCRIPTS}/asm_region.py \
-  --tasks asm_regions.tsv \
-  --wait
-
-
 ###### Identify ASM
 
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_ID="${DATASET_PRED}" \
-  --env OUTPUT_B="${OUTPUT_B}" \
-  --env ASM_REGION_EFFECT="${ASM_REGION_EFFECT}" \
-  --env CPG_SAME_DIRECTION_ASM="${CPG_SAME_DIRECTION_ASM}" \
-  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-  --env P_VALUE="${P_VALUE}" \
-  --env CONSECUTIVE_CPG="${CONSECUTIVE_CPG}" \
-  --script ${SCRIPTS}/summary_asm.sh \
-  --tasks all_samples.tsv \
-  --wait
+src/compute_asm_for_samples_in_fixed_regions.sh
 
 
 #--------------------------------------------------------------------------

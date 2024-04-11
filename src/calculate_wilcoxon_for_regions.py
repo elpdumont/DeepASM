@@ -32,8 +32,13 @@ with open("config.yaml", "r") as file:
 project_id = config["GCP"]["PROJECT_ID"]
 bucket_name = config["GCP"]["BUCKET_NAME"]
 dataset_name = config["GCP"]["CLOUDASM_STANDARD_REGIONS_DATASET"]
-p_value = config["ASM"]["P_VALUE"]
-bh_threshold = config["ASM"]["BH_THRESHOLD"]
+max_p_value = config["ASM"]["MAX_P_VALUE"]
+max_bh_threshold = config["ASM"]["MAX_BH_THRESHOLD"]
+min_nb_cpg_same_direction = config["ASM"]["MIN_NB_CPG_SAME_DIRECTION"]
+min_nb_consecutive_cpg_same_direction = config["ASM"][
+    "MIN_NB_CONSECUTIVE_CPG_SAME_DIRECTION"
+]
+min_asm_region_effect = config["ASM"]["MIN_ASM_REGION_EFFECT"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
@@ -41,31 +46,6 @@ BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project_id)
 storage_client = storage.Client(project=project_id)
-
-
-# def consecutive_cpg(row, direction):
-#     if int(row["nb_sig_cpg"]) > 1:
-#         flat_cpg = json_normalize(row["cpg"])
-#         max_nb_consec = 0
-#         current_nb_consec = 0
-#         for index, row in flat_cpg.iterrows():
-#             if index > 0:
-#                 if (
-#                     flat_cpg.iloc[index - 1].fisher_pvalue < p_value
-#                     and row.fisher_pvalue < p_value
-#                     and np.sign(flat_cpg.iloc[index - 1].effect) == direction
-#                     and np.sign(row.effect) == direction
-#                 ):
-#                     if current_nb_consec == 0:
-#                         current_nb_consec = 2
-#                     else:
-#                         current_nb_consec = current_nb_consec + 1
-#                     max_nb_consec = max(max_nb_consec, current_nb_consec)
-#                 else:
-#                     current_nb_consec = 0
-#         return max_nb_consec
-#     else:
-#         return 0
 
 
 def consecutive_cpg(row, p_value):
@@ -114,6 +94,30 @@ def wilcoxon_pvalue(row):
         return 1
 
 
+def find_asm(
+    x,
+    max_p_value,
+    min_nb_cpg_same_direction,
+    min_nb_consecutive_cpg_same_direction,
+    min_asm_region_effect,
+):
+    if (
+        x["wilcoxon_corr_p_value"] < max_p_value
+        and abs(x["asm_region_effect"]) > min_asm_region_effect
+    ):
+        positive_condition = (
+            x["pos_sig_cpg"] >= min_nb_cpg_same_direction
+            and x["nb_consec_pos_sig_asm"] >= min_nb_consecutive_cpg_same_direction
+        )
+        negative_condition = (
+            x["neg_sig_cpg"] >= min_nb_cpg_same_direction
+            and x["nb_consec_neg_sig_asm"] >= min_nb_consecutive_cpg_same_direction
+        )
+        if positive_condition or negative_condition:
+            return 1
+    return 0
+
+
 def main():
 
     logging.info("Importing the JSON file as a dataframe")
@@ -124,38 +128,9 @@ def main():
         storage_client, bucket_name, dataset_name, BATCH_TASK_INDEX, 1
     )
 
+    logging.info(f"File names: {file_name}")
+
     logging.info(f"Number of rows in DF: {len(df)}")
-
-    # # load from file-like objects
-    # with open(INPUT_FILE) as f:
-    #     data = ndjson.load(f)
-
-    # # Converte the JSON file in dataframe
-    # df = json_normalize(data)
-
-    ################################## Calculate p-value of asm_region
-
-    # Function to extract Wilcoxon p-value (5-digit rounding)
-
-    logging.info("Computing Wilcoxon p-value")
-    df["wilcoxon_pvalue"] = df.apply(wilcoxon_pvalue, axis=1)
-
-    ################################## Calculate p-value corrected for multiple testing using Benjamini–Hochberg
-
-    df["wilcoxon_corr_pvalue"] = np.round(
-        mt.multipletests(df["wilcoxon_pvalue"], alpha=bh_threshold, method="fdr_bh")[1],
-        5,
-    )
-    # df["wilcoxon_corr_pvalue"] = df["wilcoxon_corr_pvalue"].round(5)
-
-    logging.info(
-        "Calculate number of significant consecutive CpGs in the same direction."
-    )
-
-    results = df.apply(lambda row: consecutive_cpg(row, p_value), axis=1)
-
-    df["nb_consec_pos_sig_asm"] = results.apply(lambda x: x["positive"])
-    df["nb_consec_neg_sig_asm"] = results.apply(lambda x: x["negative"])
 
     for column in df.columns:
         if column not in [
@@ -165,10 +140,14 @@ def main():
             "cpg",
             "ref",
             "alt",
-            "wilcoxon_pvalue",
-            "wilcoxon_corr_pvalue",
+            # "wilcoxon_pvalue",
+            # "wilcoxon_corr_pvalue",
         ]:
-            df[column] = df[column].astype(pd.Int64Dtype())
+            df[column] = df[column].astype(int)
+    df["asm_region_effect"] = df["asm_region_effect"].astype(float)
+
+    for col in ["sample", "snp_id"]:
+        df[col] = df[col].astype(int)
 
     type_map = {
         "pos": int,
@@ -185,10 +164,42 @@ def main():
     for col in ["cpg", "ref", "alt"]:
         df[col] = df[col].apply(lambda x: [convert_types(item, type_map) for item in x])
 
+    logging.info("Computing Wilcoxon p-value")
+    df["wilcoxon_pvalue"] = df.apply(wilcoxon_pvalue, axis=1)
+
+    logging.info(
+        "Calculate p-value corrected for multiple testing using Benjamini–Hochberg"
+    )
+
+    df["wilcoxon_corr_pvalue"] = np.round(
+        mt.multipletests(
+            df["wilcoxon_pvalue"], alpha=max_bh_threshold, method="fdr_bh"
+        )[1],
+        5,
+    )
+
+    logging.info(
+        "Calculate number of significant consecutive CpGs in the same direction."
+    )
+
+    results = df.apply(lambda row: consecutive_cpg(row, max_p_value), axis=1)
+
+    df["nb_consec_pos_sig_asm"] = results.apply(lambda x: x["positive"])
+    df["nb_consec_neg_sig_asm"] = results.apply(lambda x: x["negative"])
+
+    df["asm"] = df.apply(
+        lambda x: find_asm(
+            x,
+            max_p_value,
+            min_nb_cpg_same_direction,
+            min_nb_consecutive_cpg_same_direction,
+            min_asm_region_effect,
+        ),
+        axis=1,
+    )
+
     logging.info("Saving table to BigQuery")
-    upload_dataframe_to_bq(bq_client, df, f"{dataset_name}.wilcoxon")
-    # Save to BigQuery table
-    # df.to_json(OUTPUT_FILE, orient="records", lines=True)
+    upload_dataframe_to_bq(bq_client, df, f"{dataset_name}.asm_flagged")
 
 
 # Start script
