@@ -10,7 +10,7 @@ echo "Copying this file to Cloud Storage"
 gsutil cp chr_length.txt gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_length.txt
 
 echo "Importing this file to BigQuery"
-bq --location=US load \
+bq --location="${REGION}" load \
                --replace=true \
                --source_format=CSV \
                --field_delimiter "\t" \
@@ -23,8 +23,8 @@ bq --location=US load \
 # Upload a file of the CpG positions in the reference genome
 #--------------------------------------------------------------------------
 
-# Transfer the CpG positions to the dataset
-bq --location=US load \
+echo "Transfer the CpG positions from ref genome to the dataset"
+bq --location="${REGION}" load \
                --replace=true \
                --source_format=CSV \
                --field_delimiter "\t" \
@@ -33,12 +33,13 @@ bq --location=US load \
                gs://"${BUCKET_NAME}"/ref_genomes/"${REFERENCE_GENOME}"/"${REFERENCE_GENOME}"_CpG_pos.bed \
                chr:STRING,region_inf:INT64,region_sup:INT64
 
-# Converting chr to INT for easy partitioning
+echo "Converting chr to INT for easy partitioning"
 bq query \
+    --destination_table="${REFG_FOLDER}".CpG_pos \
     --use_legacy_sql=false \
+    --clustering_fields=chr \
+    --range_partitioning=clustering_index,0,4000,1 \
     "
-    CREATE OR REPLACE TABLE ${REFG_FOLDER}.CpG_pos
-    CLUSTER BY clustering_index AS
     SELECT
         CAST(p.chr AS INT64) AS chr,
         p.region_inf,
@@ -49,17 +50,9 @@ bq query \
     WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
     "
 
-# Construct the query to count rows in the table
-QUERY="SELECT COUNT(*) as row_count FROM \`${PROJECT_ID}.${REFG_FOLDER}.CpG_pos\`"
+ROW_COUNT=$(execute_query "SELECT COUNT(*) as row_count FROM \`${PROJECT_ID}.${REFG_FOLDER}.CpG_pos\`")
 
-# Run the query and store the output
-OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
-
-# Parse the JSON output to extract the number of rows
-ROW_COUNT=$(echo ${OUTPUT} | jq '.[0].row_count')
-F_ROW_COUNT=$(format_number_with_comma "${ROW_COUNT}")
-
-echo "Number of CpGs in reference genome ${TABLE}: ${F_ROW_COUNT}"
+echo "Number of CpGs in reference genome ${TABLE}: ${ROW_COUNT}"
 
 #--------------------------------------------------------------------------
 # Prepare some files related to chromosomes
@@ -71,27 +64,32 @@ echo "Uploading chromosome regions to the bucket"
 gzip -f chr_regions.txt
 gsutil cp chr_regions.txt.gz gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_regions.txt.gz
 
-# Import the file in BigQuery
-bq --location=US load \
+echo "Import the file of chr regions in BigQuery"
+
+bq --location="${REGION}" load \
                --replace=true \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                "${REFG_FOLDER}".genomic_regions_imported \
+                "${REFG_FOLDER}".regions_imported \
                gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_regions.txt.gz \
                chr:INT64,region_inf:INT64,region_sup:INT64,region_center:INT64,clustering_index:INT64
 
 
 # Cluster the table
-bq query --use_legacy_sql=false \
-    --location=US \
-    "CREATE OR REPLACE TABLE ${REFG_FOLDER}.genomic_regions \
-    CLUSTER BY clustering_index AS \
-    SELECT * FROM ${REFG_FOLDER}.genomic_regions_imported"
+bq query \
+    --destination_table="${REFG_FOLDER}".regions \
+    --use_legacy_sql=false \
+    --clustering_fields=chr \
+    --range_partitioning=clustering_index,0,4000,1 \
+    "
+    SELECT * FROM ${REFG_FOLDER}.regions_imported
+    "
 
-NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.genomic_regions_imported")
 
-echo "BEFORE FILTERING, found ${NB_REGIONS} regions with a min of ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME} CpGse"
+NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_imported")
+
+echo "BEFORE FILTERING, found ${NB_REGIONS} regions with a min of ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME} CpGs"
 
 
 #--------------------------------------------------------------------------
@@ -108,8 +106,6 @@ NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.re
 echo "Found:${NB_REGIONS} regions with a min of ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME} CpGs, totalling ${NB_CPG} across the whole genome"
 
 
-echo "Number of regions in reference genome when each region must have ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME}: ${F_NB_CPG}"
-
 #--------------------------------------------------------------------------
 # Remove ENCODE's blacklisted regions 
 #--------------------------------------------------------------------------
@@ -122,16 +118,16 @@ gunzip encode_blacklist_regions.bed.gz
 sed -i '' 's|chr||g' encode_blacklist_regions.bed
 
 echo "Uploading blacklisted regions to Cloud Storage"
-gsutil cp encode_blacklist_regions.bed gs://${BUCKET_NAME}/${REFG_FOLDER}/
+gsutil cp encode_blacklist_regions.bed gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/
 
 echo "Transfering these regions to BigQuery"
-bq --location=US load \
+bq --location="${REGION}" load \
     --replace=true \
     --source_format=CSV \
     --field_delimiter "\t" \
     --skip_leading_rows 1 \
-    ${REFG_FOLDER}.encode_blacklist_regions_imported \
-    gs://${BUCKET_NAME}/${REFG_FOLDER}/encode_blacklist_regions.bed \
+    "${REFG_FOLDER}".encode_blacklist_regions_imported \
+    gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/encode_blacklist_regions.bed \
     chr:STRING,chr_start:INT64,chr_end:INT64,reason:STRING,name1:STRING,name2:STRING
 
 # Enforce chr as INT65
@@ -152,36 +148,27 @@ bq query \
 echo "Identify regions of the ref genome that overlap with ENCODE blacklisted regions"
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${REFG_FOLDER}".regions_w_cpg_in_blacklisted_regions \
+    --destination_table "${REFG_FOLDER}".regions_w_cpg_no_blacklist \
     --replace=true \
+    --clustering_fields=chr \
+    --range_partitioning=clustering_index,0,4000,1 \
     "
-    SELECT DISTINCT
-        t1.chr AS chr,
-        t2.chr AS chr_black,
-        t1.region_inf,
-        t1.region_sup,
-        t1.region_center,
-        t1.region_nb_cpg,
-        t1.clustering_index
-    FROM ${REFG_FOLDER}.regions_w_cpg t1
-    INNER JOIN ${REFG_FOLDER}.encode_blacklist_regions t2
-    ON t1.chr = t2.chr AND 
-       ((t2.chr_start >= t1.region_inf AND t2.chr_start <= t1.region_sup) OR
-        (t2.chr_end >= t1.region_inf AND t2.chr_end <= t1.region_sup))
-    "
-
-NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg_in_blacklisted_regions")
-echo "There are ${NB_REGIONS} genomic regions in blacklisted regions, which we will remove"
-
-
-echo "Create a table of genomic regions that do not overlap with ENCODE blacklisted regions"
-bq query \
-    --use_legacy_sql=false \
-    --destination_table "${REFG_FOLDER}".regions_w_cpg_wo_blacklisted_regions \
-    --clustering_fields=chr,clustering_index \
-    --replace=true \
-    "
-    WITH ALL_DATA AS (
+    WITH REGIONS_BLACK AS (
+        SELECT DISTINCT
+            t1.chr AS chr,
+            t2.chr AS chr_black,
+            t1.region_inf,
+            t1.region_sup,
+            t1.region_center,
+            t1.region_nb_cpg,
+            t1.clustering_index
+        FROM ${REFG_FOLDER}.regions_w_cpg t1
+        INNER JOIN ${REFG_FOLDER}.encode_blacklist_regions t2
+        ON t1.chr = t2.chr AND
+        ((t2.chr_start >= t1.region_inf AND t2.chr_start <= t1.region_sup) OR
+            (t2.chr_end >= t1.region_inf AND t2.chr_end <= t1.region_sup))
+        ),
+    ALL_DATA AS (
         SELECT 
             t1.chr AS chr,
             t2.chr AS chr_black,
@@ -191,7 +178,7 @@ bq query \
             t1.region_nb_cpg,
             t1.clustering_index
         FROM ${REFG_FOLDER}.regions_w_cpg t1
-        LEFT JOIN ${REFG_FOLDER}.regions_w_cpg_in_blacklisted_regions t2
+        LEFT JOIN REGIONS_BLACK t2
         ON t1.region_inf = t2.region_inf AND t1.region_sup = t2.region_sup AND t1.chr = t2.chr
         )
     SELECT chr, region_inf, region_sup, region_center, region_nb_cpg, clustering_index
@@ -199,8 +186,9 @@ bq query \
     WHERE chr_black IS NULL
     "
 
+
 # Construct the query to count rows in the table
-NB_CPG=$(execute_query "SELECT SUM(region_nb_cpg) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg_wo_blacklisted_regions")
-NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg_wo_blacklisted_regions")
+NB_CPG=$(execute_query "SELECT SUM(region_nb_cpg) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg_no_blacklist")
+NB_REGIONS=$(execute_query "SELECT COUNT(*) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg_no_blacklist")
 
 echo "Found:${NB_REGIONS} regions with a min of ${MIN_NB_CPG_PER_REGION_IN_REF_GENOME} CpGs, totalling ${NB_CPG} across the whole genome"

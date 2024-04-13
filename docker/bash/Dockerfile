@@ -1,0 +1,1 @@
+FROM google/cloud-sdk:471.0.0-slim

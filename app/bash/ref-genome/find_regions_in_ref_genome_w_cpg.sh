@@ -3,12 +3,14 @@ bq query \
     --use_legacy_sql=false \
     --destination_table "${FOLDER}".regions_w_cpg \
     --replace=true \
+    --clustering_fields=chr \
+    --range_partitioning=clustering_index,0,4000,1 \
     "
     WITH 
         -- Select genomic regions within the specificed chromosome and inf/sup limits
         GENOMIC_REGIONS AS (
             SELECT chr, region_inf, region_sup, region_center, clustering_index
-            FROM ${FOLDER}.genomic_regions
+            FROM ${FOLDER}.regions
         ),
         CPG_POS AS (
             -- Select the CpG coordinates in the table where there is chr, CpG pos (inf), CpG pos (sup)

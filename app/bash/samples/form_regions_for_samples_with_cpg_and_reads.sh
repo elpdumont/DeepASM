@@ -341,9 +341,9 @@ bq query \
         t1.snp_pos = t2.snp_pos
     "
 
-# Export file to JSON format in the bucket
-# (nested arrays are not supported in)
-bq extract \
-    --destination_format NEWLINE_DELIMITED_JSON \
-    "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_reads_asm \
-    gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/cpg_reads_asm*.json
+# # Export file to JSON format in the bucket
+# # (nested arrays are not supported in)
+# bq extract \
+#     --destination_format NEWLINE_DELIMITED_JSON \
+#     "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_reads_asm \
+#     gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/cpg_reads_asm*.json

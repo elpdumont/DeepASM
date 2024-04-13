@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# you need this package to parse the YAML file
-# brew install yq
-
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 

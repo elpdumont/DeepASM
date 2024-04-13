@@ -89,7 +89,9 @@ function format_number_with_comma() {
 function execute_query() {
     local QUERY=$1
     local OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
-    local NUMBER=$(echo "${OUTPUT}" | jq -r '.[0].f0_')
+    #echo "${OUTPUT}"
+    local NUMBER=$(echo "${OUTPUT}" | jq -r '.[0] | to_entries | .[0].value')
+    #echo "${NUMBER}"
     # Format the number with commas and echo it
     format_number_with_comma "${NUMBER}"
 }

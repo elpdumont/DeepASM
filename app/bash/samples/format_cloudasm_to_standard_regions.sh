@@ -40,13 +40,6 @@ source src/import_env_variables.sh
 # CONSECUTIVE_CPG="2" 
 
 
-#--------------------------------------------------------------------------
-# Evaluate ASM in every region overlapping a SNP
-#--------------------------------------------------------------------------
-
-# Create a table of regions with CpGs where ASM was calculated (Fisher's test)
-# This creates a row for each (snp id, region) combination with at least 3 CpGs 
-# All CpGs have 10x coverage and were evaluated for ASM
 
 # Check if the table exists
 # List of tables you want to check and possibly delete
@@ -68,24 +61,42 @@ for table in "${tables_to_append[@]}"; do
     for sample in "${SAMPLE_LIST[@]}"; do
         echo "Processing sample: ${sample}"
 
-        TEMP_TABLE="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp"
+        TEMP_TABLE="${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp"
+        TEMP_TABLE_2="${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp2"
 
         # Create and populate the temporary table, adding the 'sample' column
         bq query \
             --use_legacy_sql=false \
             --destination_table="${TEMP_TABLE}" \
-            --clustering_fields=sample,chr,clustering_index \
+            --replace=true \
+            --clustering_fields=sample,chr \
+            --range_partitioning=clustering_index,0,4000,1 \
             "
             SELECT
                 '${sample}' AS sample,
                 CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
                 CAST(p.chr AS INT64) AS chr,
                 p.* EXCEPT(chr)
-            FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_${table} p
-            JOIN ${REFG_FOLDER}.chr_length c
-            ON SAFE_CAST(p.chr AS INT64) = c.chr
-            WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
+                FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_${table} p
+                JOIN ${REFG_FOLDER}.chr_length c
+                ON SAFE_CAST(p.chr AS INT64) = c.chr
+                WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
             "
+
+        bq query \
+            --use_legacy_sql=false \
+            --destination_table="${TEMP_TABLE_2}" \
+            --replace=true \
+            --clustering_fields=sample,chr \
+            --range_partitioning=clustering_index,0,4000,1 \
+            "
+            SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
+            FROM ${TEMP_TABLE} p
+            INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
+            ON p.chr = c.chr AND p.clustering_index = c.clustering_index AND pos >= region_inf AND pos < region_sup
+            "
+
+
         # Append table
         bq cp --append_table \
             "${TEMP_TABLE}" \
@@ -95,6 +106,66 @@ for table in "${tables_to_append[@]}"; do
         bq rm -f -t "${TEMP_TABLE}"
     done
 done
+
+
+echo "Flag every CpG (with corresponding methylation status and READ ID) with a region inf and sup and the nb of CpGs found in the ref genome for that region"
+
+# Previously it was "cpg_regions"
+bq query \
+    --use_legacy_sql=false \
+    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".all_cpgs_flagged_w_regions \
+    --replace=true \
+    --clustering_fields=sample,chr,clustering_index \
+    --range_partitioning=clustering_index,0,4000,1 \
+    "
+    SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
+    FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.context_filtered p
+    INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
+    ON p.chr = c.chr AND p.clustering_index = c.clustering_index
+    "
+
+src/assemble_cpg_w_refg_regions.sh
+
+
+echo "Keep the CpGs with a min and max coverage (defined in config file) for quality insurance"
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".all_cpgs_flagged_w_regions_and_filtered \
+    --replace=true \
+    --clustering_fields=sample,chr,clustering_index \
+    "
+    WITH 
+        GOOD_CPG AS (
+        -- Creates a list of all CpG sites with their coverage
+            SELECT 
+                chr, 
+                pos, 
+                SUM(cov) AS sum_cov,
+            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.all_cpgs_flagged_w_regions
+            GROUP BY chr, pos
+            WHERE sum_cov >= ${MIN_CPG_COV} AND cov <= ${MAX_CPG_COV}
+        )
+        -- recreate a long table with CpG and read information
+        SELECT p.*
+        FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.all_cpgs_flagged_w_regions p
+        INNER JOIN GOOD_CPG c
+        ON p.chr = c.chr AND p.pos = c.pos
+        "
+
+
+echo "For each region, group reads in a nested structure (read ID, read FM, nb cpg in the read, relative positions of CpGs in the region with their methylation status)"
+
+
+
+
+#--------------------------------------------------------------------------
+# Evaluate ASM in every region overlapping a SNP
+#--------------------------------------------------------------------------
+
+# Create a table of regions with CpGs where ASM was calculated (Fisher's test)
+# This creates a row for each (snp id, region) combination with at least 3 CpGs 
+# All CpGs have 10x coverage and were evaluated for ASM
 
 echo "Form regions for samples with an array of CpG details"
 src/form_regions_for_samples_with_cpg_and_reads.sh
