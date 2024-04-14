@@ -14,11 +14,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the current directory contents into the container at /app
-COPY app/gcp-functions-python /app
-COPY app/prepare-samples/python /app
+COPY /app/gcp-functions-python /app
+COPY /app/prepare-samples/python /app
 
 # Copy the config files
-COPY config.yaml /app
+COPY /config.yaml /app
 
 # Switch to the non-root user
 USER appuser

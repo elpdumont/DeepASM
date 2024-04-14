@@ -1,6 +1,3 @@
-# To execute the code:
-# gcloud builds submit --config=deploy/cloudbuild.yaml . --substitutions=SHORT_SHA=$(git rev-parse --short HEAD)
-
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
   #_VERSION: latest
