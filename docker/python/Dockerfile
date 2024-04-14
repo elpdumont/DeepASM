@@ -7,18 +7,22 @@ RUN adduser --disabled-password --gecos '' appuser
 # Set the working directory in the container
 WORKDIR /app
 
+# Copy the config files
+COPY config.yaml /app
+
+# Copy the python scripts
+COPY /app/gcp-functions-python /app
+COPY /app/prepare-samples/python /app
+
 # First, copy only the requirements.txt file to leverage Docker cache
-COPY requirements.txt .
+COPY docker/python/requirements.txt /app
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the current directory contents into the container at /app
-COPY /app/gcp-functions-python /app
-COPY /app/prepare-samples/python /app
 
-# Copy the config files
-COPY /config.yaml /app
+
+
 
 # Switch to the non-root user
 USER appuser

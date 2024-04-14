@@ -8,11 +8,13 @@ steps:
     args:
       [
         build,
+        -f,
+        docker/python/Dockerfile,
         -t,
         "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}",
         .,
       ]
-    dir: docker/python
+    dir: .
 
   # Docker push to Google Artifact Registry
   - name: gcr.io/cloud-builders/docker
@@ -26,11 +28,13 @@ steps:
     args:
       [
         build,
+        -f,
+        docker/bash/Dockerfile,
         -t,
         "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}",
         .,
       ]
-    dir: docker/bash
+    dir: .
 
   # Docker push to Google Artifact Registry
   - name: gcr.io/cloud-builders/docker
