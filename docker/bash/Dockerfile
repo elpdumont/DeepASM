@@ -7,10 +7,10 @@ RUN adduser --disabled-password --gecos '' appuser
 WORKDIR /app
 
 # Copy the bash files to be used.
-COPY ../../app/prepare-samples/bash /app
+COPY app/prepare-samples/bash /app
 
 # Copy the config files
-COPY ../../config.yaml /app
+COPY config.yaml /app
 
 # Switch to the non-root user
 USER appuser
