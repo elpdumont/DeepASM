@@ -4,7 +4,7 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER"
+            "ML_DATASET": "ML_DATASET_PH"
             }
         },
         "runnables": [

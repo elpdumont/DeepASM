@@ -3,8 +3,11 @@
 # Requirements
 # CpG bed file in bucket/ref_genomes/reference_genome
 
+script_folder="app/prepare-ref-genome-bash"
+
+
 echo "Create a file with all the lengths of all chromosomes"
-src/make_chr_info_for_ref_genome.sh
+"${script_folder}"/make_chr_info_for_ref_genome.sh
 
 echo "Copying this file to Cloud Storage"
 gsutil cp chr_length.txt gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_length.txt
@@ -15,7 +18,7 @@ bq --location="${REGION}" load \
                --source_format=CSV \
                --field_delimiter "\t" \
                --skip_leading_rows 1 \
-                "${REFG_FOLDER}".chr_length \
+                "${PROJECT}:""${REFG_FOLDER}".chr_length \
                gs://"${BUCKET_NAME}"/"${REFG_FOLDER}"/chr_length.txt \
                chr:INT64,chr_length:INT64,absolute_nucleotide_pos:INT64
 
@@ -58,7 +61,7 @@ echo "Number of CpGs in reference genome ${TABLE}: ${ROW_COUNT}"
 # Prepare some files related to chromosomes
 #--------------------------------------------------------------------------
 
-src/make_regions_for_ref_genome.sh
+"${script_folder}"/make_regions_for_ref_genome.sh
 
 echo "Uploading chromosome regions to the bucket"
 gzip -f chr_regions.txt
@@ -97,7 +100,7 @@ echo "BEFORE FILTERING, found ${NB_REGIONS} regions with a min of ${MIN_NB_CPG_P
 #--------------------------------------------------------------------------
 
 echo "Creating the genomic regions with a min number of CpGs for the ref genome"
-src/find_regions_in_ref_genome_w_cpg.sh
+"${script_folder}"/find_regions_in_ref_genome_w_cpg.sh
 
 # Construct the query to count rows in the table
 NB_CPG=$(execute_query "SELECT SUM(region_nb_cpg) FROM ${PROJECT_ID}.${REFG_FOLDER}.regions_w_cpg")

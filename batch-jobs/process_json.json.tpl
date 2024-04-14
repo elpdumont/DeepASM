@@ -4,8 +4,8 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "ML_DATASET_ID_PH",
-            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PH",
+            "ML_DATASET": "ML_DATASET_PH",
+            "CLOUDASM_DATASET": "CLOUDASM_DATASET_PH",
             "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PH"
           }
         },

@@ -11,7 +11,9 @@
 # - cpg_asm: cpgs near a SNP with the corresponding SNP, allele methylation, coverage, and fisher p-value. (~2M CpGs per sample)
 # - cpg_read_genotype: all cpgs across all reads with corresponding allele (REF OR ALT). ~100M CpGs per sample (50x coverage on average)
 
-source src/import_env_variables.sh
+
+######## TEMPORARY #######################
+source scripts/import_env_variables.sh
 
 
 #--------------------------------------------------------------------------
@@ -96,14 +98,14 @@ for table in "${tables_to_append[@]}"; do
             ON p.chr = c.chr AND p.clustering_index = c.clustering_index AND pos >= region_inf AND pos < region_sup
             "
 
-
         # Append table
         bq cp --append_table \
-            "${TEMP_TABLE}" \
+            "${TEMP_TABLE_2}" \
             "${PROJECT_ID}":"${CLOUDASM_STANDARD_REGIONS_DATASET}"."${table}"
 
         # Delete temp table
         bq rm -f -t "${TEMP_TABLE}"
+        bq rm -f -t "${TEMP_TABLE_2}"
     done
 done
 

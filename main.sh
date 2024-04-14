@@ -7,7 +7,7 @@ echo "SHORT_SHA: ${SHORT_SHA}"
 source scripts/import_env_variables.sh
 
 echo "Preparing standard genomic regions using the reference genome"
-src/prepare_regions_w_cpg_using_refg.sh
+app/prepare-ref-genome-bash/prepare_regions_w_cpg_using_refg.sh
 
 echo "Formatting CloudASM output to standard genomic regions"
 src/format_cloudasm_to_standard_regions.sh

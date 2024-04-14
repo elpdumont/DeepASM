@@ -1,10 +1,10 @@
 GCP:
-  PROJECT_ID: hmh-em-deepasm
+  PROJECT: hmh-em-deepasm
   REGION: us-east1
-  BUCKET_NAME: hmh_deepasm
+  BUCKET: hmh_deepasm
   MODEL_FOLDER: models
   BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
-  CLOUDASM_OUTPUT_DATASET: cloudasm_encode_2019
+  CLOUDASM_DATASET: cloudasm_encode_2019
   SAMPLES_DATASET: samples
 
 GENOMICS:

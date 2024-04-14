@@ -5,20 +5,20 @@
 config_file="config.yaml"
 
 # GCP variables
-PROJECT_ID=$(yq e '.GCP.PROJECT_ID' "${config_file}")
-export PROJECT_ID
+PROJECT=$(yq e '.GCP.PROJECT_ID' "${config_file}")
+export PROJECT
 
 REGION=$(yq e '.GCP.REGION' "${config_file}")
 export REGION
 
-BUCKET_NAME=$(yq e '.GCP.BUCKET_NAME' "${config_file}")
-export BUCKET_NAME
+BUCKET=$(yq e '.GCP.BUCKET_NAME' "${config_file}")
+export BUCKET
 
 BQ_DATASET_EXPIRATION_SEC=$(yq e '.GCP.BQ_DATASET_EXPIRATION_SEC'  "${config_file}")
 export BQ_DATASET_EXPIRATION_SEC
 
-CLOUDASM_OUTPUT_DATASET=$(yq e '.GCP.CLOUDASM_OUTPUT_DATASET'  "${config_file}")
-export CLOUDASM_OUTPUT_DATASET
+CLOUDASM_DATASET=$(yq e '.GCP.CLOUDASM_DATASET'  "${config_file}")
+export CLOUDASM_DATASET
 
 # Genomic variables
 REFERENCE_GENOME=$(yq e '.GENOMICS.REFERENCE_GENOME' "${config_file}")
@@ -83,7 +83,7 @@ echo "List of samples: ${SAMPLE_LIST[*]}"
 
 # Form specific variables used in the scripts
 export SAMPLES_DATASET="samples_${GENOMIC_LENGTH}bp"
-export ML_DATASET="ml_${GENOMIC_LENGTH}_ml"
+export ML_DATASET="ml_${GENOMIC_LENGTH}bp"
 export REFG_FOLDER="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
 export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
@@ -91,7 +91,7 @@ export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_RE
 
 # Create datasets in BQ if they do not exist.
 echo "Creating the datasets with an expiration"
-DATASET_LIST=("${SAMPLES_DATASET}" "${REFG_FOLDER}" "{ML_DATASET}")
+DATASET_LIST=("${SAMPLES_DATASET}" "${REFG_FOLDER}" "${ML_DATASET}")
 for DATASET in "${DATASET_LIST[@]}"; do
     echo "Processing dataset: ${DATASET}"
     if bq ls --project_id="${PROJECT_ID}" | grep -w "${DATASET}"; then
@@ -141,7 +141,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#PYTHON_IMAGE_PH#${PYTHON_IMAGE}#g" "${file}"
     sed -i '' "s#BASH_IMAGE_PH#${BASH_IMAGE}#g" "${file}"
     sed -i '' "s#ML_DATASET_PH#${ML_DATASET}#g" "${file}"
-    sed -i '' "s#CLOUDASM_DATASET_ID_PH#${CLOUDASM_DATASET}#g" "${file}"
+    sed -i '' "s#CLOUDASM_DATASET_PH#${CLOUDASM_DATASET}#g" "${file}"
     sed -i '' "s#SAMPLES_DATASET_PH#${SAMPLES_DATASET}#g" "${file}"
 done
 
@@ -157,5 +157,5 @@ sed -i '' "s#IMAGE_TAG_PH#${SHORT_SHA}#g" "${deploy_file}"
 
 
 # Make all bash files executable
-chmod +x app/prepare-ref-genome-bash/.sh
-chmod +x app/prepare-samples/bash/.sh
+chmod +x app/prepare-ref-genome-bash/*.sh
+chmod +x app/prepare-samples/bash/*.sh
