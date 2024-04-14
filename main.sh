@@ -1,7 +1,10 @@
 #!/bin/bash
 
+SHORT_SHA="$(git rev-parse --short HEAD)"
+echo "SHORT_SHA: ${SHORT_SHA}"
+
 # Import environmental variables
-source src/import_env_variables.sh
+source scripts/import_env_variables.sh
 
 echo "Preparing standard genomic regions using the reference genome"
 src/prepare_regions_w_cpg_using_refg.sh

@@ -1,12 +1,11 @@
 GCP:
   PROJECT_ID: hmh-em-deepasm
   REGION: us-east1
-  IMAGE: us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python
   BUCKET_NAME: hmh_deepasm
   MODEL_FOLDER: models
-  BQ_DATASET_EXPIRATION_SEC: 864000
+  BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
   CLOUDASM_OUTPUT_DATASET: cloudasm_encode_2019
-  CLOUDASM_STANDARD_REGIONS_DATASET: samples
+  SAMPLES_DATASET: samples
 
 GENOMICS:
   REFERENCE_GENOME: hg19

@@ -5,8 +5,8 @@
         "runnables": [
           {
             "container": {
-              "imageUri": "PYTHON_IMAGE_PLACEHOLDER:IMAGE_TAG_PLACEHOLDER",
-              "commands": ["python", "/app/calculate_wilcoxon_for_regions.py"]
+              "imageUri": "PYTHON_IMAGE_PH",
+              "commands": ["python", "/app/prepare-samples/python/calculate_wilcoxon_for_regions.py"]
             }
           }
         ],
@@ -17,7 +17,7 @@
         "maxRetryCount": 0,
         "maxRunDuration": "2000s"
       },
-      "taskCount": TASK_COUNT_PLACEHOLDER,
+      "taskCount": TASK_COUNT_PH,
       "parallelism": 60
     }
   ],

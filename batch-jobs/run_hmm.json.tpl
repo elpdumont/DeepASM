@@ -10,8 +10,8 @@
         "runnables": [
           {
             "container": {
-              "imageUri": "PYTHON_IMAGE_PLACEHOLDER:IMAGE_TAG_PLACEHOLDER",
-              "commands": ["python", "/app/run_hmm.py"]
+              "imageUri": "PYTHON_IMAGE_PH",
+              "commands": ["python", "/app/prepare-samples/python/run_hmm.py"]
             }
           }
         ],

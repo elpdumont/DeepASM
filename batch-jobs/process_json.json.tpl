@@ -4,16 +4,16 @@
       "taskSpec": {
         "environment": {
           "variables": {
-            "ML_DATASET_ID": "ML_DATASET_ID_PLACEHOLDER",
-            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PLACEHOLDER",
-            "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PLACEHOLDER"
+            "ML_DATASET_ID": "ML_DATASET_ID_PH",
+            "CLOUDASM_DATASET_ID": "CLOUDASM_DATASET_ID_PH",
+            "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PH"
           }
         },
         "runnables": [
           {
             "container": {
-              "imageUri": "PYTHON_IMAGE_PLACEHOLDER:IMAGE_TAG_PLACEHOLDER",
-              "commands": ["python", "/app/process_cloudasm_to_ml_datasets.py"]
+              "imageUri": "PYTHON_IMAGE_PH",
+              "commands": ["python", "/app/prepare-samples/python/process_cloudasm_to_ml_datasets.py"]
             }
           }
         ],
@@ -24,7 +24,7 @@
         "maxRetryCount": 0,
         "maxRunDuration": "2000s"
       },
-      "taskCount": TASK_COUNT_PLACEHOLDER,
+      "taskCount": TASK_COUNT_PH,
       "parallelism": 60
     }
   ],
