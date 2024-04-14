@@ -1,9 +1,8 @@
 # To execute the code:
-# gcloud builds submit --config=cloudbuild.yaml . --substitutions=SHORT_SHA=$(git rev-parse --short HEAD)
+# gcloud builds submit --config=deploy/cloudbuild.yaml . --substitutions=SHORT_SHA=$(git rev-parse --short HEAD)
 
 substitutions:
   _ARTIFACT_REGISTRY_REPO: docker-repo
-  _IMAGE: python
   #_VERSION: latest
 
 steps:
@@ -13,18 +12,38 @@ steps:
       [
         build,
         -t,
-        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}",
         .,
       ]
+    dir: docker/python
 
   # Docker push to Google Artifact Registry
   - name: gcr.io/cloud-builders/docker
     args:
       [
         push,
-        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}",
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}",
+      ]
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        build,
+        -t,
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}",
+        .,
+      ]
+    dir: docker/bash
+
+  # Docker push to Google Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        push,
+        "us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}",
       ]
 
 # Store images in Google Artifact Registry
 images:
-  - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/${_IMAGE}:${SHORT_SHA}
+  - us-east1-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}
+  - us-east1-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REGISTRY_REPO/bash:$SHORT_SHA
