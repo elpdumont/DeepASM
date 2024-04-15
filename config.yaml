@@ -3,6 +3,7 @@ GCP:
   REGION: us-east1
   BUCKET: hmh_deepasm
   MODEL_FOLDER: models
+  ARTIFACT_REGISTRY_REPO: docker-repo
   BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
   CLOUDASM_DATASET: cloudasm_encode_2019
   SAMPLES_DATASET: samples

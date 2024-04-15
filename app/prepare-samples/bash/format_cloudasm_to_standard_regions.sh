@@ -45,11 +45,11 @@ source scripts/import_env_variables.sh
 
 # Check if the table exists
 # List of tables you want to check and possibly delete
-tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon")
+tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon" "context_filtered")
 
 # Loop through each table in the list
 for table in "${tables_to_delete[@]}"; do
-    full_table_name="${PROJECT_ID}:${CLOUDASM_STANDARD_REGIONS_DATASET}.${table}"
+    full_table_name="${PROJECT_ID}:${SAMPLES_DATASET}.${table}"
     bq rm -t -f "${full_table_name}"
 
 done
@@ -63,49 +63,7 @@ for table in "${tables_to_append[@]}"; do
     for sample in "${SAMPLE_LIST[@]}"; do
         echo "Processing sample: ${sample}"
 
-        TEMP_TABLE="${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp"
-        TEMP_TABLE_2="${CLOUDASM_STANDARD_REGIONS_DATASET}.${sample}_${table}_temp2"
-
-        # Create and populate the temporary table, adding the 'sample' column
-        bq query \
-            --use_legacy_sql=false \
-            --destination_table="${TEMP_TABLE}" \
-            --replace=true \
-            --clustering_fields=sample,chr \
-            --range_partitioning=clustering_index,0,4000,1 \
-            "
-            SELECT
-                '${sample}' AS sample,
-                CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
-                CAST(p.chr AS INT64) AS chr,
-                p.* EXCEPT(chr)
-                FROM ${PROJECT_ID}.${CLOUDASM_OUTPUT_DATASET}.${sample}_${table} p
-                JOIN ${REFG_FOLDER}.chr_length c
-                ON SAFE_CAST(p.chr AS INT64) = c.chr
-                WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
-            "
-
-        bq query \
-            --use_legacy_sql=false \
-            --destination_table="${TEMP_TABLE_2}" \
-            --replace=true \
-            --clustering_fields=sample,chr \
-            --range_partitioning=clustering_index,0,4000,1 \
-            "
-            SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
-            FROM ${TEMP_TABLE} p
-            INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
-            ON p.chr = c.chr AND p.clustering_index = c.clustering_index AND pos >= region_inf AND pos < region_sup
-            "
-
-        # Append table
-        bq cp --append_table \
-            "${TEMP_TABLE_2}" \
-            "${PROJECT_ID}":"${CLOUDASM_STANDARD_REGIONS_DATASET}"."${table}"
-
-        # Delete temp table
-        bq rm -f -t "${TEMP_TABLE}"
-        bq rm -f -t "${TEMP_TABLE_2}"
+        
     done
 done
 
@@ -115,13 +73,13 @@ echo "Flag every CpG (with corresponding methylation status and READ ID) with a 
 # Previously it was "cpg_regions"
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".all_cpgs_flagged_w_regions \
+    --destination_table "${SAMPLES_DATASET}".all_cpgs_flagged_w_regions \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     --range_partitioning=clustering_index,0,4000,1 \
     "
     SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
-    FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.context_filtered p
+    FROM ${SAMPLES_DATASET}.context_filtered p
     INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
     ON p.chr = c.chr AND p.clustering_index = c.clustering_index
     "
@@ -133,7 +91,7 @@ echo "Keep the CpGs with a min and max coverage (defined in config file) for qua
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".all_cpgs_flagged_w_regions_and_filtered \
+    --destination_table "${SAMPLES_DATASET}".all_cpgs_flagged_w_regions_and_filtered \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     "
@@ -144,13 +102,13 @@ bq query \
                 chr, 
                 pos, 
                 SUM(cov) AS sum_cov,
-            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.all_cpgs_flagged_w_regions
+            FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions
             GROUP BY chr, pos
             WHERE sum_cov >= ${MIN_CPG_COV} AND cov <= ${MAX_CPG_COV}
         )
         -- recreate a long table with CpG and read information
         SELECT p.*
-        FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.all_cpgs_flagged_w_regions p
+        FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions p
         INNER JOIN GOOD_CPG c
         ON p.chr = c.chr AND p.pos = c.pos
         "
@@ -180,12 +138,12 @@ bq query \
     SELECT 
         TABLE_NAME, 
         ROUND(TOTAL_ROWS/1000,0) AS thousand_rows 
-    FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.INFORMATION_SCHEMA.PARTITIONS
+    FROM ${SAMPLES_DATASET}.INFORMATION_SCHEMA.PARTITIONS
     WHERE TABLE_NAME LIKE 'cpg_asm_over_regions'
     "
 
 
-NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${CLOUDASM_STANDARD_REGIONS_DATASET}"/*.json | wc -l)
+NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${SAMPLES_DATASET}"/*.json | wc -l)
 
 
 source src/import_env_variables.sh

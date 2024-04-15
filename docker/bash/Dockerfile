@@ -9,6 +9,9 @@ WORKDIR /app
 # Copy the bash files to be used.
 COPY /app/prepare-samples/bash /app
 
+# Make all Bash scripts executable
+RUN chmod +x /app/*.sh
+
 # Copy the config files
 COPY config.yaml /app
 

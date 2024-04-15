@@ -14,6 +14,12 @@ export REGION
 BUCKET=$(yq e '.GCP.BUCKET' "${config_file}")
 export BUCKET
 
+MODEL_FOLDER=$(yq e '.GCP.MODEL_FOLDER' "${config_file}")
+export MODEL_FOLDER
+
+ARTIFACT_REGISTRY_REPO=$(yq e '.GCP.ARTIFACT_REGISTRY_REPO' "${config_file}")
+export ARTIFACT_REGISTRY_REPO
+
 BQ_DATASET_EXPIRATION_SEC=$(yq e '.GCP.BQ_DATASET_EXPIRATION_SEC'  "${config_file}")
 export BQ_DATASET_EXPIRATION_SEC
 
@@ -87,7 +93,11 @@ export ML_DATASET="ml_${GENOMIC_LENGTH}bp"
 export REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
 export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
+export CLOUDASM_TABLES=("context_filtered")
+export NB_SAMPLES=${#SAMPLE_LIST[@]}
+export NB_CLOUDASM_TABLES=${#CLOUDASM_TABLES[@]}
 
+nb_tasks_for_cloudasm_tables=$((NB_SAMPLES * NB_CLOUDASM_TABLES))
 
 # Create datasets in BQ if they do not exist.
 echo "Creating the datasets with an expiration"
@@ -119,11 +129,11 @@ function format_number_with_comma() {
 
 function execute_query() {
     local QUERY=$1
-    echo "${QUERY}"
+    #echo "${QUERY}"
     local OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
-    echo "${OUTPUT}"
+    #echo "${OUTPUT}"
     local NUMBER=$(echo "${OUTPUT}" | jq -r '.[0] | to_entries | .[0].value')
-    echo "${NUMBER}"
+    #echo "${NUMBER}"
     # Format the number with commas and echo it
     format_number_with_comma "${NUMBER}"
 }
@@ -141,6 +151,10 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#ML_DATASET_PH#${ML_DATASET}#g" "${file}"
     sed -i '' "s#CLOUDASM_DATASET_PH#${CLOUDASM_DATASET}#g" "${file}"
     sed -i '' "s#SAMPLES_DATASET_PH#${SAMPLES_DATASET}#g" "${file}"
+    sed -i '' "s#nb_tasks_for_cloudasm_tables_ph#${nb_tasks_for_cloudasm_tables}#g" "${file}"
+    sed -i '' "s#CLOUDASM_TABLES_PH#${CLOUDASM_TABLES[*]}#g" "${file}"
+    sed -i '' "s#SAMPLE_LIST_PH#${SAMPLE_LIST[*]}#g" "${file}"
+
 done
 
 
