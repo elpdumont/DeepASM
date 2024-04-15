@@ -5,13 +5,13 @@
 config_file="config.yaml"
 
 # GCP variables
-PROJECT=$(yq e '.GCP.PROJECT_ID' "${config_file}")
+PROJECT=$(yq e '.GCP.PROJECT' "${config_file}")
 export PROJECT
 
 REGION=$(yq e '.GCP.REGION' "${config_file}")
 export REGION
 
-BUCKET=$(yq e '.GCP.BUCKET_NAME' "${config_file}")
+BUCKET=$(yq e '.GCP.BUCKET' "${config_file}")
 export BUCKET
 
 BQ_DATASET_EXPIRATION_SEC=$(yq e '.GCP.BQ_DATASET_EXPIRATION_SEC'  "${config_file}")

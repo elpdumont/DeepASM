@@ -1,7 +1,7 @@
 #!/bin/bash
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${FOLDER}".regions_w_cpg \
+    --destination_table "${REFG_DATASET}".regions_w_cpg \
     --replace=true \
     --clustering_fields=chr \
     --range_partitioning=clustering_index,0,4000,1 \
@@ -10,12 +10,12 @@ bq query \
         -- Select genomic regions within the specificed chromosome and inf/sup limits
         GENOMIC_REGIONS AS (
             SELECT chr, region_inf, region_sup, region_center, clustering_index
-            FROM ${FOLDER}.regions
+            FROM ${REFG_DATASET}.regions
         ),
         CPG_POS AS (
             -- Select the CpG coordinates in the table where there is chr, CpG pos (inf), CpG pos (sup)
             SELECT chr, region_inf, region_sup, clustering_index
-            FROM ${FOLDER}.CpG_pos
+            FROM ${REFG_DATASET}.CpG_pos
         ),
         -- Find all the CpG in each genomic region
         REGION_CPG AS (

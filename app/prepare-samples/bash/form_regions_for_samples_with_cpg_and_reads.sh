@@ -5,7 +5,7 @@ echo "Create a table of CpG array per (genomic window, snp id) combination"
 # (specified as a variable)
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_asm_over_regions \
+    --destination_table "${SAMPLES_DATASET}".cpg_asm_over_regions \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     "

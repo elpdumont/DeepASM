@@ -10,7 +10,7 @@ echo "Preparing standard genomic regions using the reference genome"
 app/prepare-ref-genome-bash/prepare_regions_w_cpg_using_refg.sh
 
 echo "Formatting CloudASM output to standard genomic regions"
-src/format_cloudasm_to_standard_regions.sh
+app/prepare-samples/bash/format_cloudasm_to_standard_regions.sh
 
 
 # Create respective folders in BigQuery and Cloud Storage if they do not exist
