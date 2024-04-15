@@ -96,6 +96,8 @@ for (( i=0; i<max_retries; i++ )); do
 
     # Exponentially increase the delay
     delay=$((delay * 2))
+    delay=$((delay + (RANDOM % 10 + 1)))
+
 done
 
 # Check if all attempts failed
@@ -109,6 +111,8 @@ fi
 #     "${TEMP_TABLE_2}" \
 #     "${PROJECT}":"${SAMPLES_DATASET}"."${table}"
 
-# Delete temp table
+echo "Delete temp table"
 bq rm -f -t "${TEMP_TABLE}"
 bq rm -f -t "${TEMP_TABLE_2}"
+
+echo "------------------ END OF SCRIPT -------------------"

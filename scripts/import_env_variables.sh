@@ -52,6 +52,9 @@ export MIN_NB_CPG_FOR_ASM
 MAX_CPG_COV=$(yq e '.ASM.MAX_CPG_COV' "${config_file}")
 export MAX_CPG_COV
 
+MIN_CPG_COV=$(yq e '.ASM.MIN_CPG_COV' "${config_file}")
+export MIN_CPG_COV
+
 MAX_P_VALUE=$(yq e '.ASM.MAX_P_VALUE' "${config_file}")
 export MAX_P_VALUE
 
@@ -93,7 +96,7 @@ export ML_DATASET="ml_${GENOMIC_LENGTH}bp"
 export REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
 export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
-export CLOUDASM_TABLES=("context_filtered")
+export CLOUDASM_TABLES=("context_filtered" "cpg_asm" "cpg_read_genotype")
 export NB_SAMPLES=${#SAMPLE_LIST[@]}
 export NB_CLOUDASM_TABLES=${#CLOUDASM_TABLES[@]}
 

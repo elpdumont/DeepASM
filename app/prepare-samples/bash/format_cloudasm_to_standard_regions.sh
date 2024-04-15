@@ -11,6 +11,8 @@
 # - cpg_asm: cpgs near a SNP with the corresponding SNP, allele methylation, coverage, and fisher p-value. (~2M CpGs per sample)
 # - cpg_read_genotype: all cpgs across all reads with corresponding allele (REF OR ALT). ~100M CpGs per sample (50x coverage on average)
 
+script_folder="app/prepare-samples/bash"
+
 
 ######## TEMPORARY #######################
 source scripts/import_env_variables.sh
@@ -56,66 +58,50 @@ source scripts/import_env_variables.sh
 
 #tables_to_append=("cpg_asm" "cpg_read_genotype" "context_filtered")
 
+
+echo "Assemble the 3 datasets (context_filtered, cpg_asm, cpg_read_genotype) for each sample"
+
 # Append to a new table for each sample
 # Loop over all samples
-job_name="format-cloudasm-${SHORT_SHA}-2"
-
+job_name="format-cloudasm-${SHORT_SHA}"
 gcloud batch jobs submit "${job_name}" \
 	--location "${REGION}" \
 	--config batch-jobs/overlap_cloudasm_data_with_standard_regions.json
-
-
-
-echo "Flag every CpG (with corresponding methylation status and READ ID) with a region inf and sup and the nb of CpGs found in the ref genome for that region"
-
-# Previously it was "cpg_regions"
-bq query \
-    --use_legacy_sql=false \
-    --destination_table "${SAMPLES_DATASET}".all_cpgs_flagged_w_regions \
-    --replace=true \
-    --clustering_fields=sample,chr,clustering_index \
-    --range_partitioning=clustering_index,0,4000,1 \
-    "
-    SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
-    FROM ${SAMPLES_DATASET}.context_filtered p
-    INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
-    ON p.chr = c.chr AND p.clustering_index = c.clustering_index
-    "
-
-src/assemble_cpg_w_refg_regions.sh
 
 
 echo "Keep the CpGs with a min and max coverage (defined in config file) for quality insurance"
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${SAMPLES_DATASET}".all_cpgs_flagged_w_regions_and_filtered \
+    --destination_table "${SAMPLES_DATASET}".all_cpgs_flagged_w_regions \
     --replace=true \
-    --clustering_fields=sample,chr,clustering_index \
+    --clustering_fields=sample,chr \
+    --range_partitioning=clustering_index,0,4000,1 \
     "
-    WITH 
+    WITH
         GOOD_CPG AS (
         -- Creates a list of all CpG sites with their coverage
             SELECT 
                 chr, 
                 pos, 
                 SUM(cov) AS sum_cov,
-            FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions
-            GROUP BY chr, pos
-            WHERE sum_cov >= ${MIN_CPG_COV} AND cov <= ${MAX_CPG_COV}
+                clustering_index,
+                sample
+            FROM ${SAMPLES_DATASET}.context_filtered
+            GROUP BY chr, pos, sample, clustering_index
+            HAVING sum_cov >= ${MIN_CPG_COV} AND sum_cov <= ${MAX_CPG_COV}
         )
         -- recreate a long table with CpG and read information
         SELECT p.*
-        FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions p
+        FROM ${SAMPLES_DATASET}.context_filtered p
         INNER JOIN GOOD_CPG c
-        ON p.chr = c.chr AND p.pos = c.pos
-        "
+        ON p.chr = c.chr AND p.pos = c.pos AND c.clustering_index = p.clustering_index AND c.sample = p.sample
+    "
 
 
 echo "For each region, group reads in a nested structure (read ID, read FM, nb cpg in the read, relative positions of CpGs in the region with their methylation status)"
 
-
-
+"${script_folder}"/form_regions_with_arrays.sh
 
 #--------------------------------------------------------------------------
 # Evaluate ASM in every region overlapping a SNP
@@ -128,17 +114,19 @@ echo "For each region, group reads in a nested structure (read ID, read FM, nb c
 echo "Form regions for samples with an array of CpG details"
 src/form_regions_for_samples_with_cpg_and_reads.sh
 
+row_count=$(execute_query "SELECT COUNT(*) as row_count FROM \`${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays\`")
 
-# Check tables
-bq query \
-    --use_legacy_sql=false \
-    "
-    SELECT 
-        TABLE_NAME, 
-        ROUND(TOTAL_ROWS/1000,0) AS thousand_rows 
-    FROM ${SAMPLES_DATASET}.INFORMATION_SCHEMA.PARTITIONS
-    WHERE TABLE_NAME LIKE 'cpg_asm_over_regions'
-    "
+echo "Number of regions across all samples: ${row_count}"
+
+
+
+
+
+
+
+
+
+
 
 
 NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${SAMPLES_DATASET}"/*.json | wc -l)

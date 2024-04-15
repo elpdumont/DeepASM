@@ -9,11 +9,11 @@ source scripts/import_env_variables.sh
 # Create container images on GCP (for Python and bash)
 deploy/deploy.sh
 
-docker run -it \
--v ~/.config/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro \
--e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
-us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
-/bin/bash
+# docker run -it \
+# -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
+# -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
+# us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
+# /bin/bash
 
 
 echo "Preparing standard genomic regions using the reference genome"
