@@ -27,7 +27,6 @@ for sample in "${sample_list[@]}"; do
     for table in "${table_list[@]}"; do
         # Increment the index for each combination
         ((index++))
-e
         # Check if the current index matches the BATCH_TASK_INDEX
         if [[ ${index} -eq ${BATCH_TASK_INDEX} ]]; then
             echo "Sample and Table for BATCH_TASK_INDEX ${BATCH_TASK_INDEX}:"
