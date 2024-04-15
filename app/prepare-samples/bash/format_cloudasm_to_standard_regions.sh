@@ -45,27 +45,25 @@ source scripts/import_env_variables.sh
 
 # Check if the table exists
 # List of tables you want to check and possibly delete
-tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon" "context_filtered")
+# tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon" "context_filtered")
 
-# Loop through each table in the list
-for table in "${tables_to_delete[@]}"; do
-    full_table_name="${PROJECT_ID}:${SAMPLES_DATASET}.${table}"
-    bq rm -t -f "${full_table_name}"
+# # Loop through each table in the list
+# for table in "${tables_to_delete[@]}"; do
+#     full_table_name="${PROJECT_ID}:${SAMPLES_DATASET}.${table}"
+#     bq rm -t -f "${full_table_name}"
 
-done
+# done
 
-tables_to_append=("cpg_asm" "cpg_read_genotype" "context_filtered")
+#tables_to_append=("cpg_asm" "cpg_read_genotype" "context_filtered")
 
 # Append to a new table for each sample
 # Loop over all samples
-for table in "${tables_to_append[@]}"; do
-    echo "Processing table: ${table}"
-    for sample in "${SAMPLE_LIST[@]}"; do
-        echo "Processing sample: ${sample}"
+job_name="format-cloudasm-${SHORT_SHA}"
 
-        
-    done
-done
+gcloud batch jobs submit "${job_name}" \
+	--location "${REGION}" \
+	--config batch-jobs/overlap_cloudasm_data_with_standard_regions.json
+
 
 
 echo "Flag every CpG (with corresponding methylation status and READ ID) with a region inf and sup and the nb of CpGs found in the ref genome for that region"

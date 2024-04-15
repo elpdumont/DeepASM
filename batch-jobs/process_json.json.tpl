@@ -13,7 +13,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "/app/prepare-samples/python/process_cloudasm_to_ml_datasets.py"]
+              "commands": ["python", "/app/process_cloudasm_to_ml_datasets.py"]
             }
           }
         ],

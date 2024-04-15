@@ -11,7 +11,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "/app/prepare-samples/python/run_hmm.py"]
+              "commands": ["python", "/app/run_hmm.py"]
             }
           }
         ],

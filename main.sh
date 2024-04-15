@@ -6,6 +6,10 @@ echo "SHORT_SHA: ${SHORT_SHA}"
 # Import environmental variables
 source scripts/import_env_variables.sh
 
+# Create container images on GCP (for Python and bash)
+deploy/deploy.sh
+
+
 echo "Preparing standard genomic regions using the reference genome"
 app/prepare-ref-genome-bash/prepare_regions_w_cpg_using_refg.sh
 

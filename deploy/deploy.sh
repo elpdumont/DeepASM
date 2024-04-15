@@ -1,6 +1,6 @@
 #!/bin/bash
 
-gcloud builds submit --config=deploy/cloudbuild.yaml . --substitutions=SHORT_SHA="${SHORT_SHA}"
+gcloud builds submit --config=deploy/cloudbuild.yaml .
 
 
 
