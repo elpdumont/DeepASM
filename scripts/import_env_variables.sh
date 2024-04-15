@@ -84,48 +84,46 @@ echo "List of samples: ${SAMPLE_LIST[*]}"
 # Form specific variables used in the scripts
 export SAMPLES_DATASET="samples_${GENOMIC_LENGTH}bp"
 export ML_DATASET="ml_${GENOMIC_LENGTH}bp"
-export REFG_FOLDER="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
-export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
-export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
+export REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
+export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
+export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
 
 
 # Create datasets in BQ if they do not exist.
 echo "Creating the datasets with an expiration"
-DATASET_LIST=("${SAMPLES_DATASET}" "${REFG_FOLDER}" "${ML_DATASET}")
+DATASET_LIST=("${SAMPLES_DATASET}" "${REFG_DATASET}" "${ML_DATASET}")
 for DATASET in "${DATASET_LIST[@]}"; do
     echo "Processing dataset: ${DATASET}"
-    if bq ls --project_id="${PROJECT_ID}" | grep -w "${DATASET}"; then
-        echo "Dataset ${DATASET} already exists in project ${PROJECT_ID}."
+    if bq ls --project_id="${PROJECT}" | grep -w "${DATASET}"; then
+        echo "Dataset ${DATASET} already exists in project ${PROJECT}."
     else
         # Create the dataset since it does not exist
-        bq mk --project_id="${PROJECT_ID}" \
-                --dataset \
+        bq mk   --dataset \
                 --location="${REGION}" \
                 --default_table_expiration="${BQ_DATASET_EXPIRATION_SEC}" \
-                "${PROJECT_ID}:${DATASET}"
+                "${PROJECT}:${DATASET}"
 
-        echo "Dataset ${DATASET} created in project ${PROJECT_ID}."
+        echo "Dataset ${DATASET} created in project ${PROJECT}."
     fi
 done
 
 export LC_NUMERIC="en_US.UTF-8"
 
 function format_number_with_comma() {
-    local number_string=$1
+    local number=$1
     # Remove existing non-numeric characters (e.g., commas) to ensure the input is a valid integer
-    clean_number=$(echo "${number_string}" | sed 's/[^0-9]//g')
-    local clean_number
-    printf "%'d\n" "${clean_number}"
+    #clean_number=$(echo "${number_string}" | sed 's/[^0-9]//g')
+    #local clean_number
+    printf "%'d\n" "${number}"
 }
 
 function execute_query() {
     local QUERY=$1
-    OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
-    local OUTPUT
-    #echo "${OUTPUT}"
-    NUMBER=$(echo "${OUTPUT}" | jq -r '.[0] | to_entries | .[0].value')
-    local NUMBER
-    #echo "${NUMBER}"
+    echo "${QUERY}"
+    local OUTPUT=$(bq query --use_legacy_sql=false --format=json "${QUERY}")
+    echo "${OUTPUT}"
+    local NUMBER=$(echo "${OUTPUT}" | jq -r '.[0] | to_entries | .[0].value')
+    echo "${NUMBER}"
     # Format the number with commas and echo it
     format_number_with_comma "${NUMBER}"
 }
@@ -137,7 +135,7 @@ function execute_query() {
 for file in batch-jobs/*.json; do
     echo "Processing file ${file}"
     sed -i '' "s#REGION_PH#${REGION}#g" "${file}"
-    sed -i '' "s#PROJECT_ID_PH#${PROJECT_ID}#g" "${file}"
+    sed -i '' "s#PROJECT_PH#${PROJECT}#g" "${file}"
     sed -i '' "s#PYTHON_IMAGE_PH#${PYTHON_IMAGE}#g" "${file}"
     sed -i '' "s#BASH_IMAGE_PH#${BASH_IMAGE}#g" "${file}"
     sed -i '' "s#ML_DATASET_PH#${ML_DATASET}#g" "${file}"
@@ -151,7 +149,7 @@ done
 deploy_file="deploy/cloudbuild.yaml"
 
 sed -i '' "s#REGION_PH#${REGION}#g" "${deploy_file}"
-sed -i '' "s#PROJECT_ID_PH#${PROJECT_ID}#g" "${deploy_file}"
+sed -i '' "s#PROJECT_PH#${PROJECT}#g" "${deploy_file}"
 sed -i '' "s#ARTIFACT_REGISTRY_REPO_PH#${ARTIFACT_REGISTRY_REPO}#g" "${deploy_file}"
 sed -i '' "s#IMAGE_TAG_PH#${SHORT_SHA}#g" "${deploy_file}"
 
