@@ -45,7 +45,7 @@ fi
 TEMP_TABLE="${SAMPLES_DATASET}.${sample}_${table}_temp"
 TEMP_TABLE_2="${SAMPLES_DATASET}.${sample}_${table}_temp2"
 
-# Create and populate the temporary table, adding the 'sample' column
+echo "Create and populate the temporary table, adding the 'sample' column"
 bq query \
     --use_legacy_sql=false \
     --destination_table="${TEMP_TABLE}" \
@@ -58,13 +58,13 @@ bq query \
         CAST(FLOOR((c.absolute_nucleotide_pos + p.pos) / ${NB_NUCLEOTIDES_PER_CLUSTER}) AS INT64) AS clustering_index,
         CAST(p.chr AS INT64) AS chr,
         p.* EXCEPT(chr)
-        FROM ${PROJECT}.${CLOUDASM_DATASET}.${sample}_${dataset} p
+        FROM ${PROJECT}.${CLOUDASM_DATASET}.${sample}_${table} p
         JOIN ${REFG_DATASET}.chr_length c
         ON SAFE_CAST(p.chr AS INT64) = c.chr
         WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
     "
 
-# Inner join the table with the regions of the reference genome
+echo "Inner join the table with the regions of the reference genome"
 bq query \
     --use_legacy_sql=false \
     --destination_table="${TEMP_TABLE_2}" \
@@ -78,7 +78,7 @@ bq query \
     ON p.chr = c.chr AND p.clustering_index = c.clustering_index AND pos >= region_inf AND pos < region_sup
     "
 
-
+echo "Copying the table to the main one"
 # Maximum number of retries
 max_retries=5
 # Initial delay in seconds (e.g., 1 second)
