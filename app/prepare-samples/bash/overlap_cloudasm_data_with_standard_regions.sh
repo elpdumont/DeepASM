@@ -6,13 +6,18 @@
 # Initialize a counter for the mapping index
 index=0
 
+# Convert string to array
+read -a sample_list <<< "${SAMPLE_LIST}"
+read -a table_list <<< "${CLOUDASM_TABLES}"
+
+
 # Loop through each sample
-for sample in "${SAMPLE_LIST[@]}"; do
+for sample in "${sample_list[@]}"; do
     # Loop through each data item
-    for table in "${CLOUDASM_TABLES[@]}"; do
+    for table in "${table_list[@]}"; do
         # Increment the index for each combination
         ((index++))
-
+e
         # Check if the current index matches the BATCH_TASK_INDEX
         if [[ ${index} -eq ${BATCH_TASK_INDEX} ]]; then
             echo "Sample and Table for BATCH_TASK_INDEX ${BATCH_TASK_INDEX}:"

@@ -6,7 +6,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "/app/calculate_wilcoxon_for_regions.py"]
+              "commands": ["python", "calculate_wilcoxon_for_regions.py"]
             }
           }
         ],

@@ -58,7 +58,7 @@ source scripts/import_env_variables.sh
 
 # Append to a new table for each sample
 # Loop over all samples
-job_name="format-cloudasm-${SHORT_SHA}"
+job_name="format-cloudasm-${SHORT_SHA}-2"
 
 gcloud batch jobs submit "${job_name}" \
 	--location "${REGION}" \

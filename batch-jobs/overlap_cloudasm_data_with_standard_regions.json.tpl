@@ -5,6 +5,7 @@
         "environment": {
           "variables": {
             "SAMPLE_LIST": "SAMPLE_LIST_PH",
+            "SAMPLES_DATASET": "SAMPLES_DATASET_PH",
             "CLOUDASM_DATASET": "CLOUDASM_DATASET_PH",
             "CLOUDASM_TABLES": "CLOUDASM_TABLES_PH"
             }
@@ -13,7 +14,7 @@
           {
             "container": {
               "imageUri": "BASH_IMAGE_PH",
-              "commands": ["/bin/bash", "/app/prepare-samples/bash/overlap_cloudasm_with_standard_regions.sh"]
+              "commands": ["/bin/bash", "overlap_cloudasm_data_with_standard_regions.sh"]
             }
           }
         ],
