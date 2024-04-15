@@ -5,8 +5,6 @@
         "environment": {
           "variables": {
             "SAMPLE_LIST": "SAMPLE_LIST_PH",
-            "SAMPLES_DATASET": "SAMPLES_DATASET_PH",
-            "CLOUDASM_DATASET": "CLOUDASM_DATASET_PH",
             "CLOUDASM_TABLES": "CLOUDASM_TABLES_PH"
             }
         },

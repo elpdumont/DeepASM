@@ -10,6 +10,7 @@ NB_NUCLEOTIDES_PER_CLUSTER=$(yq e '.GENOMICS.NB_NUCLEOTIDES_PER_CLUSTER' "${conf
 CLOUDASM_DATASET=$(yq e '.GCP.CLOUDASM_DATASET' "${config_file}")
 REFERENCE_GENOME=$(yq e '.GENOMICS.REFERENCE_GENOME' "${config_file}")
 GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' "${config_file}")
+SAMPLES_DATASET="samples_${GENOMIC_LENGTH}bp"
 
 REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 
@@ -59,7 +60,7 @@ bq query \
         CAST(p.chr AS INT64) AS chr,
         p.* EXCEPT(chr)
         FROM ${PROJECT}.${CLOUDASM_DATASET}.${sample}_${dataset} p
-        JOIN ${REFG_FOLDER}.chr_length c
+        JOIN ${REFG_DATASET}.chr_length c
         ON SAFE_CAST(p.chr AS INT64) = c.chr
         WHERE REGEXP_CONTAINS(p.chr, r'^\\d+$')
     "
@@ -74,7 +75,7 @@ bq query \
     "
     SELECT c.region_inf, c.region_sup, c.region_nb_cpg, p.*
     FROM ${TEMP_TABLE} p
-    INNER JOIN ${REFG_FOLDER}.regions_w_cpg_no_blacklist c
+    INNER JOIN ${REFG_DATASET}.regions_w_cpg_no_blacklist c
     ON p.chr = c.chr AND p.clustering_index = c.clustering_index AND pos >= region_inf AND pos < region_sup
     "
 
