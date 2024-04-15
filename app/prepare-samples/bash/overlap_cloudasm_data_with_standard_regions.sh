@@ -3,13 +3,22 @@
 # Environmental variables: SAMPLE_LIST, DATA_LIST
 # Given by the job: BATCH_TASK_INDEX, BATCH_TASK_COUNT
 
+config_file="config.yaml"
+
+PROJECT=$(yq e '.GCP.PROJECT' "${config_file}")
+NB_NUCLEOTIDES_PER_CLUSTER=$(yq e '.GENOMICS.NB_NUCLEOTIDES_PER_CLUSTER' "${config_file}")
+CLOUDASM_DATASET=$(yq e '.GCP.CLOUDASM_DATASET' "${config_file}")
+REFERENCE_GENOME=$(yq e '.GENOMICS.REFERENCE_GENOME' "${config_file}")
+GENOMIC_LENGTH=$(yq e '.GENOMICS.GENOMIC_LENGTH' "${config_file}")
+
+REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
+
 # Initialize a counter for the mapping index
 index=0
 
 # Convert string to array
 read -a sample_list <<< "${SAMPLE_LIST}"
 read -a table_list <<< "${CLOUDASM_TABLES}"
-
 
 # Loop through each sample
 for sample in "${sample_list[@]}"; do

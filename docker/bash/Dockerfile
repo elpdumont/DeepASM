@@ -1,5 +1,8 @@
 FROM google/cloud-sdk:471.0.0-slim
 
+# Update apt cache and install yq
+RUN apt-get update && apt-get install -y yq
+
 # Create a non-root user
 RUN adduser --disabled-password --gecos '' appuser
 
