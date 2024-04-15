@@ -1,7 +1,9 @@
 FROM google/cloud-sdk:471.0.0-slim
 
 # Update apt cache and install yq
-RUN apt-get update && apt-get install -y yq
+RUN apt-get update && apt-get install -y wget && \
+    wget https://github.com/mikefarah/yq/releases/download/v4.27.5/yq_linux_amd64 -O /usr/local/bin/yq && \
+    chmod +x /usr/local/bin/yq
 
 # Create a non-root user
 RUN adduser --disabled-password --gecos '' appuser
