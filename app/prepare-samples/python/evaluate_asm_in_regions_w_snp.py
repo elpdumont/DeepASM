@@ -80,6 +80,27 @@ def compute_asm_effect_and_wilcoxon_pvalue(row):
     return {"read_asm_effect": read_asm_effect, "wilcoxon_pvalue": p_value}
 
 
+def max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
+    # Step 1: Create a dictionary to find indices quickly
+    position_dict = {value: index for index, value in enumerate(all_cpg_pos)}
+    # Step 2: Determine the maximum consecutive count
+    max_consecutive = 0
+    current_consecutive = 1
+    for i in range(1, len(qualifying_cpg_pos)):
+        # Check if current element and previous element are consecutive in all_cpg_pos
+        if (
+            position_dict[qualifying_cpg_pos[i]]
+            == position_dict[qualifying_cpg_pos[i - 1]] + 1
+        ):
+            current_consecutive += 1
+        else:
+            max_consecutive = max(max_consecutive, current_consecutive)
+            current_consecutive = 1
+    # Update max_consecutive one last time in case the longest run ends at the last element
+    max_consecutive = max(max_consecutive, current_consecutive)
+    return max_consecutive
+
+
 def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
     """
     Count the number of elements that have a p-value below a given threshold and
@@ -97,8 +118,8 @@ def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
     # Determine the sign of the effect from read_asm_effect
     effect_sign = "positive" if read_asm_effect > 0 else "negative"
     # Filter based on p-value and effect sign
-    filtered_elements = [
-        d
+    qualifying_cpg_pos = [
+        d["pos"]
         for d in cpg_data
         if d["fisher_pvalue"] < pvalue_threshold
         and (
@@ -106,19 +127,13 @@ def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
             or (effect_sign == "negative" and d["effect"] < 0)
         )
     ]
-    total_count = len(filtered_elements)
-    # Check for consecutive elements
-    consecutive_count = 0
-    if total_count > 0:
-        previous_pos = filtered_elements[0]["pos"]
-        consecutive_count = (
-            1  # Start with the first element as the beginning of a consecutive sequence
-        )
-        for element in filtered_elements[1:]:
-            if element["pos"] == previous_pos + 1:
-                consecutive_count += 1
-            previous_pos = element["pos"]
-    return {"total_count": total_count, "consecutive_count": consecutive_count}
+    all_cpg_pos = [d["pos"] for d in cpg_data]
+    total_sig_cpgs = len(qualifying_cpg_pos)
+    consecutive_sig_cpgs = max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos)
+    return {
+        "total_sig_cpgs": total_sig_cpgs,
+        "consecutive_sig_cpgs": consecutive_sig_cpgs,
+    }
 
 
 def find_asm(
@@ -131,8 +146,8 @@ def find_asm(
     if (
         x["corrected_wilcoxon_pvalue"] <= max_p_value
         and abs(x["read_asm_effect"]) >= min_asm_region_effect
-        and x["consecutive_count"] >= min_nb_consecutive_cpg_same_direction
-        and x["total_count"] >= min_nb_cpg_same_direction
+        and x["consecutive_sig_cpgs"] >= min_nb_consecutive_cpg_same_direction
+        and x["total_sig_cpgs"] >= min_nb_cpg_same_direction
     ):
         return 1
     return 0
@@ -172,7 +187,7 @@ def main():
     logging.info(
         "Calculate the number of consecutive and total CpGs that are significative in the same direction of the read ASM"
     )
-    df[["total_count", "consecutive_count"]] = df.apply(
+    df[["total_sig_cpgs", "consecutive_sig_cpgs"]] = df.apply(
         lambda x: pd.Series(
             count_elements_and_consecutive(
                 x["cpg_w_snp"], max_p_value, x["read_asm_effect"]

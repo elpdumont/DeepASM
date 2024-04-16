@@ -15,6 +15,12 @@ deploy/deploy.sh
 # us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
 # /bin/bash
 
+docker run -it \
+-v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
+-e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
+us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"d876e48" \
+/bin/bash
+
 
 echo "Preparing standard genomic regions using the reference genome"
 app/prepare-ref-genome-bash/prepare_regions_w_cpg_using_refg.sh

@@ -207,13 +207,7 @@ def upload_dataframe_to_bq(
     # Configure clustering
     if cluster_fields:
         job_config.clustering_fields = cluster_fields
-    # Start the load job
-    load_job = bq_client.load_table_from_dataframe(
-        dataframe, table_id, job_config=job_config
-    )
-    # Wait for the load job to complete
-    load_job.result()
-    logging.info(f"Dataframe uploaded successfully to {table_id}")
+
     for attempt in range(1, 7):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
