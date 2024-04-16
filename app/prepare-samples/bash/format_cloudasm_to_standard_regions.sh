@@ -11,7 +11,7 @@
 # - cpg_asm: cpgs near a SNP with the corresponding SNP, allele methylation, coverage, and fisher p-value. (~2M CpGs per sample)
 # - cpg_read_genotype: all cpgs across all reads with corresponding allele (REF OR ALT). ~100M CpGs per sample (50x coverage on average)
 
-script_folder="app/prepare-samples/bash"
+script_folder="app/prepare-samples"
 
 
 ######## TEMPORARY #######################

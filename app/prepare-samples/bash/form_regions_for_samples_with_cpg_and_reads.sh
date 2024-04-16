@@ -5,47 +5,16 @@ echo "Create a table of CpG array per (genomic window, snp id) combination"
 # (specified as a variable)
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${SAMPLES_DATASET}".cpg_asm_over_regions \
+    --destination_table "${SAMPLES_DATASET}".all_cpgs_w_asm_computed \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
+    --range_partitioning=clustering_index,0,4000,1 \
     "
-    WITH 
-        CPG_REGIONS AS (
-            SELECT 
-                chr,
-                region_inf, 
-                region_sup,
-                region_center,
-                region_nb_cpg,
-                clustering_index
-            FROM ${REFG_FOLDER}.regions_w_cpg_wo_blacklisted_regions
-        ),
-        CONTEXT_ASM AS (
-            SELECT *
-            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm
-            -- Note: we do not require that there is a min coverage because that was done by CloudASM
-            WHERE (ref_cov + alt_cov < ${MAX_CPG_COV})
-        ),
-        REGION_CPG_JOINED AS(
-            SELECT 
-                sample,
-                c.clustering_index,
-                c.chr,
-                region_inf,
-                region_sup,
-                region_center,
-                region_nb_cpg,
-                pos, 
-                snp_id, 
-                snp_pos,
-                ref_cov, 
-                ref_meth, 
-                alt_cov, 
-                alt_meth, 
-                fisher_pvalue
-            FROM CPG_REGIONS p
-            INNER JOIN CONTEXT_ASM c
-            ON pos >= region_inf AND pos <= region_sup AND c.chr = p.chr AND c.clustering_index = p.clustering_index
+    WITH CONTEXT_ASM AS (
+        SELECT *
+        FROM ${SAMPLES_DATASET}.cpg_asm
+        -- Note: we do not require that there is a min coverage because that was done by CloudASM
+        WHERE (ref_cov + alt_cov < ${MAX_CPG_COV}) AND (ref_cov + alt_cov >= ${MIN_CPG_COV})
         ),
         GROUP_BY_SNPID AS (
             SELECT
@@ -54,11 +23,11 @@ bq query \
                 chr,
                 region_inf,
                 region_sup,
-                region_center,
                 region_nb_cpg,
                 snp_id,
                 snp_pos,
-                COUNT(*) AS nb_cpg,
+                COUNT(*) AS nb_cpg_found,
+                SUM(IF(fisher_pvalue < ${MAX_P_VALUE}, COUNT(*), 0)) AS nb_sig_cpg
                 ARRAY_AGG(
                     STRUCT(
                         pos, 
@@ -71,13 +40,9 @@ bq query \
                         )
                         ORDER BY pos
                     ) AS cpg_asm
-            FROM REGION_CPG_JOINED
-            GROUP BY sample, clustering_index, chr, snp_id, snp_pos, region_inf, region_sup, region_center, region_nb_cpg
-        ),
-        GROUP_BY_SNPID_MIN_CPG AS (
-        SELECT * 
-        FROM GROUP_BY_SNPID
-        WHERE nb_cpg >= ${MIN_NB_CPG_FOR_ASM}
+            FROM CONTEXT_ASM
+            GROUP BY sample, clustering_index, chr, snp_id, snp_pos, region_inf, region_sup, region_nb_cpg
+            HAVING nb_cpg_found >= ${MIN_NB_CPG_FOR_ASM}
         )
         SELECT
             sample,
@@ -85,137 +50,84 @@ bq query \
             chr,
             region_inf,
             region_sup,
-            region_center,
             region_nb_cpg,
             snp_id,
             snp_pos,
-            nb_cpg,
-            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE}) AS nb_sig_cpg, 
-            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE} AND SIGN(effect) = 1) AS pos_sig_cpg,
-            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE} AND SIGN(effect) = -1) AS neg_sig_cpg, 
-            (SELECT MIN(pos) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE}) AS asm_region_inf,
-            (SELECT MAX(pos) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${P_VALUE}) AS asm_region_sup,
-            (SELECT MIN(pos) FROM UNNEST(cpg_asm)) AS min_cpg,
-            (SELECT MAX(pos) FROM UNNEST(cpg_asm)) AS max_cpg,
+            nb_cpg_found,
+            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${MAX_P_VALUE}) AS nb_sig_cpg,
+            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${MAX_P_VALUE} AND SIGN(effect) = 1) AS pos_sig_cpg,
+            (SELECT COUNT(fisher_pvalue) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${MAX_P_VALUE} AND SIGN(effect) = -1) AS neg_sig_cpg,
+            (SELECT MIN(pos) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${MAX_P_VALUE}) AS min_pos_sig_cpg,
+            (SELECT MAX(pos) FROM UNNEST(cpg_asm) WHERE fisher_pvalue < ${MAX_P_VALUE}) AS max_pos_sig_cpg,
+            (SELECT MIN(pos) FROM UNNEST(cpg_asm)) AS min_cpg_pos,
+            (SELECT MAX(pos) FROM UNNEST(cpg_asm)) AS max_cpg_pos,
             cpg_asm
-        FROM GROUP_BY_SNPID_MIN_CPG
+        FROM GROUP_BY_SNPID
     "
 
-
+ 
 echo "Create a list of CpGs - reads ID relevant to the windows where ASM needs to be computed"
 # Meaning that CpGs need to be within 2 significant CpGs (that can have different ASM directions) 
 # or the two extreme CpGs (but in that case, there won't be ASM)
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_for_asm_region_effect \
+    --destination_table "${SAMPLES_DATASET}".cpg_for_asm_region_effect \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     "
     WITH 
-        -- Import the list of CpGs with their genotype as a function of read_id and snp_id
         ALL_CPG AS (
-            SELECT
-                sample,
-                clustering_index,
-                chr,
-                pos,
-                meth,
-                cov,
-                snp_id,
-                allele,
-                read_id 
-            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_read_genotype
+            SELECT *
+            FROM ${SAMPLES_DATASET}.cpg_read_genotype
         ),
         -- Import all CpGs that are at least 5x covered on each allele and for which we have a fisher p-value
-        WELL_COVERED_CPG_ARRAY AS (
-            SELECT 
-                sample,
-                clustering_index,
-                chr,
-                region_inf,
-                region_sup,
-                region_center,
-                snp_id,
-                snp_pos,
-                asm_region_inf,
-                asm_region_sup,
-                min_cpg,
-                max_cpg,
-                nb_cpg,
-                nb_sig_cpg,
-                pos_sig_cpg,
-                neg_sig_cpg,
-                ARRAY(
-                    (SELECT pos FROM UNNEST(cpg_asm))
-                    ) AS pos_array
-            FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm_over_regions
-        ),
         WELL_COVERED_CPG AS (
-            SELECT
-                sample,
-                clustering_index,
-                chr,
-                region_inf,
-                region_sup,
-                region_center,
-                snp_id,
-                snp_pos,
-                asm_region_inf,
-                asm_region_sup,
-                min_cpg,
-                max_cpg, 
-                nb_cpg,
-                nb_sig_cpg,
-                pos_sig_cpg,
-                neg_sig_cpg,
-                pos_well_cov
-            FROM WELL_COVERED_CPG_ARRAY, UNNEST(pos_array) AS pos_well_cov
+            SELECT *
+            FROM ${SAMPLES_DATASET}.all_cpgs_w_asm_computed
         )
-        -- Keep the combination of CpG, read_id, allele for which CpGs are at least 5x covered on each allele
-            SELECT DISTINCT
-                c.sample,
-                c.clustering_index,
-                c.chr,
-                region_inf,
-                region_sup,
-                pos,
-                meth,
-                cov,
-                allele,
-                read_id,
-                c.snp_id,
-                snp_pos,
-                asm_region_inf,
-                asm_region_sup,
-                min_cpg,
-                max_cpg,
-                nb_cpg,
-                nb_sig_cpg,
-                pos_sig_cpg,
-                neg_sig_cpg
-            FROM ALL_CPG c
-            INNER JOIN WELL_COVERED_CPG p
-            ON 
-                c.sample = p.sample AND
-                c.chr = p.chr AND
-                c.clustering_index = p.clustering_index AND
-                --c.pos = pos_well_cov AND
-                c.snp_id = p.snp_id
-            WHERE 
-                pos >= IF(asm_region_inf IS NULL, min_cpg, asm_region_inf) AND
-                pos <= IF(asm_region_sup IS NULL, max_cpg, asm_region_sup)
+        SELECT DISTINCT
+            c.sample,
+            c.clustering_index,
+            c.chr,
+            c.region_inf,
+            c.region_sup,
+            pos,
+            meth,
+            cov,
+            allele,
+            read_id,
+            c.snp_id,
+            c.snp_pos,
+            min_cpg_pos,
+            max_cpg_pos,
+            min_pos_sig_cpg,
+            max_pos_sig_cpg,
+            nb_cpg_found,
+            nb_sig_cpg,
+            pos_sig_cpg,
+            neg_sig_cpg
+        FROM ALL_CPG c
+        INNER JOIN WELL_COVERED_CPG p
+        ON
+            c.sample = p.sample AND
+            c.chr = p.chr AND
+            c.clustering_index = p.clustering_index AND
+            c.snp_id = p.snp_id
+        WHERE
+            pos >= IF(min_pos_sig_cpg IS NULL, min_cpg_pos, min_pos_sig_cpg) AND
+            pos <= IF(max_pos_sig_cpg IS NULL, max_cpg_pos, max_pos_sig_cpg)
         "
 
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".reads_asm \
+    --destination_table "${SAMPLES_DATASET}".reads_asm \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     "
     WITH 
         QUALIFYING_CPG_WILCOX AS (
-            SELECT * FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_for_asm_region_effect
+            SELECT * FROM ${SAMPLES_DATASET}.cpg_for_asm_region_effect
         ),
         METHYL_PER_READ_WILCOX AS (
             SELECT
@@ -302,7 +214,7 @@ bq query \
 echo "Merge the 2 tables of CpG fractional methyl and read fractional methyl arrays."
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${CLOUDASM_STANDARD_REGIONS_DATASET}".cpg_reads_asm \
+    --destination_table "${SAMPLES_DATASET}".cpg_reads_asm \
     --replace=true \
     --clustering_fields=sample,chr,clustering_index \
     "
@@ -329,8 +241,8 @@ bq query \
         t1.cpg_asm As cpg,
         t2.ref,
         t2.alt
-    FROM ${CLOUDASM_STANDARD_REGIONS_DATASET}.cpg_asm_over_regions t1
-    JOIN ${CLOUDASM_STANDARD_REGIONS_DATASET}.reads_asm t2 
+    FROM ${SAMPLES_DATASET}.cpg_asm_over_regions t1
+    JOIN ${SAMPLES_DATASET}.reads_asm t2
     ON 
         t1.sample = t2.sample AND
         t1.clustering_index = t2.clustering_index AND
