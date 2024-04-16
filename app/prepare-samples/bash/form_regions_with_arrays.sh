@@ -111,7 +111,7 @@ bq query \
             region_inf,
             region_sup,
             region_nb_cpg,
-            COUNT(*) AS nb_cpg_found,
+            COUNT(*) AS nb_cpg_found_w_snp,
             ARRAY_AGG(
                 STRUCT(
                     pos,
@@ -123,23 +123,77 @@ bq query \
                     fisher_pvalue
                     )
                     ORDER BY pos
-                ) AS cpg_asm
+                ) AS cpg_w_snp
         FROM CPG_WITH_ASM_TMP
         GROUP BY sample, clustering_index, chr, region_inf, region_sup, region_nb_cpg, snp_id, snp_pos
-        HAVING nb_cpg_found >= ${MIN_NB_CPG_FOR_ASM}
+        HAVING nb_cpg_found_w_snp >= ${MIN_NB_CPG_FOR_ASM}
+    ),
+    READS_WITH_ASM_TMP AS (
+        SELECT
+            sample,
+            chr,
+            clustering_index,
+            snp_id,
+            snp_pos,
+            region_inf,
+            region_sup,
+            read_id,
+            allele,
+            ROUND(SAFE_DIVIDE(SUM(meth),SUM(cov)),5) AS methyl_perc,
+        FROM ${SAMPLES_DATASET}.cpg_read_genotype
+        GROUP BY sample, chr, clustering_index, snp_id, snp_pos, read_id, allele, region_inf, region_sup
+    ),
+    READS_WITH_ASM AS (
+        SELECT
+            sample,
+            chr,
+            clustering_index,
+            snp_id,
+            snp_pos,
+            region_inf,
+            region_sup,
+            COUNT(*) AS nb_reads_found_w_snp,
+            ARRAY_AGG(
+                STRUCT(
+                    CASE WHEN allele = 'REF' THEN methyl_perc END AS ref,
+                    CASE WHEN allele = 'ALT' THEN methyl_perc END AS alt
+                )
+            ) AS reads_w_snp
+        FROM READS_WITH_ASM_TMP
+        GROUP BY sample, chr, clustering_index, snp_id, snp_pos, region_inf, region_sup
+    ),
+    CPG_AND_READS_ASM AS (
+        SELECT
+            p.sample,
+            p.chr,
+            p.clustering_index,
+            p.snp_id,
+            p.snp_pos,
+            p.region_inf,
+            p.region_sup,
+            p.nb_cpg_found_w_snp,
+            c.nb_reads_found_w_snp,
+            p.cpg_w_snp,
+            c.reads_w_snp
+        FROM CPG_WITH_ASM p
+        INNER JOIN READS_WITH_ASM c
+        ON p.sample = c.sample AND p.chr = c.chr AND p.clustering_index = c. clustering_index AND p.region_inf = c.region_inf AND p.region_sup = c.region_sup AND p.snp_id = c.snp_id AND p.snp_pos = c.snp_pos
     )
     SELECT
         p.chr,
         p.region_inf,
         p.region_sup,
         p.region_nb_cpg,
+        q.nb_cpg_found,
         p.sample,
         p.clustering_index,
-        q.nb_cpg_found,
         q.cpg,
         c.reads,
         p.all_reads,
-        d.cpg_asm,
+        d.nb_cpg_found_w_snp,
+        d.nb_reads_found_w_snp,
+        d.cpg_w_snp,
+        d.reads_w_snp,
         d.snp_id,
         d.snp_pos
     FROM ALL_READ_ARRAY p
@@ -147,7 +201,7 @@ bq query \
     ON p.chr = q.chr AND p.region_inf = q.region_inf AND p.region_sup = q.region_sup AND p.clustering_index = q.clustering_index AND p.sample = q.sample
     INNER JOIN READ_ARRAY c
     ON p.chr = c.chr AND p.region_inf = c.region_inf AND p.region_sup = c.region_sup AND p.clustering_index = c.clustering_index AND p.sample = c.sample
-    LEFT JOIN CPG_WITH_ASM d
+    LEFT JOIN CPG_AND_READS_ASM d
     ON p.chr = d.chr AND p.region_inf = d.region_inf AND p.region_sup = d.region_sup AND p.clustering_index = d.clustering_index AND p.sample = d.sample
     "
 

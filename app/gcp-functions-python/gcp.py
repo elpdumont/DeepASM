@@ -170,17 +170,50 @@ def export_dataframe_to_gcs_as_json(
     logging.info(f"DataFrame exported to: gs://{bucket_name}/{file_name}")
 
 
-def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
+def upload_dataframe_to_bq(
+    bq_client,
+    dataframe,
+    table_id,
+    schema=None,
+    partition_field=None,
+    cluster_fields=None,
+):
+    """
+    Upload a dataframe to Google BigQuery, with options for schema definition, partitioning, and clustering.
+    Parameters:
+    - bq_client: The BigQuery client.
+    - dataframe: The Pandas DataFrame to upload.
+    - table_id: The BigQuery table ID where the DataFrame will be uploaded.
+    - schema: The schema of the table, if not set, schema will be autodetected.
+    - partition_field: The field name to be used for partitioning.
+    - cluster_fields: A list of field names to be used for clustering.
+    Returns:
+    - None
+    """
     logging.info(f"Uploading dataframe to {table_id}")
+    job_config = bigquery.LoadJobConfig()
     if not schema:
-        job_config = bigquery.LoadJobConfig(
-            autodetect=True, write_disposition="WRITE_APPEND"
-        )
+        job_config.autodetect = True
     else:
-        job_config = bigquery.LoadJobConfig(
-            schema=schema, write_disposition="WRITE_APPEND"
+        job_config.schema = schema
+    job_config.write_disposition = "WRITE_APPEND"
+    # Configure partitioning
+    if partition_field:
+        start, end, interval = (0, 4000, 1)
+        job_config.range_partitioning = bigquery.RangePartitioning(
+            field=partition_field,
+            range_=bigquery.PartitionRange(start=start, end=end, interval=interval),
         )
-
+    # Configure clustering
+    if cluster_fields:
+        job_config.clustering_fields = cluster_fields
+    # Start the load job
+    load_job = bq_client.load_table_from_dataframe(
+        dataframe, table_id, job_config=job_config
+    )
+    # Wait for the load job to complete
+    load_job.result()
+    logging.info(f"Dataframe uploaded successfully to {table_id}")
     for attempt in range(1, 7):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
@@ -202,7 +235,6 @@ def upload_dataframe_to_bq(bq_client, dataframe, table_id, schema=None):
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
             raise
-
         # Handle retry for both TooManyRequests and rateLimitExceeded Forbidden errors
         if attempt < 6:
             base_sleep = 2**attempt  # Exponential backoff formula

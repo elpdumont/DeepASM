@@ -27,7 +27,6 @@ bq query \
                 snp_id,
                 snp_pos,
                 COUNT(*) AS nb_cpg_found,
-                SUM(IF(fisher_pvalue < ${MAX_P_VALUE}, COUNT(*), 0)) AS nb_sig_cpg
                 ARRAY_AGG(
                     STRUCT(
                         pos, 

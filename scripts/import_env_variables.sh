@@ -157,6 +157,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#nb_tasks_for_cloudasm_tables_ph#${nb_tasks_for_cloudasm_tables}#g" "${file}"
     sed -i '' "s#CLOUDASM_TABLES_PH#${CLOUDASM_TABLES[*]}#g" "${file}"
     sed -i '' "s#SAMPLE_LIST_PH#${SAMPLE_LIST[*]}#g" "${file}"
+    sed -i '' "s#NB_SAMPLES_PH#${NB_SAMPLES}#g" "${file}"
 
 done
 

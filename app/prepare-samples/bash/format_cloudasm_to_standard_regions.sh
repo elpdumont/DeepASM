@@ -14,51 +14,7 @@
 script_folder="app/prepare-samples"
 
 
-######## TEMPORARY #######################
-source scripts/import_env_variables.sh
-
-
-#--------------------------------------------------------------------------
-# ASM Variables
-#--------------------------------------------------------------------------
-
-# # Minimum number of CpGs we require near a SNP for it to be considered for an ASM region
-# CPG_PER_ASM_REGION="3"
-
-# # Max CpG coverage (to get rid off abherent regions with dozens of thousands of reads overlap.)
-# MAX_CPG_COV="200"
-
-# # p-value cut-off used in all tests for significance
-# P_VALUE="0.05"
-
-# # Benjamin-Hochberg threshold
-# BH_THRESHOLD="0.05"
-
-# # Effect size required at the ASM region level.
-# ASM_REGION_EFFECT="0.2"
-
-# # In an ASM region, minimum bumber of CpGs with significant ASM in the same direction
-# CPG_SAME_DIRECTION_ASM="3"
-
-# # Number of consecutive CpGs with significant ASM in the same direction (among all well-covered CpGs)
-# CONSECUTIVE_CPG="2" 
-
-
-
-# Check if the table exists
-# List of tables you want to check and possibly delete
-# tables_to_delete=("cpg_asm" "cpg_read_genotype" "wilcoxon" "context_filtered")
-
-# # Loop through each table in the list
-# for table in "${tables_to_delete[@]}"; do
-#     full_table_name="${PROJECT_ID}:${SAMPLES_DATASET}.${table}"
-#     bq rm -t -f "${full_table_name}"
-
-# done
-
-#tables_to_append=("cpg_asm" "cpg_read_genotype" "context_filtered")
-
-
+#-----------------------------------------------
 echo "Assemble the 3 datasets (context_filtered, cpg_asm, cpg_read_genotype) for each sample"
 
 # Append to a new table for each sample
@@ -98,176 +54,27 @@ bq query \
         ON p.chr = c.chr AND p.pos = c.pos AND c.clustering_index = p.clustering_index AND c.sample = p.sample
     "
 
+#-----------------------------------------------
+echo "For each region, group cpg, reads in a nested structure"
 
-echo "For each region, group reads in a nested structure (read ID, read FM, nb cpg in the read, relative positions of CpGs in the region with their methylation status)"
+"${script_folder}"/bash/form_regions_with_arrays.sh
 
-"${script_folder}"/form_regions_with_arrays.sh
+# Construct the query to count rows in the table
+nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays")
+nb_regions_w_snp=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays WHERE snp_id IS NOT NULL")
 
-#--------------------------------------------------------------------------
-# Evaluate ASM in every region overlapping a SNP
-#--------------------------------------------------------------------------
+echo "Found:${nb_regions} regions, of which only ${nb_regions_w_snp} have SNP information"
 
-# Create a table of regions with CpGs where ASM was calculated (Fisher's test)
-# This creates a row for each (snp id, region) combination with at least 3 CpGs 
-# All CpGs have 10x coverage and were evaluated for ASM
+#-----------------------------------------------
+echo "Evaluating ASM in regions that have a SNP"
 
-echo "Form regions for samples with an array of CpG details"
-src/form_regions_for_samples_with_cpg_and_reads.sh
-
-row_count=$(execute_query "SELECT COUNT(*) as row_count FROM \`${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays\`")
-
-echo "Number of regions across all samples: ${row_count}"
-
-
-
-
-
-
-
-
-
-
-
-
-NUM_JSON_FILES=$(gsutil ls gs://"${BUCKET_NAME}"/"${SAMPLES_DATASET}"/*.json | wc -l)
-
-
-source src/import_env_variables.sh
-
-sed -i '' "s/NB_FILES_PER_TASK_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
-sed -i '' "s/TASK_COUNT_PLACEHOLDER/${NUM_JSON_FILES}/g" jobs/calculate_wilcoxon_for_regions.json
-#sed -i '' "s/TASK_COUNT_PLACEHOLDER/1/g" jobs/calculate_wilcoxon_for_regions.json
-
-JOB_NAME="calculate-wilcoxon-${SHORT_SHA}"
+JOB_NAME="evaluate-asm-${SHORT_SHA}"
 
 gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
-	--config jobs/calculate_wilcoxon_for_regions.json
+	--config jobs/evaluate_asm_in_regions_w_snp.json
 
 
-
-###### Identify ASM
-
-src/compute_asm_for_samples_in_fixed_regions.sh
-
-
-#--------------------------------------------------------------------------
-# Prepare files for DeepASM
-#--------------------------------------------------------------------------
-
-
-######## Aggregate ASM information with cpg and read FM, and annotation.
-
-######## Add information about the sample (whether it was transformed or not)
-
-# Prepare TSV file for ENCODE samples
-echo -e "--env SAMPLE\t--env SAMPLE_STATUS" > sample_status.tsv
-echo -e "A549\tmodified" >> sample_status.tsv
-echo -e "CD14\tnot_modified" >> sample_status.tsv
-echo -e "CD34\tnot_modified" >> sample_status.tsv
-echo -e "HeLa_S3\tmodified" >> sample_status.tsv
-echo -e "HepG2\tmodified" >> sample_status.tsv
-echo -e "fibroblast\tmodified" >> sample_status.tsv
-echo -e "mammary_epithelial\tnot_modified" >> sample_status.tsv
-echo -e "right_lobe_liver\tnot_modified" >> sample_status.tsv
-echo -e "sk_n_sh\tmodified" >> sample_status.tsv
-echo -e "spleen_female_adult\tnot_modified" >> sample_status.tsv
-echo -e "t_cell_male_adult\tnot_modified" >> sample_status.tsv
-echo -e "gm12878\tmodified" >> sample_status.tsv
-
-# Prepare TSV file for t-cells samples
-echo -e "--env SAMPLE\t--env SAMPLE_STATUS" > sample_status.tsv
-echo -e "tb10206R\tnot_modified" >> sample_status.tsv
-echo -e "tb6878R\tnot_modified" >> sample_status.tsv
-echo -e "tb6883R\tnot_modified" >> sample_status.tsv
-
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_PRED="${DATASET_PRED}" \
-  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-  --script ${SCRIPTS}/asm_notebook.sh \
-  --tasks sample_status.tsv \
-  --wait
-
-
-############## Add genomic window informations
-
-dsub \
-  --project $PROJECT_ID \
-  --zones $ZONE_ID \
-  --image ${DOCKER_GCP} \
-  --logging $LOG \
-  --env DATASET_PRED="${DATASET_PRED}" \
-  --env GENOMIC_INTERVAL="${GENOMIC_INTERVAL}" \
-  --script ${SCRIPTS}/add_genomic_window.sh \
-  --tasks all_samples.tsv \
-  --wait
-
-
-
-##################
-######## Concatenate all files per sample
-
-bq rm -f -t ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp
-
-while read SAMPLE ; do 
-    echo "Sample:" ${SAMPLE}
-    bq cp --append_table \
-        ${DATASET_PRED}.${SAMPLE}_all_info_${GENOMIC_INTERVAL}bp \
-        ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp
-done < sample_id.txt
-
-
-
-
-#--------------------------------------------------------------------------
-# Create table with genomic regions where we know there is ASM
-#--------------------------------------------------------------------------
-
-bq query \
-    --use_legacy_sql=false \
-    --destination_table ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp_for_notebook \
-    --replace=true \
-    "
-    WITH RENAME AS (
-        SELECT 
-            asm_snp AS asm_snp_tmp, 
-            sample_category AS sample_c, 
-            * EXCEPT(asm_snp, 
-                     sample_category, 
-                     wilcoxon_corr_pvalue, 
-                     asm_region_effect, 
-                     snp_id, 
-                     snp_pos)
-        FROM ${DATASET_PRED}.all_samples_all_info_${GENOMIC_INTERVAL}bp 
-    )
-    SELECT 
-        IF(asm_snp_tmp = True, 1, IF(asm_snp_tmp = False, 0, -1)) AS asm_snp,
-        IF(sample_c = 'not_modified', 0, 1) AS sample_category,
-        * EXCEPT(asm_snp_tmp, read, cpg, sample_c, window_details),
-        (SELECT ARRAY 
-            (SELECT ROUND(fm, 3) FROM UNNEST(read) 
-            )
-        ) AS read_fm,
-        (SELECT ARRAY -- we order by position the FM
-            (SELECT ROUND(fm, 3) FROM UNNEST(cpg) ORDER BY pos
-            )
-        ) AS cpg_fm,
-        (SELECT ARRAY -- we order by position 
-            (SELECT CAST(cov AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
-            )
-        ) AS cpg_cov,
-        (SELECT ARRAY -- we order by position. We use Float because python thinks it'a string otherwise
-            (SELECT CAST(pos - region_inf + 1 AS FLOAT64) FROM UNNEST(cpg) ORDER BY pos
-            ) 
-        ) AS cpg_pos,
-        window_details AS genomic_picture
-    FROM RENAME
-    WHERE (asm_snp_tmp = True OR asm_snp_tmp = False) 
-    "
 
 #--------------------------------------------------------------------------
 # Export ENCODE training set to Cloud Storage

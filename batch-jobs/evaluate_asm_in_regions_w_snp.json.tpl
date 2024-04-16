@@ -2,6 +2,11 @@
   "taskGroups": [
     {
       "taskSpec": {
+        "environment": {
+          "variables": {
+            "SAMPLES_DATASET": "SAMPLES_DATASET_PH"
+            }
+        },
         "runnables": [
           {
             "container": {
@@ -11,20 +16,20 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 1500,
+          "cpuMilli": 5000,
           "memoryMib": 20000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "2000s"
       },
-      "taskCount": TASK_COUNT_PH,
-      "parallelism": 60
+      "taskCount": NB_SAMPLES_PH,
+      "parallelism": NB_SAMPLES_PH
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-96"
+        "policy": { "machineType": "n1-highmem-32"
       }}
     ]
   },
