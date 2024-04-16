@@ -11,7 +11,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "calculate_wilcoxon_for_regions.py"]
+              "commands": ["python", "evaluate_asm_in_regions_w_snp.py"]
             }
           }
         ],
