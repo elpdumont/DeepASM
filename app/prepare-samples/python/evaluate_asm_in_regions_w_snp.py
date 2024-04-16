@@ -222,8 +222,8 @@ def main():
                 "read_asm_effect",
                 "wilcoxon_pvalue",
                 "corrected_wilcoxon_pvalue",
-                "total_count",
-                "consecutive_count",
+                "total_sig_cpgs",
+                "consecutive_sig_cpgs",
                 "asm",
             ]
         ],
