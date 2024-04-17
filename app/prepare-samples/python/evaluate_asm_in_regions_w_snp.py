@@ -228,8 +228,6 @@ def main():
             ]
         ],
         f"{samples_dataset}.asm_flagged",
-        partition_field="clustering_index",
-        cluster_fields=["sample", "chr"],
     )
 
     logging.info("END OF SCRIPT")
