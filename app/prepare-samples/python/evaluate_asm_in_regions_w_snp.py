@@ -158,7 +158,7 @@ def main():
     logging.info("Importing the sample data necessary to compute ASM")
 
     query = f"SELECT sample, chr, region_inf, region_sup, clustering_index, snp_id, snp_pos, cpg_w_snp, reads_w_snp \
-                FROM {project}.{samples_dataset}.regions_w_arrays \
+                FROM {project}.{samples_dataset}.regions_w_snps \
                 WHERE sample = '{sample}' AND snp_id IS NOT NULL \
                 "
 

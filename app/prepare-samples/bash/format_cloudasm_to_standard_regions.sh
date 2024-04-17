@@ -57,13 +57,24 @@ bq query \
 #-----------------------------------------------
 echo "For each region, group cpg, reads in a nested structure"
 
+# NEED TO BETTER CALCULATE THE FM OF READS TO AVOID COUNTING THE SAME CPG TWICE
+# IF IT IS LINKED TO 2 DIFFERENT SNPS
+
+# FORM "DUPLICATE" REGIONS DEPENDING ON WHICH SNP WE LOOK AT
+# ONCE ASM IS EVALUATED, COMBINE THE TWO TABLES.
+
 "${script_folder}"/bash/form_regions_with_arrays.sh
 
 # Construct the query to count rows in the table
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays")
-nb_regions_w_snp=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays WHERE snp_id IS NOT NULL")
+echo "Across ${NB_SAMPLES} samples, we have ${nb_regions} regions"
 
-echo "Found:${nb_regions} regions, of which only ${nb_regions_w_snp} have SNP information"
+"${script_folder}"/bash/form_regions_with_snps.sh
+
+nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_and_snps")
+nb_regions_unique=$(execute_query "SELECT COUNT(*) AS unique_row_count FROM ( SELECT sample, chr, region_inf, region_sup, clustering_index FROM ${PROJECT}.${SAMPLES_DATASET}.regions_and_snps GROUP BY sample, chr, region_inf, region_sup, clustering_index)")
+echo "Across ${NB_SAMPLES} samples, we have ${nb_regions} regions overlapping a SNP, of which ${nb_regions_unique} regions are unique"
+
 
 #-----------------------------------------------
 echo "Evaluating ASM in regions that have a SNP. Correcting Wilcoxon p-value across each sample"
