@@ -66,15 +66,48 @@ nb_regions_w_snp=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATA
 echo "Found:${nb_regions} regions, of which only ${nb_regions_w_snp} have SNP information"
 
 #-----------------------------------------------
-echo "Evaluating ASM in regions that have a SNP"
+echo "Evaluating ASM in regions that have a SNP. Correcting Wilcoxon p-value across each sample"
 
 JOB_NAME="evaluate-asm-${SHORT_SHA}"
 
 gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
-	--config jobs/evaluate_asm_in_regions_w_snp.json
+	--config batch-jobs/evaluate_asm_in_regions_w_snp.json
 
 
+nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.asm_flagged")
+nb_regions_w_asm=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.asm_flagged WHERE asm = 1")
+
+echo "Evaluated ${nb_regions} regions, of which only ${nb_regions_w_asm} have ASM"
+
+echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
+
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table "${SAMPLES_DATASET}".regions_w_arrays_and_asm_flag \
+    --replace=true \
+    --clustering_fields=sample,chr \
+    --range_partitioning=clustering_index,0,4000,1 \
+    "
+    WITH ASM AS (
+        SELECT
+            sample,
+            chr,
+            clustering_index,
+            region_inf,
+            region_sup,
+            CASE
+                WHEN AVG(asm) > 0 THEN 1 --we require finding at least one asm
+                ELSE 0
+            END AS asm
+        FROM ${SAMPLES_DATASET}.asm_flagged
+        GROUP BY sample, chr, clustering_index, region_inf, region_sup
+    )
+    SELECT c.*, p.asm FROM ${SAMPLES_DATASET}.regions_w_arrays c
+    LEFT JOIN ASM p
+    ON c.sample = p.sample AND c.chr = p.chr AND c.clustering_index = p.clustering_index AND c.region_inf = p.region_inf AND c.region_sup = p.region_sup
+    "
 
 #--------------------------------------------------------------------------
 # Export ENCODE training set to Cloud Storage
