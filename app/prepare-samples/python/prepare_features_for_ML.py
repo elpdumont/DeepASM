@@ -221,209 +221,74 @@ def expand_array_elements(df, column_name):
         )
 
 
-def generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
-    read_dictionary, genomic_length, min_nb_cpg_in_read
+def generate_feature_arrays(
+    row,
+    min_nb_reads_in_sequence,
+    min_fraction_of_nb_cpg_in_read,
+    sort_reads_randomly,
+    nb_cpg_for_padding,
 ):
-    """
-    Generates a methylation profile for a given read.
-
-    The profile is a one-dimensional numpy array representing each position within
-    the genomic length. Each position in the array can have a value of:
-    - 0 if there is no CpG at that position,
-    - 1 if there is a CpG with no methylation, and
-    - 2 if there is a CpG with methylation.
-
-    Parameters:
-    - read_dictionary (dict): A dictionary containing 'pos_array' with 1-indexed positions of CpGs,
-                              'meth_array' indicating methylation status (0 or 1) for each CpG,
-                              'read_fm' indicating forward or reverse read, and 'nb_cpg' the number of CpGs.
-    - genomic_length (int): The length of the genome or region being considered.
-    - min_nb_cpg_in_read (int): Minimum number of CpGs required in a read for it to be considered.
-
-    Returns:
-    - dict: A dictionary containing 'read_fm' and 'cpg_methylation_profile' if nb_cpg meets or exceeds the minimum.
-            Returns None if the condition is not met.
-    """
-
-    pos_array = (
-        np.array(read_dictionary["pos_array"], dtype=int) - 1
-    )  # Convert to 0-indexed
-    meth_array = np.array(read_dictionary["meth_array"], dtype=int)
-
-    # Initialize the result array with zeros
-    result = np.zeros(genomic_length, dtype=int)
-
-    # Set the values based on CpG presence and methylation status
-    result[pos_array] = meth_array + 1
-
-    return (
-        {
-            "read_fm": read_dictionary["read_fm"],
-            "cpg_methylation_profile": result,
-        }
-        if int(read_dictionary["nb_cpg"]) >= min_nb_cpg_in_read
-        else None
-    )
-
-
-def generate_sequence_cpg_cov_and_methyl_over_reads(
-    row_df,
-    genomic_length,
-    nb_reads_in_sequence,
-    min_fraction_of_nb_cpg,
-    sort_randomly,
-    min_cpg_for_padding,
-):
-    """
-    Generates a genomic-length wide list of dictionaries, along with the percentage of
-    methylated CpGs over the total number of reads for each genomic position where CpG is present.
-
-    Each dictionary within the primary list represents a nucleotide position and contains
-    information about the reads at that position. The "reads" are described by a dictionary with
-    keys indicating the read number and the CpG status:
-       - 0 if there is no CpG at that position,
-       - 1 if there is a CpG without methylation, and
-       - 2 if there is a methylated CpG.
-
-    Reads are sorted by fractional methylation (FM) in descending order. The function also
-    calculates the percentage of reads with a CpG state of 2 (methylated CpGs) for each CpG
-    position, excluding positions with no CpGs. This calculation only includes positions where
-    a CpG (state 1 or 2) is present, ignoring those with a state of 0.
-
-    If the minimum coverage (number of reads) criterion is not met, an empty list and an empty
-    array are returned.
-
-    Parameters:
-    - row_df (pd.Series): A row from a DataFrame, representing data for a specific genomic window.
-    - genomic_length (int): The length of the genomic window to be considered.
-    - nb_reads_in_sequence (int): The minimum number of reads required to generate the matrix.
-    - min_fraction_of_nb_cpg (float): The minimum fraction of CpGs required to select a read for consideration.
-    - sort_randomly (bool): Whether to sort the profiles randomly or not. If false, profiles are
-      sorted to select an even distribution across the FM spectrum.
-
-    Returns:
-    - Tuple of (list, list):
-      - First list: A genomic-length wide list of dictionaries, each containing nucleotide position
-        and reads information. Each "reads" entry is a list of dictionaries with read number and
-        CpG status.
-      - Second list: A list of the percentages of methylated CpGs (state 2) over total reads for
-        each genomic position where a CpG is present, rounded to two decimal places. Positions
-        with no CpGs present are excluded from this list.
-    """
-
-    genomic_array = row_df["genomic_picture"]
-    nb_cpg_found_in_region = int(row_df["nb_cpg_found"])
-    min_cpg_to_keep_in_read = int(nb_cpg_found_in_region * min_fraction_of_nb_cpg)
-
-    half_reads = nb_reads_in_sequence // 2
-
-    # Generate the 1D CpG methylation profile for each read
-    profiles = [
-        generate_nucleotide_sequence_of_cpg_and_methyl_for_read(
-            read_dict,
-            genomic_length,
-            min_cpg_to_keep_in_read,
-        )
-        for read_dict in genomic_array
+    reads = row["reads"]
+    nb_cpg_found = row["nb_cpg_found"]
+    reads_w_enough_cpgs = [
+        read_info
+        for read_info in reads
+        if len(read_info["cpg_pos"]) >= min_fraction_of_nb_cpg_in_read * nb_cpg_found
     ]
-
-    profiles = [profile for profile in profiles if profile]
-
-    if len(profiles) >= nb_reads_in_sequence:
-
-        sorted_all_profiles = sorted(profiles, key=lambda d: d["read_fm"])
-
-        if sort_randomly:
-            # Randomly sample profiles if more are available than the minimum required
-            sampled_profiles = (
-                random.sample(sorted_all_profiles, nb_reads_in_sequence)
-                if len(sorted_all_profiles) > nb_reads_in_sequence
-                else sorted_all_profiles
+    # Return None if we do not have enough reads
+    if len(reads_w_enough_cpgs) >= min_nb_reads_in_sequence:
+        return None
+    # Sort reads by FM descending
+    reads_sorted_by_fm = sorted(
+        reads_w_enough_cpgs, key=lambda d: d["fm"], reverse=True
+    )
+    # Pick reads at random if variable is set to true and there are more reads than what we need
+    if sort_reads_randomly and len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
+        # Randomly sample profiles if more are available than the minimum required
+        reads_sorted_by_fm = random.sample(reads_sorted_by_fm, min_nb_reads_in_sequence)
+    # Find the list of unique CpG positions
+    cpg_unique_pos = sorted(
+        set(pos for read in reads_sorted_by_fm for pos in read["cpg_pos"])
+    )
+    # Create a dictionary of all CpGs positions (sorted by position) with their methylation status (0 if no information, 1 for unmethylated CpG, 2 for methylated CpG)
+    cpg_dic = {cpg_pos: [] for cpg_pos in cpg_unique_pos}
+    meth_count = 0
+    for read in reads_sorted_by_fm:
+        meth_count += 1
+        for cpg_pos, cpg_meth in zip(read["cpg_pos"], read["cpg_meth"]):
+            cpg_dic[cpg_pos] += [cpg_meth + 1]
+        for unique_cpg in cpg_unique_pos:
+            if len(cpg_dic[unique_cpg]) < meth_count:
+                cpg_dic[unique_cpg] += [0]
+    # Compute directional fractional methylation
+    cpg_directional_fm = [
+        np.round(
+            (
+                sum(x[: int(min_nb_reads_in_sequence / 2)])
+                - sum(x[int(min_nb_reads_in_sequence / 2) :])
             )
-
-            # Assuming you still want them sorted in descending order for this path
-            sorted_profiles = sorted(
-                sampled_profiles, key=lambda d: d["read_fm"], reverse=True
-            )
-        else:
-            # logging.info("Not sorting randomly")
-            sorted_profiles = (
-                sorted_all_profiles[:half_reads] + sorted_all_profiles[-half_reads:]
-            )
-
-        # Extract the CpG methylation profiles
-        methylation_matrix = np.array(
-            [profile["cpg_methylation_profile"] for profile in sorted_profiles]
+            / min_nb_reads_in_sequence,
+            3,
         )
-
-        # Transpose the matrix to match the required dimensions to be genomic_length x nb_reads_in_sequence
-        methylation_matrix = np.transpose(methylation_matrix)
-
-        pos_reads_array = []
-        cpg_frac_array = []
-        cpg_states_array = []
-
-        for pos in range(genomic_length):
-
-            # Extract the methylation state for all reads at the current position
-            cpg_states = methylation_matrix[pos, :]
-
-            # Check if there are any CpG states with values 1 or 2
-            if np.any((cpg_states == 1) | (cpg_states == 2)):
-                # Calculate the sum of CpG states that are equal to 2 in each half
-                sum_first_half = np.sum(cpg_states[:half_reads] == 2)
-                sum_second_half = np.sum(cpg_states[half_reads:] == 2)
-
-                # Perform the specified calculation
-                fractional_methylation_of_cpg = (
-                    sum_first_half - sum_second_half
-                ) / nb_reads_in_sequence
-
-                # Append the calculation result to its array
-                cpg_frac_array.append(fractional_methylation_of_cpg)
-                cpg_states_array.append(json.dumps(cpg_states.tolist()))
-
-            reads_info = []
-            for read_nb, cpg_state in enumerate(cpg_states, start=1):
-                reads_info.append({"read_nb": read_nb, "cpg_state": cpg_state})
-            pos_reads_array.append({"pos": pos + 1, "reads": reads_info})
-
-        cpg_states_array_padding = []
-        nb_cpg_qualified = len(cpg_states_array)
-
-        # logging.info(f"cpg_states_array: {cpg_states_array}")
-
-        if nb_cpg_qualified < min_cpg_for_padding:
-            # logging.info("Need to add padding")
-            # Calculate the total number of zeros needed to ensure the array has at least min_cpg_for_padding elements
-            total_zeros_needed = min_cpg_for_padding - nb_cpg_qualified
-            left_padding_size = total_zeros_needed // 2
-            # logging.info(f"Left padding {left_padding_size}")
-            right_padding_size = total_zeros_needed - left_padding_size
-            # logging.info(f"Right padding {right_padding_size}")
-
-            # Create padding
-            padding_vector = str([0] * nb_reads_in_sequence)
-            # logging.info(f"padding vector: {padding_vector}")
-            left_padding = [padding_vector for _ in range(left_padding_size)]
-            right_padding = [padding_vector for _ in range(right_padding_size)]
-
-            # logging.info(f"left_padding: {left_padding}")
-            # logging.info(f"right_padding: {right_padding}")
-            # Apply padding
-            cpg_states_array_padding = left_padding + cpg_states_array + right_padding
-        else:
-            cpg_states_array_padding = cpg_states_array
-
-        # logging.info(f"cpg_states_array_padding: {cpg_states_array_padding}")
-
-    else:
-        pos_reads_array = []
-        cpg_frac_array = []
-        cpg_states_array = []
-        cpg_states_array_padding = []
-
-    return pos_reads_array, cpg_frac_array, cpg_states_array, cpg_states_array_padding
+        for x in cpg_dic.values()
+    ]
+    # Add padding to the cpg_dic
+    cpgs_w_padding = [cpg_methyl for cpg_methyl in cpg_dic.values()]
+    # First scenario: remove extra CpGs from the trailing end
+    while len(cpgs_w_padding) > nb_cpg_for_padding:
+        cpgs_w_padding.pop(0)
+        if len(cpgs_w_padding) > nb_cpg_for_padding:
+            cpgs_w_padding.pop(-1)
+    # Second scenario: add CpGs with zeros on each side consecutively
+    while len(cpgs_w_padding) < nb_cpg_for_padding:
+        cpgs_w_padding = [0] * min_nb_reads_in_sequence + cpgs_w_padding
+        if len(cpgs_w_padding) < nb_cpg_for_padding:
+            cpgs_w_padding += [0] * min_nb_reads_in_sequence
+    # Return resultats
+    return {
+        "cpg_directional_fm": cpg_directional_fm,
+        "cpgs_w_padding": cpgs_w_padding,
+    }
 
 
 # Define main script
@@ -444,7 +309,6 @@ def main():
     # Uncomment this for testing
     # df_raw = df_raw.head(10)
 
-    logging.info(f"File names: {file_name}")
     logging.info(f"Number of rows in raw dataframe: {len(df)}")
 
     # logging.info("Create kernel functions")
@@ -466,9 +330,9 @@ def main():
     }
 
     # logging.info("Calculate consecutive distances between CpGs")
-    df["cpg_dist"] = df["cpg"].apply(calculate_cpg_distances)
-    df["cpg_cov"] = df["cpg"].apply(lambda x: [int(d["cov"]) for d in x])
-    df["cpg_fm"] = df["cpg"].apply(lambda x: [int(d["fm"]) for d in x])
+    df["cpg_dist"] = df["cpgs"].apply(calculate_cpg_distances)
+    df["cpg_cov"] = df["cpgs"].apply(lambda x: [int(d["cov"]) for d in x])
+    df["cpg_fm"] = df["cpgs"].apply(lambda x: [int(d["fm"]) for d in x])
     df["read_fm"] = df["reads"].apply(lambda x: [int(d["fm"]) for d in x])
     df["nb_reads"] = df["read_fm"].apply(len)
 
@@ -486,22 +350,14 @@ def main():
     for col in dic_kernel.keys():
         expand_array_elements(df, col + "_kd")
 
-    # logging.info(
-    #     "Create a nucleotide sequence of CpG fractional methylation over the genomic length. Each nucleotide comes with 2 infos: presence of CpG, presence of methylation"
-    # )
-    # df_filtered["sequence_cpg_fm"] = df_filtered.apply(
-    #     lambda x: generate_nucleotide_sequence_of_cpg_fm(x, genomic_length), axis=1
-    # )
-
     logging.info(
-        "Create a sequence of nucleotide over the genomic length. Each nucleotide is represented by a vector of the depth (Number of reads required). Each element represents the presence of a CpG and its methylation status (0: no CpG, 1: Cpg non methylated, 2: methylated CpG)"
+        "Create two new columns, one with the sequence of directional CpG FM, one with the 2d picture nb CpGs x nb_reads"
     )
 
     ddf = dd.from_pandas(df, npartitions=10)
     result = ddf.apply(
-        lambda x: generate_sequence_cpg_cov_and_methyl_over_reads(
+        lambda x: generate_feature_arrays(
             x,
-            genomic_length,
             min_nb_reads_in_sequence,
             min_fraction_of_nb_cpg_in_read,
             sort_reads_randomly,
@@ -514,10 +370,8 @@ def main():
     logging.info("Adding the new columns to the dataframe")
     df[
         [
-            "sequence_cpg_cov_and_methyl",
-            "directional_cpg_frac",
-            "cpg_states_array",
-            "cpg_states_array_padding",
+            "cpg_directional_fm",
+            "cpgs_w_padding",
         ]
     ] = result.compute().apply(pd.Series)
 

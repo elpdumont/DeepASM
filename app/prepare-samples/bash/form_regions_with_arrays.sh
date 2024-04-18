@@ -23,7 +23,6 @@ bq query \
             clustering_index,
             read_id AS id,
             ROUND(SUM(meth)/SUM(cov),3) AS fm,
-            COUNT(*) AS nb_cpg,
             ARRAY_AGG (pos-region_inf + 1) AS cpg_pos,
             ARRAY_AGG (meth) AS cpg_meth
         FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions
@@ -38,8 +37,8 @@ bq query \
             sample,
             clustering_index,
             ARRAY_AGG(
-                STRUCT(id, fm, nb_cpg, cpg_pos, cpg_meth)
-            ) AS all_reads
+                STRUCT(id, fm, cpg_pos, cpg_meth)
+            ) AS reads
         FROM ALL_READ_ARRAY_TMP
         GROUP BY sample, clustering_index, chr, region_inf, region_sup, region_nb_cpg
         ),
@@ -67,34 +66,10 @@ bq query \
             COUNT(*) AS nb_cpg_found,
             ARRAY_AGG(
                 STRUCT(fm, cov, pos) ORDER by pos
-                ) AS cpg
+                ) AS cpgs
         FROM CPG_ARRAY_TMP        
         GROUP BY sample, clustering_index, chr, region_inf, region_sup
         HAVING nb_cpg_found >= ${MIN_NB_CPG_FOR_ASM}
-    ),
-    READ_ARRAY_TMP AS (
-        SELECT
-            chr,
-            region_inf,
-            region_sup,
-            sample,
-            clustering_index,
-            ROUND(SUM(meth)/SUM(cov),3) AS fm
-        FROM ${SAMPLES_DATASET}.all_cpgs_flagged_w_regions
-        GROUP BY sample, clustering_index, chr, region_inf, region_sup, read_id
-    ),
-    READ_ARRAY AS (
-        SELECT
-            chr,
-            region_inf,
-            region_sup,
-            sample,
-            clustering_index,
-            ARRAY_AGG(
-                STRUCT(fm) ORDER BY fm
-                ) AS reads
-        FROM READ_ARRAY_TMP
-        GROUP BY sample, clustering_index, chr, region_inf, region_sup
     )
     SELECT
         p.chr,
@@ -104,12 +79,9 @@ bq query \
         q.nb_cpg_found,
         p.sample,
         p.clustering_index,
-        q.cpg,
-        c.reads,
-        p.all_reads
+        q.cpgs,
+        p.reads
     FROM ALL_READ_ARRAY p
     INNER JOIN CPG_ARRAY q
     ON p.chr = q.chr AND p.region_inf = q.region_inf AND p.region_sup = q.region_sup AND p.clustering_index = q.clustering_index AND p.sample = q.sample
-    INNER JOIN READ_ARRAY c
-    ON p.chr = c.chr AND p.region_inf = c.region_inf AND p.region_sup = c.region_sup AND p.clustering_index = c.clustering_index AND p.sample = c.sample
     "
