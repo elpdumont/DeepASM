@@ -96,7 +96,7 @@ echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), parti
 
 bq query \
     --use_legacy_sql=false \
-    --destination_table "${SAMPLES_DATASET}".regions_w_arrays_and_asm_flag \
+    --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_flagged \
     --replace=true \
     --clustering_fields=sample,chr \
     --range_partitioning=clustering_index,0,4000,1 \
@@ -119,6 +119,36 @@ bq query \
     LEFT JOIN ASM p
     ON c.sample = p.sample AND c.chr = p.chr AND c.clustering_index = p.clustering_index AND c.region_inf = p.region_inf AND c.region_sup = p.region_sup
     "
+
+nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged")
+nb_regions_evaluated=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged WHERE asm IS NOT NULL")
+nb_regions_w_asm=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged WHERE asm = 1")
+echo "We have ${nb_regions} regions. We evaluated ${nb_regions_evaluated} regions for ASM. Among these, there are ${nb_regions_w_asm} regions where we found ASM"
+
+echo "Exporting the data to the bucket"
+bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_flagged" gs://"${BUCKET}"/"${SAMPLES_DATASET}"/all_regions/unique_regions_w_asm_flagged_*.json
+
+nb_files=$(gsutil ls gs://${BUCKET}/${SAMPLES_DATASET}/all_regions/* | wc -l)
+echo "There are ${nb_files} that cover all the regions with an ASM flag when ASM could be evaluated"
+
+
+bq query \
+    --use_legacy_sql=false \
+    --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_0_or_1 \
+    --replace=true \
+    "
+    SELECT * FROM ${SAMPLES_DATASET}.unique_regions_w_asm_flagged
+    WHERE asm IS NOT NULL
+    "
+
+echo "Exporting the data to the bucket with ASM being 0 or 1"
+bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_0_or_1" gs://"${BUCKET}"/"${SAMPLES_DATASET}"/regions_with_known_asm/unique_regions_w_asm_0_or_1_*.json
+
+
+echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
+"${script_folder}"/python/prepare_features_for_ML.py
+
+
 
 #--------------------------------------------------------------------------
 # Export ENCODE training set to Cloud Storage

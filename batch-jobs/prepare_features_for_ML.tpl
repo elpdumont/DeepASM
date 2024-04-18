@@ -5,7 +5,6 @@
         "environment": {
           "variables": {
             "ML_DATASET": "ML_DATASET_PH",
-            "CLOUDASM_DATASET": "CLOUDASM_DATASET_PH",
             "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PH"
           }
         },

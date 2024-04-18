@@ -6,7 +6,6 @@ GCP:
   ARTIFACT_REGISTRY_REPO: docker-repo
   BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
   CLOUDASM_DATASET: cloudasm_encode_2019
-  SAMPLES_DATASET: samples
 
 GENOMICS:
   REFERENCE_GENOME: hg19
@@ -106,8 +105,6 @@ VARS_TO_NORMALIZE:
 
 CATEGORICAL_VARS:
   - chr
-  - sample_category
-  - dnase
 
 CAT_VARS_OHE:
   - chr
