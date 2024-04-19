@@ -65,6 +65,7 @@ SAMPLES:
 
 VARS_TO_REMOVE:
   - read_fm
+  - cpg_fm
   - cpg_pos
   - cpg_cov
   - cpg_dist

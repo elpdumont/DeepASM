@@ -229,15 +229,26 @@ def generate_feature_arrays(
     nb_cpg_for_padding,
 ):
     reads = row["reads"]
-    nb_cpg_found = row["nb_cpg_found"]
+    nb_cpg_found = int(row["nb_cpg_found"])
+    # Obtain the reads that have enough CpGs
     reads_w_enough_cpgs = [
         read_info
         for read_info in reads
-        if len(read_info["cpg_pos"]) >= min_fraction_of_nb_cpg_in_read * nb_cpg_found
+        if len(read_info["cpg_pos"])
+        >= int(np.round(min_fraction_of_nb_cpg_in_read * nb_cpg_found))
     ]
     # Return None if we do not have enough reads
-    if len(reads_w_enough_cpgs) >= min_nb_reads_in_sequence:
-        return None
+    if len(reads_w_enough_cpgs) < min_nb_reads_in_sequence:
+        # print("Returning None")
+        return pd.Series([None, None])
+    # Ensure the data type of each dictionary is correct
+    for read in reads_w_enough_cpgs:
+        # Convert 'fm' to float
+        read["fm"] = float(read["fm"])
+        # Convert 'cpg_pos' to list of integers
+        read["cpg_pos"] = [int(pos) for pos in read["cpg_pos"]]
+        # Convert 'cpg_meth' to list of integers
+        read["cpg_meth"] = [int(meth) for meth in read["cpg_meth"]]
     # Sort reads by FM descending
     reads_sorted_by_fm = sorted(
         reads_w_enough_cpgs, key=lambda d: d["fm"], reverse=True
@@ -281,14 +292,11 @@ def generate_feature_arrays(
             cpgs_w_padding.pop(-1)
     # Second scenario: add CpGs with zeros on each side consecutively
     while len(cpgs_w_padding) < nb_cpg_for_padding:
-        cpgs_w_padding = [0] * min_nb_reads_in_sequence + cpgs_w_padding
+        cpgs_w_padding = [[0] * min_nb_reads_in_sequence] + cpgs_w_padding
         if len(cpgs_w_padding) < nb_cpg_for_padding:
-            cpgs_w_padding += [0] * min_nb_reads_in_sequence
+            cpgs_w_padding += [[0] * min_nb_reads_in_sequence]
     # Return resultats
-    return {
-        "cpg_directional_fm": cpg_directional_fm,
-        "cpgs_w_padding": cpgs_w_padding,
-    }
+    return pd.Series([cpg_directional_fm, cpgs_w_padding])
 
 
 # Define main script
@@ -354,8 +362,12 @@ def main():
         "Create two new columns, one with the sequence of directional CpG FM, one with the 2d picture nb CpGs x nb_reads"
     )
 
-    ddf = dd.from_pandas(df, npartitions=10)
-    result = ddf.apply(
+    df[
+        [
+            "cpg_directional_fm",
+            "cpgs_w_padding",
+        ]
+    ] = df.apply(
         lambda x: generate_feature_arrays(
             x,
             min_nb_reads_in_sequence,
@@ -364,51 +376,21 @@ def main():
             nb_cpg_for_padding,
         ),
         axis=1,
-        meta=("x", "object"),
+        result_type="expand",
     )
 
-    logging.info("Adding the new columns to the dataframe")
-    df[
-        [
-            "cpg_directional_fm",
-            "cpgs_w_padding",
-        ]
-    ] = result.compute().apply(pd.Series)
+    logging.info("Removing extra columns")
+    df = df.drop(
+        columns=vars_to_remove + ["cpgs", "reads"], axis=1, errors="ignore"
+    ).copy(deep=True)
 
-    initial_row_count = len(df)
-    # Remove rows where the specified column contains an empty list
-    df = df[df["sequence_cpg_cov_and_methyl"].apply(lambda x: len(x) > 0)].copy(
-        deep=True
-    )
-
-    # Count the number of rows after removing rows with empty lists
-    final_row_count = len(df)
-
-    # Calculate the number of rows removed
-    rows_removed = initial_row_count - final_row_count
-
-    logging.info(
-        f"There are {rows_removed} rows without sequence_cpg_cov_and_methyl data from the dataset out of {initial_row_count} rows"
-    )
-    percentage_removed = (rows_removed / initial_row_count) * 100
-    logging.info(f"{percentage_removed:.2f}% of the rows were removed")
-
-    logging.info(compute_counts_and_percentages(df["asm"]))
-
-    logging.info("Create the same sequence but keep the nucleotides with CpGs only.")
-
-    logging.info("Storing the different datasets into a hash table.")
-    dic_data = {}
-
-    df = df.drop(columns=vars_to_remove, axis=1, errors="ignore").copy(deep=True)
-
-    # logging.info("One-hot encode categoricals variables that are not binary")
+    logging.info("One-hot encode categoricals variables that are not binary")
     dummies_list = []
     for var in categorical_vars_ohe:
         # logging.info(f"One hot for variable {var}")
         dummies = pd.get_dummies(df[var], prefix=var, dtype=int)
         dummies_list.append(dummies)
-    dic_data["clean"] = pd.concat([df, pd.concat(dummies_list, axis=1)], axis=1)
+    df = pd.concat([df, pd.concat(dummies_list, axis=1)], axis=1)
 
     # logging.info("Enforcing data types for integer variables")
     for var in [
@@ -420,85 +402,14 @@ def main():
         "nb_cpg_found",
         "asm",
     ]:
-        dic_data["clean"][var] = dic_data["clean"][var].astype(pd.Int64Dtype())
+        df[var] = df[var].astype(pd.Int64Dtype())
 
-    # logging.info("Creating the  dataset with the methylation matrix")
-    dic_data["sequence_cpg_cov_and_methyl"] = dic_data["clean"][
-        vars_to_keep + ["sequence_cpg_cov_and_methyl"]
-    ].copy(deep=True)
+    df[["cpg_directional_fm", "cpgs_w_padding"]] = df[
+        ["cpg_directional_fm", "cpgs_w_padding"]
+    ].applymap(lambda x: f'"{x}"')
 
-    # logging.info("Creating the tabular dataset")
-    dic_data["tabular"] = (
-        dic_data["clean"]
-        .drop(
-            columns=[
-                # "sequence_cpg_fm",
-                "sequence_cpg_cov_and_methyl",
-                # "cpg_fm",
-                # "sequence_cpg_cov_and_methyl_nonzeros",
-            ],
-            axis=1,
-        )
-        .copy(deep=True)
-    )
-
-    # logging.info(f"All variables in tabular dataset: {dic_data['tabular'].columns}")
-
-    logging.info("Uploading the 3 datasets to BigQuery")
-    # Define schema fields based on a dictionary of variables
-    schema_fields = create_schema_fields(dic_vars_to_keep)
-
-    record_fields_sequence_cpg_cov_and_methyl = [
-        bigquery.SchemaField("pos", "INTEGER", mode="REQUIRED"),
-        bigquery.SchemaField(
-            "reads",
-            "RECORD",
-            mode="REPEATED",
-            fields=[
-                bigquery.SchemaField("read_nb", "INTEGER", mode="REQUIRED"),
-                bigquery.SchemaField("cpg_state", "INTEGER", mode="REQUIRED"),
-            ],
-        ),
-    ]
-
-    # Add record fields to the base schema
-    # schema_sequence_cpg_fm = add_record_field(
-    #     schema_fields, "sequence_cpg_fm", record_fields_sequence_cpg_fm
-    # )
-
-    schema_sequence_cpg_cov_and_methyl = add_record_field(
-        schema_fields,
-        "sequence_cpg_cov_and_methyl",
-        record_fields_sequence_cpg_cov_and_methyl,
-    )
-
-    upload_dataframe_to_bq(
-        bq_client,
-        dic_data["sequence_cpg_cov_and_methyl"],
-        f"{ml_dataset}.sequence_cpg_cov_and_methyl",
-        schema_sequence_cpg_cov_and_methyl,
-    )
-
-    # For datasets with autodetection
-    upload_dataframe_to_bq(bq_client, dic_data["tabular"], f"{ml_dataset}.tabular")
-
-    logging.info("Uploading the dataframes as JSONs on Cloud Storage")
-
-    for dataset_type in [
-        # "sequence_cpg_fm",
-        "sequence_cpg_cov_and_methyl",
-        "tabular",
-        # "sequence_cpg_fm_nonzeros",
-        # "sequence_cpg_cov_and_methyl_nonzeros",
-    ]:
-        export_dataframe_to_gcs_as_json(
-            storage_client,
-            dic_data[dataset_type],
-            bucket,
-            ml_dataset,
-            BATCH_TASK_INDEX,
-            dataset_type,
-        )
+    logging.info("Uploading the data to BigQuery")
+    upload_dataframe_to_bq(bq_client, df, f"{ml_dataset}.features_wo_hmm")
 
     logging.info("SCRIPT COMPLETE")
 
