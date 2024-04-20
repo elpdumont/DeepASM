@@ -5,19 +5,16 @@ import os
 import random
 import sys
 
-import dask.dataframe as dd
-
 # Python packages for data, stats
 import numpy as np
 import pandas as pd
 import yaml
-from gcp import (
-    create_df_from_json_for_index_file,
-    export_dataframe_to_gcs_as_json,
-    upload_dataframe_to_bq,
-)
+from gcp import create_df_from_json_for_index_file, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
+
+# import dask.dataframe as dd
+
 
 # Initialize random seed (for selecting the reads used in the matrix)
 random_seed = 42
@@ -302,7 +299,7 @@ def generate_feature_arrays(
 # Define main script
 def main():
 
-    logging.info(f"Sorting method: {sort_reads_randomly}")
+    logging.info(f"Importing: {nb_files_per_task} files...")
     # logging.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
@@ -392,11 +389,16 @@ def main():
         dummies_list.append(dummies)
     df = pd.concat([df, pd.concat(dummies_list, axis=1)], axis=1)
 
+    for chr_num in range(1, 23):
+        if "chr_" + str(chr_num) not in df.columns:
+            df["chr_" + str(chr_num)] = 0
+
     # logging.info("Enforcing data types for integer variables")
     for var in [
         "chr",
         "region_inf",
         "region_sup",
+        "clustering_index",
         "region_nb_cpg",
         "nb_reads",
         "nb_cpg_found",

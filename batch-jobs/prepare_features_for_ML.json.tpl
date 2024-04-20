@@ -5,6 +5,7 @@
         "environment": {
           "variables": {
             "ML_DATASET": "ML_DATASET_PH",
+            "SAMPLES_DATASET": "SAMPLES_DATASET_PH",
             "NB_FILES_PER_TASK": "NB_FILES_PER_TASK_PH"
           }
         },
@@ -12,19 +13,18 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "process_cloudasm_to_ml_datasets.py"]
+              "commands": ["python", "prepare_features_for_ML.py"]
             }
           }
         ],
         "computeResource": {
-          "cpuMilli": 1500,
-          "memoryMib": 20000
+          "cpuMilli": 3500,
+          "memoryMib": 30000
         },
         "maxRetryCount": 0,
-        "maxRunDuration": "2000s"
+        "maxRunDuration": "5000s"
       },
-      "taskCount": TASK_COUNT_PH,
-      "parallelism": 60
+      "taskCount": TASK_COUNT_PH
     }
   ],
   "allocationPolicy": {

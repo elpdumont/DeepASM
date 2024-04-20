@@ -153,6 +153,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#BASH_IMAGE_PH#${BASH_IMAGE}#g" "${file}"
     sed -i '' "s#ML_DATASET_PH#${ML_DATASET}#g" "${file}"
     sed -i '' "s#CLOUDASM_DATASET_PH#${CLOUDASM_DATASET}#g" "${file}"
+    sed -i '' "s#ML_DATASET_PH#${ML_DATASET}#g" "${file}"
     sed -i '' "s#SAMPLES_DATASET_PH#${SAMPLES_DATASET}#g" "${file}"
     sed -i '' "s#nb_tasks_for_cloudasm_tables_ph#${nb_tasks_for_cloudasm_tables}#g" "${file}"
     sed -i '' "s#CLOUDASM_TABLES_PH#${CLOUDASM_TABLES[*]}#g" "${file}"

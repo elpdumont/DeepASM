@@ -79,9 +79,7 @@ echo "Across ${NB_SAMPLES} samples, we have ${nb_regions} regions overlapping a 
 #-----------------------------------------------
 echo "Evaluating ASM in regions that have a SNP. Correcting Wilcoxon p-value across each sample"
 
-JOB_NAME="evaluate-asm-${SHORT_SHA}"
-
-gcloud batch jobs submit "${JOB_NAME}" \
+gcloud batch jobs submit "evaluate-asm-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/evaluate_asm_in_regions_w_snp.json
 
@@ -146,7 +144,26 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DAT
 
 
 echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
-"${script_folder}"/python/prepare_features_for_ML.py
+NB_FILES_PER_TASK="100"
+NB_FILES_TO_PROCESS=$(gsutil ls gs://"${BUCKET}"/"${SAMPLES_DATASET}"/all_regions/* | wc -l | awk '{print $1}')
+TASK_COUNT=$(( (${NB_FILES_TO_PROCESS} + ${NB_FILES_PER_TASK} - 1) / ${NB_FILES_PER_TASK} ))
+sed -i '' "s#NB_FILES_PER_TASK_PH#${NB_FILES_PER_TASK}#g" "${file}"
+sed -i '' "s#TASK_COUNT_PH#${TASK_COUNT}#g" "${file}"
+
+
+gcloud batch jobs submit "prepare-features-for-ml-${SHORT_SHA}"-4 \
+	--location "${REGION}" \
+	--config batch-jobs/prepare_features_for_ML.json
+
+
+
+
+
+
+
+
+
+
 
 
 
