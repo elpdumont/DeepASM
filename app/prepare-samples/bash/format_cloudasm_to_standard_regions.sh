@@ -144,7 +144,7 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DAT
 
 
 echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
-NB_FILES_PER_TASK="100"
+NB_FILES_PER_TASK="50"
 NB_FILES_TO_PROCESS=$(gsutil ls gs://"${BUCKET}"/"${SAMPLES_DATASET}"/all_regions/* | wc -l | awk '{print $1}')
 TASK_COUNT=$(( (${NB_FILES_TO_PROCESS} + ${NB_FILES_PER_TASK} - 1) / ${NB_FILES_PER_TASK} ))
 sed -i '' "s#NB_FILES_PER_TASK_PH#${NB_FILES_PER_TASK}#g" "batch-jobs/prepare_features_for_ML.json"
