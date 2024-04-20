@@ -408,7 +408,7 @@ def main():
 
     df[["cpg_directional_fm", "cpgs_w_padding"]] = df[
         ["cpg_directional_fm", "cpgs_w_padding"]
-    ].applymap(lambda x: f'"{x}"')
+    ].applymap(lambda x: f'"{x}"' if x != "" else x)
 
     logging.info("Uploading the data to BigQuery")
     upload_dataframe_to_bq(bq_client, df, f"{ml_dataset}.features_wo_hmm")
