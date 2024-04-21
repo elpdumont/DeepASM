@@ -1,6 +1,7 @@
 # File management
 import json
 import logging
+import math
 import os
 import random
 import sys
@@ -226,13 +227,16 @@ def generate_feature_arrays(
     nb_cpg_for_padding,
 ):
     reads = row["reads"]
+    nb_half_reads = min_nb_reads_in_sequence // 2
     nb_cpg_found = int(row["nb_cpg_found"])
+    # print(f"nb_cpg_found: {nb_cpg_found}")
+    # print(f"{int(np.round(math.ceil(min_fraction_of_nb_cpg_in_read * nb_cpg_found)))}")
     # Obtain the reads that have enough CpGs
     reads_w_enough_cpgs = [
         read_info
         for read_info in reads
         if len(read_info["cpg_pos"])
-        >= int(np.round(min_fraction_of_nb_cpg_in_read * nb_cpg_found))
+        >= int(math.ceil(min_fraction_of_nb_cpg_in_read * nb_cpg_found))
     ]
     # Return None if we do not have enough reads
     if len(reads_w_enough_cpgs) < min_nb_reads_in_sequence:
@@ -251,9 +255,16 @@ def generate_feature_arrays(
         reads_w_enough_cpgs, key=lambda d: d["fm"], reverse=True
     )
     # Pick reads at random if variable is set to true and there are more reads than what we need
-    if sort_reads_randomly and len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
-        # Randomly sample profiles if more are available than the minimum required
-        reads_sorted_by_fm = random.sample(reads_sorted_by_fm, min_nb_reads_in_sequence)
+    if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
+        if sort_reads_randomly:
+            # Randomly sample profiles if more are available than the minimum required
+            reads_sorted_by_fm = random.sample(
+                reads_sorted_by_fm, min_nb_reads_in_sequence
+            )
+        else:
+            reads_sorted_by_fm = (
+                reads_sorted_by_fm[:nb_half_reads] + reads_sorted_by_fm[-nb_half_reads:]
+            )
     # Find the list of unique CpG positions
     cpg_unique_pos = sorted(
         set(pos for read in reads_sorted_by_fm for pos in read["cpg_pos"])
@@ -268,14 +279,13 @@ def generate_feature_arrays(
         for unique_cpg in cpg_unique_pos:
             if len(cpg_dic[unique_cpg]) < meth_count:
                 cpg_dic[unique_cpg] += [0]
+    # print(f"CpG DIC: {cpg_dic}")
     # Compute directional fractional methylation
     cpg_directional_fm = [
         np.round(
-            (
-                sum(x[: int(min_nb_reads_in_sequence / 2)])
-                - sum(x[int(min_nb_reads_in_sequence / 2) :])
-            )
-            / min_nb_reads_in_sequence,
+            (sum(1 for i in range(nb_half_reads) if x[i] == 2)) / nb_half_reads
+            - (sum(1 for i in range(nb_half_reads, len(x)) if x[i] == 2))
+            / nb_half_reads,
             3,
         )
         for x in cpg_dic.values()
