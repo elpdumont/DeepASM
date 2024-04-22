@@ -248,7 +248,7 @@ def main():
         quoted_samples = ",".join(
             [f"'{sample}'" for sample in samples_dic[dataset_name]]
         )
-        query = f"SELECT * FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL LIMIT 100"
+        query = f"SELECT * FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL"
         # Execute the query and store in dic
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
         dic_data[dataset_name]["imported"][hmm_var + "_no_string"] = dic_data[
