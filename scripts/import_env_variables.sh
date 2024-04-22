@@ -92,6 +92,8 @@ echo "List of samples: ${SAMPLE_LIST[*]}"
 
 # Form specific variables used in the scripts
 export SAMPLES_DATASET="samples_${GENOMIC_LENGTH}bp"
+export MODEL_PATH="${SAMPLES_DATASET}/model"
+export DATA_PATH="${SAMPLES_DATASET}/datasets"
 export ML_DATASET="ml_${GENOMIC_LENGTH}bp"
 export REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
@@ -159,7 +161,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#CLOUDASM_TABLES_PH#${CLOUDASM_TABLES[*]}#g" "${file}"
     sed -i '' "s#SAMPLE_LIST_PH#${SAMPLE_LIST[*]}#g" "${file}"
     sed -i '' "s#NB_SAMPLES_PH#${NB_SAMPLES}#g" "${file}"
-
+    sed -i '' "s#SHORT_SHA_PH#${SHORT_SHA}#g" "${file}"
 done
 
 

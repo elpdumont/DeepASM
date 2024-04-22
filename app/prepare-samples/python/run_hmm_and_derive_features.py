@@ -1,4 +1,5 @@
 # Python packages for data, stats
+import ast
 import json
 import logging
 import os
@@ -7,17 +8,13 @@ import sys
 import numpy as np
 import pandas as pd
 import yaml
+from gcp_utils import upload_blob, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from hmmlearn.hmm import GaussianHMM
+from hmmlearn.vhmm import VariationalGaussianHMM
 from joblib import dump
 from scipy.stats import entropy
 from sklearn.utils import check_random_state
-
-from gcp_utils import (
-    export_dataframe_to_gcs_as_json,
-    upload_blob,
-    upload_dataframe_to_bq,
-)
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
@@ -46,14 +43,22 @@ samples_dic = config["SAMPLES"]
 dataset_types = list(samples_dic.keys())
 
 # HMM variables
+model_type = config["HMM"]["MODEL_TYPE"]
 n_states = config["HMM"]["N_STATES"]
+n_model_loop = config["HMM"]["N_MODEL_LOOP"]
 covariance = config["HMM"]["COVARIANCE"]
 n_iterations = config["HMM"]["N_ITERATIONS"]
 algorithm = config["HMM"]["ALGORITHM"]
 hmm_var = config["HMM"]["VAR_NAME"]
 
+model_dic = {
+    "Gaussian": GaussianHMM,
+    "Variational Gaussian": VariationalGaussianHMM,
+}
+
 # Retrieve Job-defined env vars
 ml_dataset_id = os.getenv("ML_DATASET_ID")
+short_sha = os.getenv("SHORT_SHA")
 
 
 def prepare_data_for_hmm(sequence):
@@ -150,8 +155,8 @@ def extract_features(hidden_states_sequences):
         feature_names.append(f"count_state_{state}")
         feature_names.append(f"proportion_state_{state}")
 
-    for i, state_i in enumerate(unique_states):
-        for j, state_j in enumerate(unique_states):
+    for _, state_i in enumerate(unique_states):
+        for _, state_j in enumerate(unique_states):
             feature_names.append(f"transition_from_{state_i}_to_{state_j}")
 
     feature_names.extend(["start_state", "end_state", "nb_state_changes"])
@@ -160,8 +165,8 @@ def extract_features(hidden_states_sequences):
         feature_names.append(f"mean_duration_state_{state}")
         feature_names.append(f"variance_duration_state_{state}")
 
-    for i, state_i in enumerate(unique_states):
-        for j, state_j in enumerate(unique_states):
+    for _, state_i in enumerate(unique_states):
+        for _, state_j in enumerate(unique_states):
             feature_names.append(f"transition_probability_from_{state_i}_to_{state_j}")
 
     feature_names.append("entropy_state_distribution")
@@ -205,7 +210,7 @@ def extract_features(hidden_states_sequences):
                 current_duration = 1
         state_durations[current_state].append(current_duration)  # for the last state
 
-        for state, durations in state_durations.items():
+        for _, durations in state_durations.items():
             if durations:
                 mean_duration = np.mean(durations)
                 var_duration = np.var(durations)
@@ -245,8 +250,8 @@ def extract_features(hidden_states_sequences):
     return np.array(features), feature_names
 
 
-def save_HMM_model_to_bucket(model):
-    file_name = "hmm_model.joblib"
+def save_HMM_model_to_bucket(model, short_sha):
+    file_name = "hmm_model_" + short_sha + ".joblib"
     dump(model, file_name)
     upload_blob(storage_client, bucket_name, file_name, model_folder)
     return None
@@ -265,40 +270,49 @@ def main():
         quoted_samples = ",".join(
             [f"'{sample}'" for sample in samples_dic[dataset_name]]
         )
-        # logging.info(f"Quotes samples: {quoted_samples}")
-
         # query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples}) LIMIT 1000"
-
-        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.tabular WHERE sample IN ({quoted_samples})"
-
+        query = f"SELECT * FROM {project_id}.{ml_dataset_id}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL"
+        # Execute the query and store in dic
         dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
+        dic_data[dataset_name]["imported"][hmm_var + "no_string"] = dic_data[
+            dataset_name
+        ]["imported"][hmm_var].apply(lambda x: ast.literal_eval(x.strip('"')))
 
     logging.info("Creating a unique sequence for training the HMM")
-    training_seq = np.concatenate(dic_data["TRAINING"]["imported"][hmm_var].tolist())
+    training_seq = np.concatenate(
+        dic_data["TRAINING"]["imported"][hmm_var + "no_string"].tolist()
+    )
 
     logging.info("Reshaping training data")
     reshaped_data, lengths = prepare_data_for_hmm(training_seq)
 
-    model = GaussianHMM(
-        n_components=n_states,
-        covariance_type=covariance,
-        n_iter=n_iterations,
-        algorithm=algorithm,
-        random_state=rs,
-    )
-
-    logging.info("Fitting the model")
-    model.fit(reshaped_data, lengths)
+    best_ll = None
+    best_model = None
+    for i in range(n_model_loop):
+        print(f"Iteration: {i}")
+        h = model_dic[model_type](
+            n_states,
+            n_iter=n_iterations,
+            covariance_type=covariance,
+            algorithm=algorithm,
+            random_state=rs,
+        )  # tol=1e-4,
+        h.fit(reshaped_data, lengths)
+        score = h.score(reshaped_data)
+        print(f"score: {score}")
+        if not best_ll or best_ll < best_ll:
+            best_ll = score
+            best_model = h
 
     logging.info("Saving model in the bucket")
-    save_HMM_model_to_bucket(model)
+    save_HMM_model_to_bucket(best_model)
 
     for dataset_name in dataset_types:
 
         df_imported = dic_data[dataset_name]["imported"].copy(deep=True)
         logging.info(f"Computing hidden states for dataset: {dataset_name}")
         dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
-            model, df_imported[hmm_var]
+            best_model, df_imported[hmm_var + "no_string"]
         )
 
         logging.info(
@@ -323,17 +337,11 @@ def main():
             axis=1,
         )
 
+        # Drop columns for upload
+        df_export.drop(hmm_var + "no_string", axis=1, inplace=True)
+
         logging.info("Exportind dataset to BQ and Bucket")
         upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset_id}.{dataset_name}")
-        export_dataframe_to_gcs_as_json(
-            storage_client,
-            df_export,
-            bucket_name,
-            ml_dataset_id,
-            0,
-            dataset_name,
-        )
-
     logging.info("END OF SCRIPT")
 
 

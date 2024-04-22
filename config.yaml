@@ -2,7 +2,6 @@ GCP:
   PROJECT: hmh-em-deepasm
   REGION: us-east1
   BUCKET: hmh_deepasm
-  MODEL_FOLDER: models
   ARTIFACT_REGISTRY_REPO: docker-repo
   BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
   CLOUDASM_DATASET: cloudasm_encode_2019
@@ -39,10 +38,12 @@ FEATURE_PREP:
 
 HMM:
   N_STATES: 5
+  MODEL_TYPE: Variational Gaussian
+  N_MODEL_LOOP: 5
   COVARIANCE: tied
   N_ITERATIONS: 200
   ALGORITHM: viterbi
-  VAR_NAME: directional_cpg_frac
+  VAR_NAME: cpg_directional_fm
 
 
 SAMPLES:
