@@ -175,6 +175,9 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}
 #---------------------------------------------
 echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
 
+gcloud batch jobs submit "compute-hmm-${SHORT_SHA}" \
+	--location "${REGION}" \
+	--config batch-jobs/run_hmm_and_derive_features.json
 
 
 

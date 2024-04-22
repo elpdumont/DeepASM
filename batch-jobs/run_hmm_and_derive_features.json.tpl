@@ -13,7 +13,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "run_hmm.py"]
+              "commands": ["python", "run_hmm_and_derive_features.py"]
             }
           }
         ],
