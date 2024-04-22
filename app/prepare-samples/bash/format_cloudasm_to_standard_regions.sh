@@ -151,12 +151,12 @@ sed -i '' "s#NB_FILES_PER_TASK_PH#${NB_FILES_PER_TASK}#g" "batch-jobs/prepare_fe
 sed -i '' "s#TASK_COUNT_PH#${TASK_COUNT}#g" "batch-jobs/prepare_features_for_ML.json"
 
 
-gcloud batch jobs submit "prepare-features-for-ml-${SHORT_SHA}"-2 \
+gcloud batch jobs submit "prepare-features-for-ml-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/prepare_features_for_ML.json
 
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm")
-nb_regions_w_data=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm WHERE cpgs_w_padding != 'None' ")
+nb_regions_w_data=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm WHERE cpgs_w_padding IS NOT NULL ")
 nb_regions_w_data_and_asm_flagged=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm WHERE cpgs_w_padding IS NOT NULL AND asm IS NOT NULL")
 echo "Features were prepared for ${nb_regions} regions. Among these, we could extract features for ${nb_regions_w_data} regions. Among these, we have ${nb_regions_w_data_and_asm_flagged} regions with features and ASM."
 

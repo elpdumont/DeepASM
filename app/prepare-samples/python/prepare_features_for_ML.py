@@ -347,8 +347,8 @@ def main():
     # logging.info("Calculate consecutive distances between CpGs")
     df["cpg_dist"] = df["cpgs"].apply(calculate_cpg_distances)
     df["cpg_cov"] = df["cpgs"].apply(lambda x: [int(d["cov"]) for d in x])
-    df["cpg_fm"] = df["cpgs"].apply(lambda x: [int(d["fm"]) for d in x])
-    df["read_fm"] = df["reads"].apply(lambda x: [int(d["fm"]) for d in x])
+    df["cpg_fm"] = df["cpgs"].apply(lambda x: [float(d["fm"]) for d in x])
+    df["read_fm"] = df["reads"].apply(lambda x: [float(d["fm"]) for d in x])
     df["nb_reads"] = df["read_fm"].apply(len)
 
     # logging.info("Convert specific arrays into kernel densities")
