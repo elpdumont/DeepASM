@@ -266,7 +266,7 @@ def main():
     best_ll = None
     best_model = None
     for i in range(n_model_loop):
-        print(f"Iteration: {i}")
+        logging.info(f"Iteration: {i}")
         h = model_dic[model_type](
             n_states,
             n_iter=n_iterations,
@@ -276,7 +276,7 @@ def main():
         )  # tol=1e-4,
         h.fit(reshaped_data, lengths)
         score = h.score(reshaped_data)
-        print(f"score: {score}")
+        logging.info(f"score: {score}")
         if not best_ll or best_ll < best_ll:
             best_ll = score
             best_model = h
