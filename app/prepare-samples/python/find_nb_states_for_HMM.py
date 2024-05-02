@@ -115,7 +115,7 @@ def main():
     quoted_samples = ",".join(
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]
     )
-    query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL LIMIT 100"
+    query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL"
     # Execute the query and store in dic
     df = bq_client.query(query).to_dataframe()
     df["cpg_directional_fm"] = df["cpg_directional_fm"].apply(
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as err:
-        message = f"Task #{BATCH_TASK_INDEX} failed: {str(err)}"
+        message = f"Number of states #{n_states} failed: {str(err)}"
 
         print(json.dumps({"message": message, "severity": "ERROR"}))
         sys.exit(1)  # Retry Job Task by exiting the process
