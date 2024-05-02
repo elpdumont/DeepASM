@@ -171,6 +171,15 @@ echo "Exporting the dataset with features (excluding HMM) to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}.features_wo_hmm" gs://"${BUCKET}"/"${DATA_PATH}"/features_wo_hmm/features_wo_hmm_*.json
 
 
+#---------------------------------------------
+# Find the number of states that works best
+NB_STATES="20"
+sed -i '' "s#TASK_COUNT_PH#${NB_STATES}#g" "batch-jobs/find_nb_states_for_HMM.json"
+
+gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}"-1 \
+	--location "${REGION}" \
+	--config batch-jobs/find_nb_states_for_HMM.json
+
 
 #---------------------------------------------
 echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
