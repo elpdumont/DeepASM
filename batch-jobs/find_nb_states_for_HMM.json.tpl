@@ -13,21 +13,25 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "run_hmm_and_derive_features.py"]
+              "commands": ["python", "find_nb_states_for_HMM.py"]
             }
           }
         ],
+        "computeResource": {
+          "cpuMilli": 6000,
+          "memoryMib": 15000
+        },
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
-      "taskCount": 1,
+      "taskCount": TASK_COUNT_PH,
       "parallelism": 1
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "e2-highmem-8"
+        "policy": { "machineType": "n1-highmem-64"
       }}
     ]
   },
