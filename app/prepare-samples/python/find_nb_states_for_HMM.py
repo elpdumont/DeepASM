@@ -2,6 +2,7 @@
 import ast
 import json
 import logging
+import multiprocessing
 import os
 import sys
 
@@ -19,9 +20,6 @@ from sklearn.utils import check_random_state
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
-
-# Initialize random state
-rs = check_random_state(546)
 
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
@@ -46,10 +44,10 @@ n_iterations = config["HMM"]["N_ITERATIONS"]
 algorithm = config["HMM"]["ALGORITHM"]
 hmm_var = config["HMM"]["VAR_NAME"]
 
-# model_dic = {
-#     "Gaussian": GaussianHMM,
-#     "Variational Gaussian": VariationalGaussianHMM,
-# }
+# Initialize random state
+base_seed = 546  # Example value, adjust as needed
+random_seeds = [base_seed + i for i in range(n_model_loop)]
+
 
 # Retrieve Job-defined env vars
 ml_dataset = os.getenv("ML_DATASET")
@@ -109,8 +107,26 @@ def save_HMM_model_to_bucket(directory, model, short_sha, bucket, model_path, n_
     return None
 
 
-def main():
+def fit_hmm(
+    n_states, n_iterations, covariance, algorithm, reshaped_data, lengths, rs_seed
+):
+    logging.info(
+        f"Number of states: {n_states} and random seed for generation: {rs_seed}"
+    )
+    rs = check_random_state(rs_seed)
+    h = GaussianHMM(
+        n_states,
+        n_iter=n_iterations,
+        covariance_type=covariance,
+        algorithm=algorithm,
+        random_state=rs,
+    )
+    h.fit(reshaped_data, lengths)
+    score = h.score(reshaped_data)
+    return score, h
 
+
+def main():
     dataset_for_hmm = "TRAINING"
     quoted_samples = ",".join(
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]
@@ -125,23 +141,33 @@ def main():
     all_obs = np.concatenate(df["cpg_directional_fm"].tolist())
     logging.info(f"Number of CpGs to be used in training: {len(all_obs)}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
+
+    pool = multiprocessing.Pool()
+    results = []
+    for rs_seed in random_seeds:
+        results.append(
+            pool.apply_async(
+                fit_hmm,
+                args=(
+                    n_states,
+                    n_iterations,
+                    covariance,
+                    algorithm,
+                    reshaped_data,
+                    lengths,
+                    rs_seed,
+                ),
+            )
+        )
+
     best_ll = None
     best_model = None
-    for i in range(n_model_loop):
-        logging.info(f"Number of states: {n_states} and iteration: {i}")
-        h = GaussianHMM(
-            n_states,
-            n_iter=n_iterations,
-            covariance_type=covariance,
-            algorithm=algorithm,
-            random_state=rs,
-        )
-        h.fit(reshaped_data, lengths)
-        score = h.score(reshaped_data)
+    for result in results:
+        score, h = result.get()
         if best_ll is None or score > best_ll:
             best_ll = score
             best_model = h
-    logging.info("Obtain aic, bic, ll")
+
     aic, bic, ll = best_model.aic(reshaped_data), best_model.bic(reshaped_data), best_ll
     # Store values in DF
     df = pd.DataFrame(
@@ -160,7 +186,7 @@ def main():
     save_HMM_model_to_bucket(
         home_directory, best_model, short_sha, bucket, model_path, n_states
     )
-    logging.info("END OF SCRIPT")
+    logging.info(f"END OF SCRIPT for {n_states} states")
 
 
 # Start script
