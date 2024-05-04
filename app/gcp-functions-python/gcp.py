@@ -79,6 +79,32 @@ def upload_blob(storage_client, bucket_name, source_file_name, folder_path):
     logging.info(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
 
+def download_blob(storage_client, bucket_name, source_blob_name, destination_file_path):
+    """
+    Downloads a file from a specified folder within a Google Cloud Storage bucket.
+
+    Parameters:
+    - storage_client: storage.Client. The Google Cloud Storage client.
+    - bucket_name: str. The name of the bucket to download from.
+    - source_blob_name: str. The blob name in the bucket to download.
+    - destination_file_path: str. The local path where the file will be saved.
+
+    Returns:
+    None
+    """
+
+    # Get the bucket object
+    bucket = storage_client.bucket(bucket_name)
+
+    # Create a new blob object
+    blob = bucket.blob(source_blob_name)
+
+    # Download the file to the destination path
+    blob.download_to_filename(destination_file_path)
+
+    logging.info(f"File {source_blob_name} downloaded to {destination_file_path}.")
+
+
 def create_df_from_json_for_index_file(
     storage_client, bucket_name, folder_path, task_index, num_files_to_download
 ):

@@ -5,23 +5,22 @@ import logging
 import os
 import sys
 
+# from hmmlearn.vhmm import VariationalGaussianHMM
+import joblib
 import numpy as np
 import pandas as pd
 import yaml
-from gcp import upload_blob, upload_dataframe_to_bq
+from gcp import download_blob, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from hmmlearn.hmm import GaussianHMM
-from hmmlearn.vhmm import VariationalGaussianHMM
-from joblib import dump
 from scipy.stats import entropy
-from sklearn.utils import check_random_state
+
+# from sklearn.utils import check_random_state
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
 
-# Initialize random state
-rs = check_random_state(546)
 
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
@@ -42,18 +41,8 @@ samples_dic = config["SAMPLES"]
 dataset_types = list(samples_dic.keys())
 
 # HMM variables
-model_type = config["HMM"]["MODEL_TYPE"]
-n_states = config["HMM"]["N_STATES"]
-n_model_loop = config["HMM"]["N_MODEL_LOOP"]
-covariance = config["HMM"]["COVARIANCE"]
-n_iterations = config["HMM"]["N_ITERATIONS"]
-algorithm = config["HMM"]["ALGORITHM"]
 hmm_var = config["HMM"]["VAR_NAME"]
-
-model_dic = {
-    "Gaussian": GaussianHMM,
-    "Variational Gaussian": VariationalGaussianHMM,
-}
+model_name = config["HMM"]["MODEL_NAME"]
 
 # Retrieve Job-defined env vars
 ml_dataset = os.getenv("ML_DATASET")
@@ -72,35 +61,6 @@ if os.path.exists(credentials_path):
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
-
-
-def prepare_data_for_hmm(sequence):
-    """
-    Prepares a sequence of data for processing with a Hidden Markov Model (HMM).
-
-    This function ensures the input sequence is in a 2D NumPy array format required by HMM processing routines, handling both single-dimensional sequences (interpreting them as a sequence of scalar observations) and two-dimensional sequences (interpreting them as a sequence of vector observations). It also calculates the length of the sequence, which is necessary for some HMM algorithms.
-
-    Parameters:
-    - sequence (np.ndarray): The input sequence to be processed. This can be either a 1D array of scalar observations or a 2D array of vector observations, where each row represents a timestep.
-
-    Returns:
-    - sequence (np.ndarray): The input sequence reshaped into a 2D NumPy array format, with individual observations along rows.
-    - lengths (list of int): A list containing a single integer, which is the length of the input sequence. This is used by HMM algorithms that require the lengths of sequences being processed.
-
-    Raises:
-    - ValueError: If the input `sequence` has more than two dimensions, indicating it's not in an acceptable format for HMM processing.
-    """
-    if sequence.ndim == 1:
-        sequence = np.atleast_2d(sequence).T
-    elif sequence.ndim > 2:
-        raise ValueError(
-            "Sequence must be 1D (for single float sequence) or 2D (for sequence of vectors)"
-        )
-    # Determine the length of the sequence dynamically
-    sequence_length = sequence.shape[0]
-    # For a single sequence, the lengths list contains just one element: the sequence length
-    lengths = [sequence_length]
-    return sequence, lengths
 
 
 def predict_hidden_states_for_sequences(model, sequences, log_frequency=100000):
@@ -229,14 +189,17 @@ def extract_features(hidden_states_sequences):
     return np.array(features), feature_names
 
 
-def save_HMM_model_to_bucket(directory, model, short_sha, bucket, model_path):
-    file_name = directory + "/hmm_model_" + short_sha + ".joblib"
-    dump(model, file_name)
-    upload_blob(storage_client, bucket, file_name, model_path)
-    return None
-
-
 def main():
+
+    logging.info("Download model")
+    model_full_path = model_path + "/" + model_name + ".joblib"
+    download_blob(
+        storage_client,
+        bucket,
+        model_full_path,
+        home_directory + "/" + model_name + ".joblib",
+    )
+    hmm_model = joblib.load(home_directory + "/" + model_name + ".joblib")
 
     dic_data = {key: {} for key in dataset_types}
 
@@ -255,40 +218,11 @@ def main():
             dataset_name
         ]["imported"][hmm_var].apply(lambda x: ast.literal_eval(x.strip('"')))
 
-    logging.info("Creating a unique sequence for training the HMM")
-    training_seq = np.concatenate(
-        dic_data["TRAINING"]["imported"][hmm_var + "_no_string"].tolist()
-    )
-
-    logging.info("Reshaping training data")
-    reshaped_data, lengths = prepare_data_for_hmm(training_seq)
-
-    best_ll = None
-    best_model = None
-    for i in range(n_model_loop):
-        logging.info(f"Iteration: {i}")
-        h = model_dic[model_type](
-            n_states,
-            n_iter=n_iterations,
-            covariance_type=covariance,
-            algorithm=algorithm,
-            random_state=rs,
-        )  # tol=1e-4,
-        h.fit(reshaped_data, lengths)
-        score = h.score(reshaped_data)
-        logging.info(f"score: {score}")
-        if not best_ll or best_ll < best_ll:
-            best_ll = score
-            best_model = h
-
-    logging.info("Saving model in the bucket")
-    save_HMM_model_to_bucket(home_directory, best_model, short_sha, bucket, model_path)
-
-    for dataset_name in dataset_types:
+        logging.info("Creating a unique sequence for training the HMM")
         df_imported = dic_data[dataset_name]["imported"].copy(deep=True)
         logging.info(f"Computing hidden states for dataset: {dataset_name}")
         dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
-            best_model, df_imported[hmm_var + "_no_string"]
+            hmm_model, df_imported[hmm_var + "_no_string"]
         )
         logging.info(
             f"Compiling features based on the hidden state for dataset {dataset_name}"
