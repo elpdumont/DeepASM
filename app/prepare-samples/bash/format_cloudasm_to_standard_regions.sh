@@ -183,10 +183,12 @@ gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}"-1 \
 
 #---------------------------------------------
 echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
+TOTAL_TASKS="100"
+sed -i '' "s#TOTAL_TASKS_PH#${TOTAL_TASKS}#g" "batch-jobs/find_nb_states_for_HMM.json"
 
-gcloud batch jobs submit "compute-hmm-${SHORT_SHA}"-2 \
+gcloud batch jobs submit "compute-hmm-${SHORT_SHA}"-3 \
 	--location "${REGION}" \
-	--config batch-jobs/run_hmm_and_derive_features.json
+	--config batch-jobs/derive_features_from_HMM.json
 
 
 

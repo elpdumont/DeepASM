@@ -6,28 +6,29 @@
           "variables": {
             "ML_DATASET": "ML_DATASET_PH",
             "MODEL_PATH": "MODEL_PATH_PH",
-            "SHORT_SHA": "SHORT_SHA_PH"
+            "SHORT_SHA": "SHORT_SHA_PH",
+            "TOTAL_TASKS":
             }
         },
         "runnables": [
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "run_hmm_and_derive_features.py"]
+              "commands": ["python", "derive_features_from_HMM.py"]
             }
           }
         ],
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
-      "taskCount": 1,
-      "parallelism": 1
+      "taskCount": TOTAL_TASK_PH,
+      "parallelism": TOTAL_TASK_PH
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "e2-highmem-8"
+        "policy": { "machineType": "e2-highmem-16"
       }}
     ]
   },

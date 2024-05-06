@@ -10,7 +10,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import yaml
-from gcp import download_blob, upload_dataframe_to_bq
+from gcp import (
+    download_blob,
+    fetch_chunk_from_bq_as_dataframe_w_hmmvar,
+    upload_dataframe_to_bq,
+)
 from google.cloud import bigquery, storage
 from hmmlearn.hmm import GaussianHMM
 from scipy.stats import entropy
@@ -45,6 +49,8 @@ hmm_var = config["HMM"]["VAR_NAME"]
 model_name = config["HMM"]["MODEL_NAME"]
 
 # Retrieve Job-defined env vars
+BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
+TOTAL_TASKS = int(os.getenv("TOTAL_TASKS", 0))
 ml_dataset = os.getenv("ML_DATASET")
 model_path = os.getenv("MODEL_PATH")
 short_sha = os.getenv("SHORT_SHA")
@@ -191,6 +197,8 @@ def extract_features(hidden_states_sequences):
 
 def main():
 
+    logging.info(f"Batch task index: {BATCH_TASK_INDEX}")
+
     logging.info("Download model")
     model_full_path = model_path + "/" + model_name + ".joblib"
     download_blob(
@@ -201,51 +209,52 @@ def main():
     )
     hmm_model = joblib.load(home_directory + "/" + model_name + ".joblib")
 
-    dic_data = {key: {} for key in dataset_types}
+    logging.info("Downloading dataframe from BQ")
+    df = fetch_chunk_from_bq_as_dataframe_w_hmmvar(
+        ml_dataset, "features_wo_hmm", BATCH_TASK_INDEX, TOTAL_TASKS, project, hmm_var
+    )
 
-    logging.info(f"Dataset types: {dataset_types}")
-    logging.info(f"Samples dictionary: {samples_dic}")
+    logging.info(f"Number of rows: {len(df)}")
+
+    df[hmm_var + "_no_string"] = df[hmm_var].apply(
+        lambda x: ast.literal_eval(x.strip('"'))
+    )
+
+    logging.info("Creating a unique sequence for training the HMM")
+
+    logging.info("Computing hidden states")
+    df["hidden_states"] = predict_hidden_states_for_sequences(
+        hmm_model, df[hmm_var + "_no_string"]
+    )
+
+    logging.info("Compiling features based on the hidden states")
+    features, feature_names = extract_features(df["hidden_states"])
+
+    hs_features_df = pd.DataFrame(features, columns=feature_names).reset_index(
+        drop=True
+    )
+    # Round float values
+    hs_features_df = np.round(hs_features_df.astype(float), 4)
+    # Form final dataframe
+    df_export = pd.concat(
+        [df, hs_features_df],
+        axis=1,
+    )
+
+    # Drop columns for upload
+    df_export.drop([hmm_var + "_no_string", "hidden_states"], axis=1, inplace=True)
 
     for dataset_name in dataset_types:
-        logging.info(f"Importing dataset {dataset_name}")
-        quoted_samples = ",".join(
-            [f"'{sample}'" for sample in samples_dic[dataset_name]]
-        )
-        query = f"SELECT * FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL"
-        # Execute the query and store in dic
-        dic_data[dataset_name]["imported"] = bq_client.query(query).to_dataframe()
-        dic_data[dataset_name]["imported"][hmm_var + "_no_string"] = dic_data[
-            dataset_name
-        ]["imported"][hmm_var].apply(lambda x: ast.literal_eval(x.strip('"')))
-
-        logging.info("Creating a unique sequence for training the HMM")
-        df_imported = dic_data[dataset_name]["imported"].copy(deep=True)
-        logging.info(f"Computing hidden states for dataset: {dataset_name}")
-        dic_data[dataset_name]["hidden_states"] = predict_hidden_states_for_sequences(
-            hmm_model, df_imported[hmm_var + "_no_string"]
-        )
+        logging.info(f"Exporting rows relevant to the dataset {dataset_name}")
+        df_dataset = df_export[
+            df_export["sample"].isin(samples_dic[dataset_name])
+        ].copy(deep=True)
         logging.info(
-            f"Compiling features based on the hidden state for dataset {dataset_name}"
+            f"Exportind dataset to BQ and Bucket. Number of rows: {len(df_dataset)}"
         )
-        features, feature_names = extract_features(
-            dic_data[dataset_name]["hidden_states"]
-        )
-        # Use feature_names directly for column naming in the DataFrame
-        hs_features_df = pd.DataFrame(features, columns=feature_names).reset_index(
-            drop=True
-        )
-        # Round float values
-        hs_features_df = np.round(hs_features_df.astype(float), 4)
-        # Form final dataframe
-        df_export = pd.concat(
-            [df_imported, hs_features_df],
-            axis=1,
-        )
-        # Drop columns for upload
-        df_export.drop(hmm_var + "_no_string", axis=1, inplace=True)
-        logging.info("Exportind dataset to BQ and Bucket")
-        upload_dataframe_to_bq(bq_client, df_export, f"{ml_dataset}.{dataset_name}")
-    logging.info("END OF SCRIPT")
+        upload_dataframe_to_bq(bq_client, df_dataset, f"{ml_dataset}.{dataset_name}")
+
+    logging.info(f"END OF SCRIPT for batch task index: {BATCH_TASK_INDEX}")
 
 
 # Start script

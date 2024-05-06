@@ -82,26 +82,20 @@ def upload_blob(storage_client, bucket_name, source_file_name, folder_path):
 def download_blob(storage_client, bucket_name, source_blob_name, destination_file_path):
     """
     Downloads a file from a specified folder within a Google Cloud Storage bucket.
-
     Parameters:
     - storage_client: storage.Client. The Google Cloud Storage client.
     - bucket_name: str. The name of the bucket to download from.
     - source_blob_name: str. The blob name in the bucket to download.
     - destination_file_path: str. The local path where the file will be saved.
-
     Returns:
     None
     """
-
     # Get the bucket object
     bucket = storage_client.bucket(bucket_name)
-
     # Create a new blob object
     blob = bucket.blob(source_blob_name)
-
     # Download the file to the destination path
     blob.download_to_filename(destination_file_path)
-
     logging.info(f"File {source_blob_name} downloaded to {destination_file_path}.")
 
 
@@ -233,7 +227,6 @@ def upload_dataframe_to_bq(
     # Configure clustering
     if cluster_fields:
         job_config.clustering_fields = cluster_fields
-
     for attempt in range(1, 7):  # Retry up to 5 times
         try:
             job = bq_client.load_table_from_dataframe(
@@ -267,3 +260,19 @@ def upload_dataframe_to_bq(
         else:
             logging.error("Maximum retry attempts reached. Job failed.")
             raise Exception("Maximum retry attempts reached.")
+
+
+def fetch_chunk_from_bq_as_dataframe_w_hmmvar(
+    dataset_id, table_id, task_index, total_tasks, project_id, hmm_var
+):
+    client = bigquery.Client(project=project_id)
+    # Construct SQL to divide the table into chunks
+    query = f"""
+    SELECT *
+    FROM `{dataset_id}.{table_id}`
+    WHERE {hmm_var} IS NOT NULL AND MOD(ABS(FARM_FINGERPRINT(CAST(clustering_index AS STRING))), {total_tasks}) = {task_index}
+    """
+    # Start the query and wait for it to complete, then load it into a DataFrame
+    query_job = client.query(query)
+    dataframe = query_job.to_dataframe()
+    return dataframe
