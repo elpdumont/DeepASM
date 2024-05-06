@@ -39,7 +39,7 @@ FEATURE_PREP:
 HMM:
   N_STATES: 5
   MODEL_TYPE: Variational Gaussian
-  N_MODEL_LOOP: 5
+  N_MODEL_LOOP: 10
   COVARIANCE: tied
   N_ITERATIONS: 200
   ALGORITHM: viterbi
