@@ -7,7 +7,7 @@
             "ML_DATASET": "ML_DATASET_PH",
             "MODEL_PATH": "MODEL_PATH_PH",
             "SHORT_SHA": "SHORT_SHA_PH",
-            "TOTAL_TASKS":
+            "TOTAL_TASKS": "TOTAL_TASK_PH"
             }
         },
         "runnables": [
@@ -18,11 +18,15 @@
             }
           }
         ],
+        "computeResource": {
+          "cpuMilli": 4000,
+          "memoryMib": 20000
+        },
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
       "taskCount": TOTAL_TASK_PH,
-      "parallelism": TOTAL_TASK_PH
+      "parallelism": 40
     }
   ],
   "allocationPolicy": {

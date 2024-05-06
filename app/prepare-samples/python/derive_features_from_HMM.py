@@ -215,12 +215,9 @@ def main():
     )
 
     logging.info(f"Number of rows: {len(df)}")
-
     df[hmm_var + "_no_string"] = df[hmm_var].apply(
         lambda x: ast.literal_eval(x.strip('"'))
     )
-
-    logging.info("Creating a unique sequence for training the HMM")
 
     logging.info("Computing hidden states")
     df["hidden_states"] = predict_hidden_states_for_sequences(
