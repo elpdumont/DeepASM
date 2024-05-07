@@ -173,18 +173,18 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}
 
 #---------------------------------------------
 # Find the number of states that works best
-NB_STATES="20"
+NB_STATES="10"
 sed -i '' "s#TASK_COUNT_PH#${NB_STATES}#g" "batch-jobs/find_nb_states_for_HMM.json"
 
-gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}"-1 \
+gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/find_nb_states_for_HMM.json
 
 
 #---------------------------------------------
 echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
-TOTAL_TASKS="100"
-sed -i '' "s#TOTAL_TASKS_PH#${TOTAL_TASKS}#g" "batch-jobs/find_nb_states_for_HMM.json"
+TOTAL_TASKS="120"
+sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
 gcloud batch jobs submit "compute-hmm-${SHORT_SHA}"-3 \
 	--location "${REGION}" \
