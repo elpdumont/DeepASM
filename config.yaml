@@ -44,7 +44,7 @@ HMM:
   N_ITERATIONS: 200
   ALGORITHM: viterbi
   VAR_NAME: cpg_directional_fm
-  MODEL_NAME: hmm_model_4fa1c65_19states
+  MODEL_NAME: hmm_model_2af650b_8states
 
 
 SAMPLES:

@@ -26,13 +26,13 @@
         "maxRunDuration": "500000s"
       },
       "taskCount": TOTAL_TASK_PH,
-      "parallelism": 40
+      "parallelism": 80
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "e2-highmem-16"
+        "policy": { "machineType": "n1-highmem-32"
       }}
     ]
   },
