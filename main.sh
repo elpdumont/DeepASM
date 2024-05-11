@@ -9,6 +9,8 @@ source scripts/import_env_variables.sh
 # Create container images on GCP (for Python and bash)
 deploy/deploy.sh
 
+
+
 docker run -it \
 -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
 -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
@@ -126,3 +128,14 @@ JOB_NAME="run-hmm-${SHORT_SHA}"
 gcloud batch jobs submit "${JOB_NAME}" \
 	--location "${REGION}" \
 	--config jobs/run_hmm.json
+
+
+#-----------------------------------------------------------
+
+# ML: PERFORM RANDOM SEARCH FOR TREE MODELS
+
+JOB_NAME="tree-search-${SHORT_SHA}"
+
+gcloud batch jobs submit "${JOB_NAME}" \
+	--location "${REGION}" \
+	--config jobs/perform_random_search_tree.json
