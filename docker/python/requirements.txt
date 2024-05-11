@@ -6,7 +6,7 @@ dask==2024.2.1
 pandas==1.5.3
 numpy==1.25.2
 pandas-gbq==0.22.0
-sklearn==1.2.2
+scikit-learn==1.2.2
 PyYAML==6.0.1
 #logging==0.4.9.6
 #kaleido==0.2.1
