@@ -46,6 +46,11 @@ HMM:
   VAR_NAME: cpg_directional_fm
   MODEL_NAME: hmm_model_2af650b_8states
 
+ML:
+  BATCH_SIZE: 1024
+  PADDING_VALUE: 0
+  DROPOUT_RATE: 0.5
+  N_RANDOM_SEARCH: 50
 
 SAMPLES:
   TRAINING:
