@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import random
+import re
 import sys
 
 import numpy as np
@@ -122,7 +123,7 @@ def evaluate_model_for_trees(dic_data, dataset, model):
 def save_tree_model_to_bucket(
     directory, model_name, model, short_sha, bucket, model_path, storage_client
 ):
-    file_name = directory + "/" + model_name + short_sha + ".joblib"
+    file_name = directory + "/" + model_name + "_" + short_sha + ".joblib"
     # Save model locally
     dump(model, file_name)
     # Save model in bucket
@@ -166,6 +167,7 @@ def main():
     model_params = dic_model[BATCH_TASK_INDEX]
     model = model_params["model"]
     model_name = str(model)
+    model_name = re.search(r"\.(\w+)[^\.]*>$", model_name).group(1)
     grid = model_params["grid"]
     weight_name = model_params["weight_name"]
 
