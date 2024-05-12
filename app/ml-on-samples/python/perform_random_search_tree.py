@@ -16,6 +16,7 @@ from gcp import upload_dataframe_to_bq
 from google.cloud import bigquery
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
 from xgboost import XGBClassifier
 
 # Create a handler for Google Cloud Logging.
@@ -66,9 +67,10 @@ dic_model = {
         "model": XGBClassifier,
         "weight_name": "scale_pos_weight",
         "grid": {
-            "max_depth": list(range(5, 80, 5)) + [None],
+            "max_depth": list(range(1, 20, 2)) + [None],
             "n_estimators": list(range(10, 160, 10)),
-            "learning_rate": [0.001, 0.01, 0.1],
+            "eta": [0.001, 0.01, 0.1],
+            "nthread": [8],
             "min_child_weight": [1, 5, 10],
             "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],
             "colsample_bytree": [0.6, 0.8, 1.0],
@@ -84,21 +86,21 @@ random_seed = 42
 random.seed(random_seed)
 
 
-def compute_class_weight(dic_data):
+def compute_classes(dic_data):
     class_weight_dic = {"TRAINING": {}, "TRAINING_AND_VALIDATION": {}}
     for data in ["TRAINING", "TRAINING_AND_VALIDATION"]:
         labels = dic_data[data]["labels"]["asm"]
         weights = np.round(
             compute_class_weight("balanced", classes=[0, 1], y=labels), 2
         )
-        class_weight_dic[data]["class_weight"] = weights
+        class_weight_dic[data]["class_weight"] = {0: weights[0], 1: weights[1]}
         scale_pos_weight = len(labels[labels == 0]) / len(labels[labels == 1])
         class_weight_dic[data]["scale_pos_weight"] = scale_pos_weight
     return class_weight_dic
 
 
 def evaluate_model_for_trees(dic_data, dataset, model):
-    data = dic_data[dataset]["TABULAR"]
+    data = dic_data[dataset]["tabular"]
     labels = dic_data[dataset]["labels"].squeeze()
     data = np.array(data)
     predictions = model.predict(data)
@@ -118,7 +120,6 @@ def main():
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpg_directional_fm, cpgs_w_padding)
             FROM {project}.{ml_dataset}.{dataset}
             WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
-            LIMIT 10000
             """
         df = bq_client.query(query).to_dataframe()
         dic_data[dataset]["labels"] = df[["asm"]]
@@ -141,7 +142,7 @@ def main():
             [dic_data["TRAINING"][data], dic_data["VALIDATION"][data]]
         )
 
-    class_weight_dic = compute_class_weight(dic_data)
+    class_weight_dic = compute_classes(dic_data)
 
     model_params = dic_model[BATCH_TASK_INDEX]
     model = model_params["model"]
@@ -162,16 +163,13 @@ def main():
     results = []
     for idx, params in enumerate(random_hyperparameters_list):
         logging.info(f"Dictionary {idx+1}: {params}")
-
-        model = model(**weight_dic, **params)
-        model.fit(x_train, y_train)
-
+        model_w_params = model(**weight_dic, **params)
+        model_w_params.fit(x_train, y_train)
         # evaluate model on f_1 score
         sumf1, confusion, report = evaluate_model_for_trees(
-            dic_data, "VALIDATION", model
+            dic_data, "VALIDATION", model_w_params
         )
         logging.info(f"Sum of F1s: {sumf1}")
-
         # save results
         results.append({"parameters": params, "sumf1": sumf1})
 
@@ -185,7 +183,7 @@ def main():
     y_train = dic_data["TRAINING_AND_VALIDATION"]["labels"].squeeze()
     weight_dic = {weight_name: class_weight_dic["TRAINING_AND_VALIDATION"][weight_name]}
 
-    best_model = model(weight_dic, **best_hyperparameters)
+    best_model = model(**weight_dic, **best_hyperparameters)
 
     best_model.fit(x_train, y_train)
     sumf1, confusion, report = evaluate_model_for_trees(dic_data, "TESTING", best_model)
@@ -198,6 +196,11 @@ def main():
         "False Negative": confusion[1, 0],
         "True Positive": confusion[1, 1],
     }
+
+    # Change keys for bigquery
+    report["class_0"], report["class_1"] = report["0.0"], report["1.0"]
+    del report["0.0"], report["1.0"]
+
     dic_results = {
         **{"model": str(model), "sum_f1": sumf1},
         **confusion_dict,
