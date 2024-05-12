@@ -122,7 +122,7 @@ def evaluate_model_for_trees(dic_data, dataset, model):
 def save_tree_model_to_bucket(
     directory, model_name, model, short_sha, bucket, model_path, storage_client
 ):
-    file_name = directory + "/model_name_" + short_sha + ".joblib"
+    file_name = directory + "/" + model_name + short_sha + ".joblib"
     # Save model locally
     dump(model, file_name)
     # Save model in bucket
@@ -235,7 +235,7 @@ def main():
 
     dic_results = {
         **{
-            "model": str(model),
+            "model": model_name,
             "short_sha": short_sha,
             "n_random_search": n_random_search,
             "sum_f1": sumf1,
