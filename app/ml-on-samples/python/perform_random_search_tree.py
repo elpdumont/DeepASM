@@ -12,8 +12,9 @@ import pandas as pd
 
 # from pandas.io.json import json_normalize
 import yaml
-from gcp import upload_dataframe_to_bq
-from google.cloud import bigquery
+from gcp import upload_blob, upload_dataframe_to_bq
+from google.cloud import bigquery, storage
+from joblib import dump
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
@@ -27,6 +28,8 @@ with open("config.yaml", "r") as file:
 
 # Accessing GCP configuration
 project = config["GCP"]["PROJECT"]
+bucket = config["GCP"]["BUCKET"]
+
 # samples_dic = config["SAMPLES"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
@@ -35,7 +38,10 @@ n_random_search = config["ML"]["N_RANDOM_SEARCH"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
+model_path = os.getenv("MODEL_PATH")
 ml_dataset = os.getenv("ML_DATASET")
+short_sha = os.getenv("SHORT_SHA")
+home_directory = os.path.expanduser("~")
 
 # Define the path to the JSON credentials file
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
@@ -50,6 +56,8 @@ if os.path.exists(credentials_path):
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project)
+storage_client = storage.Client(project=project)
+
 
 dic_model = {
     0: {
@@ -111,6 +119,17 @@ def evaluate_model_for_trees(dic_data, dataset, model):
     return sum_f1, confusion, report
 
 
+def save_tree_model_to_bucket(
+    directory, model_name, model, short_sha, bucket, model_path, storage_client
+):
+    file_name = directory + "/model_name_" + short_sha + ".joblib"
+    # Save model locally
+    dump(model, file_name)
+    # Save model in bucket
+    upload_blob(storage_client, bucket, file_name, model_path)
+    return None
+
+
 def main():
     dic_data = {dataset: {} for dataset in datasets}
 
@@ -146,6 +165,7 @@ def main():
 
     model_params = dic_model[BATCH_TASK_INDEX]
     model = model_params["model"]
+    model_name = str(model)
     grid = model_params["grid"]
     weight_name = model_params["weight_name"]
 
@@ -186,6 +206,18 @@ def main():
     best_model = model(**weight_dic, **best_hyperparameters)
 
     best_model.fit(x_train, y_train)
+
+    # Save model
+    save_tree_model_to_bucket(
+        home_directory,
+        model_name,
+        best_model,
+        short_sha,
+        bucket,
+        model_path,
+        storage_client,
+    )
+
     sumf1, confusion, report = evaluate_model_for_trees(dic_data, "TESTING", best_model)
     logging.info(f"GENERALIZATION ERROR, {sumf1}, {confusion}, {report}")
 
@@ -202,10 +234,15 @@ def main():
     del report["0.0"], report["1.0"]
 
     dic_results = {
-        **{"model": str(model), "sum_f1": sumf1},
+        **{
+            "model": str(model),
+            "short_sha": short_sha,
+            "n_random_search": n_random_search,
+            "sum_f1": sumf1,
+            "hyper_parameters": str(best_hyperparameters),
+        },
         **confusion_dict,
         **report,
-        **best_hyperparameters,
     }
 
     results_df = pd.DataFrame([dic_results])  # The dictionary is put inside a list
