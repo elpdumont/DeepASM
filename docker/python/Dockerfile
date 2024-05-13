@@ -1,5 +1,6 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10.12-slim
+#FROM python:3.10.12-slim
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 
 # Create a non-root user
 RUN adduser --disabled-password --gecos '' appuser

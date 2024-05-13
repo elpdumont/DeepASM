@@ -65,19 +65,35 @@ if os.path.exists(credentials_path):
     # Assuming 'project' is already defined somewhere in your script
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
     samples_dataset = "samples_250bp"
+    BATCH_TASK_INDEX = 0
+    model_path = "samples_250bp/models"
+    ml_dataset = "ml_250bp_3"
+    short_sha = "test"
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project)
 storage_client = storage.Client(project=project)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    f"cuda:{BATCH_TASK_INDEX}" if torch.cuda.is_available() else "cpu"
+)
 
 
 class TransformerModel(nn.Module):
     def __init__(
-        self, d_model, nhead, dim_feedforward, max_seq_length, num_layers, dropout
+        self,
+        d_model,
+        nhead,
+        dim_feedforward,
+        max_sequence_length,
+        num_layers,
+        dropout,
+        device,
+        **kwargs,
     ):
         self.d_model = d_model
+        self.device = device
+        # self.max_sequence_length = max_sequence_length
         super(TransformerModel, self).__init__()
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -90,11 +106,12 @@ class TransformerModel(nn.Module):
             self.encoder_layer, num_layers=num_layers
         )
         self.position_embeddings = nn.Embedding(
-            max_seq_length, d_model
+            max_sequence_length, d_model
         )  # Prepare position embeddings
         self.fc = nn.Linear(d_model, 1)
 
     def forward(self, x):
+        x = x.to(self.device)
         x = x.unsqueeze(-1).repeat(
             1, 1, self.d_model
         )  # Extend features to match d_model
@@ -110,6 +127,7 @@ class TransformerModel(nn.Module):
         return x.view(-1)
 
     def predict(self, x, threshold=0.5):
+        x = x.to(self.device)
         logits = self.forward(x)
         predictions = torch.sigmoid(
             logits
@@ -121,7 +139,13 @@ class TransformerModel(nn.Module):
 
 class RNNModel(nn.Module):
     def __init__(
-        self, input_size, hidden_size, output_size, max_sequence_length, dropout_rate
+        self,
+        input_size,
+        hidden_size,
+        output_size,
+        max_sequence_length,
+        dropout_rate,
+        **kwargs,
     ):
         super(RNNModel, self).__init__()
         self.max_sequence_length = max_sequence_length
@@ -130,11 +154,14 @@ class RNNModel(nn.Module):
             hidden_size=hidden_size,
             batch_first=True,
             dropout=dropout_rate,
+            device="cpu",
         )
+        self.to(device)
         self.dropout = nn.Dropout(dropout_rate)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
+        x.to(self.device)
         # Check input length
         if x.shape[1] != self.max_sequence_length:
             raise ValueError(
@@ -145,18 +172,16 @@ class RNNModel(nn.Module):
             -1
         )  # Increase feature dimension from (batch, seq_len) to (batch, seq_len, features)
         output, _ = self.rnn(x)
-
         # Applying dropout to the output of the LSTM
         output = self.dropout(
             output[:, -1, :]
         )  # Applying dropout to the last output of the sequence
-
         # Pass the last output to the fully connected layer
         logits = self.fc(output)
-
         return logits.view(-1)  # Flatten the output to shape (batch,)
 
     def predict(self, x, threshold=0.5):
+        x = x.to(self.device)
         logits = self.forward(x)
         predictions = torch.sigmoid(
             logits
@@ -166,53 +191,55 @@ class RNNModel(nn.Module):
         ).float()  # Threshold the probabilities to get binary predictions
 
 
+def create_model(model_number, **kwargs):
+    # logging.info(kwargs)
+    if model_number == 0:
+        return TransformerModel(**kwargs)
+    elif model_number == 1:
+        return RNNModel(**kwargs)
+    else:
+        raise ValueError("Unsupported model number")
+
+
 def evaluate_model(model, dataloader, criterion, device):
     model = model.to(device)
     model.eval()  # Set the model to evaluation mode
-
     total_loss = 0
     all_preds = []
     all_targets = []
-
     with torch.no_grad():
         for data, targets in dataloader:
             data, targets = data.to(device), targets.to(device)
-
             # Forward pass
             outputs = model.forward(data)
             preds = model.predict(data)
             loss = criterion(outputs, targets)
-
             # Update lists
             all_preds.extend(preds.view(-1).cpu().numpy())
             all_targets.extend(targets.view(-1).cpu().numpy())
-
             # Update loss
             total_loss += loss.item() * data.size(0)
-
     # Calculate the average loss
     average_loss = total_loss / len(dataloader.dataset)
     logging.info(f"Average loss: {average_loss}")
-
     # Generate the classification report
     report = classification_report(all_targets, all_preds, output_dict=True, digits=4)
     confusion = confusion_matrix(all_targets, all_preds)
-
     # Return the report as a dictionary for further analysis if needed
     return report["0.0"]["f1-score"] + report["1.0"]["f1-score"], report, confusion
 
 
-def train_seq_model(model, num_epochs, training_data_dataloader, optimizer, criterion):
+def train_seq_model(
+    model, num_epochs, training_data_dataloader, optimizer, criterion, device
+):
     for epoch in range(num_epochs):
         total_loss = 0
         num_batches = 0
         for data, targets in training_data_dataloader:
             data, targets = data.to(device), targets.to(device)
-
             # Training Transformer
             model.zero_grad()
             outputs = model(data)
-
             # Compute loss
             loss = criterion(outputs, targets)
             loss.backward()
@@ -220,19 +247,19 @@ def train_seq_model(model, num_epochs, training_data_dataloader, optimizer, crit
             total_loss += loss.item()
             num_batches += 1
         average_loss = total_loss / num_batches
-
-        logging.info(f"Epoch {epoch+1}, Average loss: {average_loss:.4f}")
+        if (epoch + 1) % 10 == 0:
+            logging.info(f"Epoch {epoch+1}, Average loss: {average_loss:.4f}")
     logging.info("End of model training")
     return None
 
 
 dic_model = {
     0: {
-        "model": TransformerModel,
+        "model": "TransformerModel",
         "weight_name": "class_weight",
         "grid": {
             "d_model": [8, 16, 32, 64, 128],  # Dimensionality of the model
-            "nhead": [2, 4, 6, 8],  # Number of heads in the multi-head attention models
+            "nhead": [2, 4, 8],  # Number of heads in the multi-head attention models
             "num_layers": [
                 2,
                 4,
@@ -246,33 +273,35 @@ dic_model = {
                 128,
                 256,
             ],  # Size of the feedforward model in nn.TransformerEncoder
-            "learning_rate": [
-                0.0001,
-                0.001,
-                0.01,
-                0.1,
-            ],  # Learning rate for the optimizer
-            "num_epochs": [n_epochs],  # Number of training epochs
+            # Learning rate for the optimizer
             "dropout": [dropout_rate],
-            "weight_decay": [0.001],
-        },
-    },
-    1: {
-        "model": RNNModel,
-        "weight_name": "class_weight",
-        "grid": {
-            "input_size": [1],
-            "hidden_size": [8, 16, 32, 64, 128],
             "learning_rate": [
                 0.0001,
                 0.001,
                 0.01,
                 0.1,
             ],
+            "num_epochs": [n_epochs],
+            "weight_decay": [0.001],  # Number of training epochs
+        },
+    },
+    1: {
+        "model": "RNNModel",
+        "weight_name": "class_weight",
+        "grid": {
+            "input_size": [1],
+            "hidden_size": [8, 16, 32, 64, 128],
             "output_size": [1],
             "dropout_rate": [dropout_rate],
             "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],
+            "learning_rate": [
+                0.0001,
+                0.001,
+                0.01,
+                0.1,
+            ],
             "num_epochs": [n_epochs],
+            "weight_decay": [0.001],
         },
     },
 }
@@ -284,16 +313,19 @@ random_seed = 42
 random.seed(random_seed)
 
 
-def compute_classes(dic_data):
+def compute_classes(dic_data, device):
     class_weight_dic = {"TRAINING": {}, "TRAINING_AND_VALIDATION": {}}
     for data in ["TRAINING", "TRAINING_AND_VALIDATION"]:
-        labels = dic_data[data]["labels"]["asm"]
+        labels = dic_data[data]["labels"]
         weights = np.round(
             compute_class_weight("balanced", classes=[0, 1], y=labels), 2
         )
         class_weight_dic[data]["class_weight"] = {0: weights[0], 1: weights[1]}
         scale_pos_weight = len(labels[labels == 0]) / len(labels[labels == 1])
         class_weight_dic[data]["scale_pos_weight"] = scale_pos_weight
+        class_weight_dic[data]["weight_tensor"] = torch.tensor(
+            weights, dtype=torch.float32
+        ).to(device)
     return class_weight_dic
 
 
@@ -302,7 +334,7 @@ def save_1d_model_to_bucket(
 ):
     file_name = directory + "/" + model_name + "_" + short_sha + ".pth"
     # Save model locally
-    torch.save(model.state_dict(), "model.pth")
+    torch.save(model.state_dict(), file_name)
     # Save model in bucket
     upload_blob(storage_client, bucket, file_name, model_path)
     return None
@@ -318,7 +350,7 @@ def main():
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpgs_w_padding)
             FROM {project}.{ml_dataset}.{dataset}
             WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
-            LIMIT 1000
+            LIMIT 10000
             """
         df = bq_client.query(query).to_dataframe()
         dic_data[dataset]["labels"] = df["asm"]
@@ -347,7 +379,6 @@ def main():
         dic_data[dataset]["1d_seq"] = pd.concat(
             [dic_data[dataset]["1d_seq"], pd.Series([zero_sequence])], ignore_index=True
         )
-
         # Assuming you need to add a corresponding new label
         dic_data[dataset]["labels"] = pd.concat(
             [dic_data[dataset]["labels"], pd.Series([0])], ignore_index=True
@@ -357,17 +388,14 @@ def main():
         logging.info(f"Processing Data Loader for: {dataset}")
         sequences = [list(row) for row in dic_data[dataset]["1d_seq"]]
         labels = list(dic_data[dataset]["labels"])
-
         # Convert sequences to tensors and pad them
         padded_sequences = torch.nn.utils.rnn.pad_sequence(
             [torch.tensor(s) for s in sequences],
             batch_first=True,
             padding_value=padding_value,
         )
-
         # Convert labels to a tensor
         labels = torch.tensor(labels, dtype=torch.float32)
-
         # Create DataLoader for batch processing
         data = TensorDataset(padded_sequences, labels)
         dic_data[dataset]["dataloader"] = DataLoader(
@@ -375,31 +403,38 @@ def main():
         )
 
     logging.info("Computing class weights")
-    class_weight_dic = compute_classes(dic_data)
+    class_weight_dic = compute_classes(dic_data, device)
 
     logging.info("Defining criterion")
     criterion = nn.BCEWithLogitsLoss(
         pos_weight=class_weight_dic["TRAINING"]["weight_tensor"][1]
     )
 
-    model_params = dic_model[BATCH_TASK_INDEX]
-    model = model_params["model"]
-    model_name = str(model)
-    model_name = re.search(r"\.(\w+)[^\.]*>$", model_name).group(1)
-    grid = model_params["grid"]
-    weight_name = model_params["weight_name"]
-
-    weight_dic = {weight_name: class_weight_dic["TRAINING"][weight_name]}
+    model_info = dic_model[BATCH_TASK_INDEX]
+    # model = model_params["model"]
+    model_name = model_info["model"]
+    # model_name = re.search(r"\.(\w+)[^\.]*>$", model_name).group(1)
+    model_grid = model_info["grid"]
 
     random_hyperparameters_list = []
     for _ in range(n_random_search):
-        random_params = {key: random.choice(value) for key, value in grid.items()}
-        random_hyperparameters_list.append(random_params)
+        random_model_params = {
+            key: random.choice(value) for key, value in model_grid.items()
+        }
+        random_hyperparameters_list.append(
+            {
+                **random_model_params,
+                **{"max_sequence_length": max_sequence_length, "device": device},
+            }
+        )
 
     results = []
     for idx, params in enumerate(random_hyperparameters_list):
-        logging.info(f"Dictionary {idx+1}: {params}")
-        model_w_params = model(**params)
+        logging.info(f"Dictionary {idx+1}: {params} for model {model_name}")
+        model_w_params = create_model(
+            BATCH_TASK_INDEX,
+            **params,
+        )
         optimizer = torch.optim.AdamW(
             model_w_params.parameters(),
             lr=params["learning_rate"],
@@ -407,10 +442,11 @@ def main():
         )
         train_seq_model(
             model_w_params,
-            n_epochs,
+            params["num_epochs"],
             dic_data["TRAINING"]["dataloader"],
             optimizer,
             criterion,
+            device,
         )
         # evaluate model on f_1 score
         sumf1, report, confusion = evaluate_model(
@@ -422,13 +458,23 @@ def main():
 
     # get the best hyperparameters
     best_hyperparameters = max(results, key=lambda x: x["sumf1"])["parameters"]
-    logging.info(f"Best hyperparameters: {best_hyperparameters}")
+    logging.info(f"Best hyperparameters: {best_hyperparameters} for model {model_name}")
     # del best_hyperparameters['sumf1']
 
     # Retrain model on training and validation
-    weight_dic = {weight_name: class_weight_dic["TRAINING_AND_VALIDATION"][weight_name]}
+    criterion = nn.BCEWithLogitsLoss(
+        pos_weight=class_weight_dic["TRAINING_AND_VALIDATION"]["weight_tensor"][1]
+    )
 
-    best_model = model(**best_hyperparameters)
+    best_model = create_model(
+        BATCH_TASK_INDEX,
+        **best_hyperparameters,
+    )
+    optimizer = torch.optim.AdamW(
+        best_model.parameters(),
+        lr=best_hyperparameters["learning_rate"],
+        weight_decay=best_hyperparameters["weight_decay"],
+    )
 
     train_seq_model(
         best_model,
@@ -436,6 +482,7 @@ def main():
         dic_data["TRAINING_AND_VALIDATION"]["dataloader"],
         optimizer,
         criterion,
+        device,
     )
 
     # Save model
@@ -470,6 +517,7 @@ def main():
         **{
             "model": model_name,
             "short_sha": short_sha,
+            "n_random_search": n_random_search,
             "sum_f1": sumf1,
             "hyper_parameters": str(best_hyperparameters),
         },

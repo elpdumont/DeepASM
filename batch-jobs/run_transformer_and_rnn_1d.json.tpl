@@ -19,10 +19,10 @@
         ],
         "computeResource": {
           "cpuMilli": 10000,
-          "memoryMib": 80000
+          "memoryMib": 30000
         },
         "maxRetryCount": 0,
-        "maxRunDuration": "1200000s"
+        "maxRunDuration": "12000000s"
       },
       "taskCount": 2,
       "parallelism": 2
@@ -31,7 +31,8 @@
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-32"
+        "installGpuDrivers": true,
+        "policy": { "machineType": "g2-standard-24"
       }}
     ]
   },
