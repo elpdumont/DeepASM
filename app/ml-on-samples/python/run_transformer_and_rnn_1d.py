@@ -353,7 +353,6 @@ def main():
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpgs_w_padding)
             FROM {project}.{ml_dataset}.{dataset}
             WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
-            LIMIT 10000
             """
         df = bq_client.query(query).to_dataframe()
         dic_data[dataset]["labels"] = df["asm"]
