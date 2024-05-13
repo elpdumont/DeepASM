@@ -20,7 +20,7 @@ us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
 docker run -it \
 -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
 -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
-us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"b6e09ad" \
+us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"3d08d96" \
 /bin/bash
 
 
@@ -139,6 +139,6 @@ gcloud batch jobs submit "tree-search-${SHORT_SHA}-2" \
 	--config batch-jobs/perform_random_search_tree.json
 
 
-gcloud batch jobs submit "transformer-${SHORT_SHA}-1" \
+gcloud batch jobs submit "transformer-${SHORT_SHA}-2" \
 	--location "${REGION}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json

@@ -6,7 +6,8 @@ import json
 import logging
 import os
 import random
-import re
+
+# import re
 import sys
 
 import numpy as np
@@ -145,18 +146,20 @@ class RNNModel(nn.Module):
         output_size,
         max_sequence_length,
         dropout_rate,
+        device,
         **kwargs,
     ):
+        self.device = device
         super(RNNModel, self).__init__()
+        self.to(device)
         self.max_sequence_length = max_sequence_length
         self.rnn = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
             batch_first=True,
             dropout=dropout_rate,
-            device="cpu",
+            device=device,
         )
-        self.to(device)
         self.dropout = nn.Dropout(dropout_rate)
         self.fc = nn.Linear(hidden_size, output_size)
 
@@ -431,15 +434,15 @@ def main():
     results = []
     for idx, params in enumerate(random_hyperparameters_list):
         logging.info(f"Dictionary {idx+1}: {params} for model {model_name}")
-        model_w_params = create_model(
-            BATCH_TASK_INDEX,
-            **params,
-        )
+        model_w_params = create_model(BATCH_TASK_INDEX, **params)
+        model_w_params = model_w_params.to(device)
+        logging.info("Defining optimizer")
         optimizer = torch.optim.AdamW(
             model_w_params.parameters(),
             lr=params["learning_rate"],
             weight_decay=params["weight_decay"],
         )
+        logging.info("Start training...")
         train_seq_model(
             model_w_params,
             params["num_epochs"],
@@ -448,7 +451,7 @@ def main():
             criterion,
             device,
         )
-        # evaluate model on f_1 score
+        logging.info("Evaluate model on f_1 score")
         sumf1, report, confusion = evaluate_model(
             model_w_params, dic_data["VALIDATION"]["dataloader"], criterion, device
         )
@@ -466,10 +469,8 @@ def main():
         pos_weight=class_weight_dic["TRAINING_AND_VALIDATION"]["weight_tensor"][1]
     )
 
-    best_model = create_model(
-        BATCH_TASK_INDEX,
-        **best_hyperparameters,
-    )
+    best_model = create_model(BATCH_TASK_INDEX, **best_hyperparameters)
+    best_model = best_model.to(device)
     optimizer = torch.optim.AdamW(
         best_model.parameters(),
         lr=best_hyperparameters["learning_rate"],
