@@ -35,7 +35,7 @@ bucket = config["GCP"]["BUCKET"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
 # ML variables
-n_random_search = config["ML"]["N_RANDOM_SEARCH"]
+n_random_search = config["ML"]["N_RANDOM_SEARCH_TREE"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))

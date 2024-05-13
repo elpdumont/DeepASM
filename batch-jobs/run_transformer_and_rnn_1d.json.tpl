@@ -13,7 +13,7 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "perform_random_search_tree.py"]
+              "commands": ["python", "run_transformer_and_rnn_1d.py"]
             }
           }
         ],
@@ -22,7 +22,7 @@
           "memoryMib": 80000
         },
         "maxRetryCount": 0,
-        "maxRunDuration": "60000s"
+        "maxRunDuration": "1200000s"
       },
       "taskCount": 2,
       "parallelism": 2
