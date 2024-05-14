@@ -617,6 +617,7 @@ def main():
         "nb_reads",
         "nb_cpg_found",
         "asm",
+        "asm_not_corrected",
         "approx_asm",
     ]:
         df[var] = df[var].astype(pd.Int64Dtype())
