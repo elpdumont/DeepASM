@@ -13,6 +13,7 @@ COPY config.yaml /app
 
 # Copy the python scripts
 COPY /app/gcp-functions-python /app
+COPY /app/asm-functions-python /app
 COPY /app/prepare-samples/python /app
 COPY /app/ml-on-samples/python /app
 

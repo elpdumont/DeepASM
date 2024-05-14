@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import yaml
-from evaluate_asm_in_regions_w_snp import find_asm, find_max_consecutive_positions
+from asm import find_asm, find_max_consecutive_positions
 from gcp import create_df_from_json_for_index_file, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity

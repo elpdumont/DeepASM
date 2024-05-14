@@ -111,8 +111,9 @@ gcloud batch jobs submit "evaluate-asm-${SHORT_SHA}" \
 
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.asm_flagged")
 nb_regions_w_asm=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.asm_flagged WHERE asm = 1")
+nb_regions_w_asm_not_corrected=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.asm_flagged WHERE asm_not_corrected = 1")
 
-echo "Evaluated ${nb_regions} regions, of which only ${nb_regions_w_asm} have ASM"
+echo "Evaluated ${nb_regions} regions, of which only ${nb_regions_w_asm} have ASM (Wilcoxon Corrected) and ${nb_regions_w_asm_not_corrected} have ASM (Wilcoxon NOT corrected)"
 
 # echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
 
@@ -163,7 +164,8 @@ bq query \
             ANY_VALUE(total_sig_cpgs) AS total_sig_cpgs,
             ANY_VALUE(consecutive_sig_cpgs) AS consecutive_sig_cpgs,
             ANY_VALUE(read_asm_effect) AS read_asm_effect,
-            ANY_VALUE(asm) AS asm
+            ANY_VALUE(asm) AS asm,
+            ANY_VALUE(asm_not_corrected) AS asm_not_corrected
         FROM ${SAMPLES_DATASET}.asm_flagged
         GROUP BY sample, chr, clustering_index, region_inf, region_sup
         HAVING COUNT(*) = 1
