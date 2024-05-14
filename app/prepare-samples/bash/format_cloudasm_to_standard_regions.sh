@@ -114,7 +114,7 @@ nb_regions_w_asm=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATA
 
 echo "Evaluated ${nb_regions} regions, of which only ${nb_regions_w_asm} have ASM"
 
-echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
+# echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
 
 
 # bq query \
@@ -171,12 +171,7 @@ bq query \
     SELECT
         c.*,
         p.asm,
-        CASE
-            WHEN p.asm IS NULL then NULL
-            WHEN p.asm = 1 AND p.wilcoxon_pvalue < ${MAX_P_VALUE} THEN 1
-            WHEN p.asm = 0 THEN 0
-            ELSE NULL
-        END AS asm_not_corrected,
+        p.asm_not_corrected,
         p.wilcoxon_pvalue,
         p.corrected_wilcoxon_pvalue,
         p.total_sig_cpgs,

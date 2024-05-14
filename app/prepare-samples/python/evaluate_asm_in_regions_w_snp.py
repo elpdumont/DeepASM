@@ -146,13 +146,14 @@ def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
 
 def find_asm(
     x,
+    wilcoxon_to_use,
     max_p_value,
     min_nb_cpg_same_direction,
     min_nb_consecutive_cpg_same_direction,
     min_asm_region_effect,
 ):
     if (
-        x["corrected_wilcoxon_pvalue"] <= max_p_value
+        x[wilcoxon_to_use] <= max_p_value
         and abs(x["read_asm_effect"]) >= min_asm_region_effect
         and x["consecutive_sig_cpgs"] >= min_nb_consecutive_cpg_same_direction
         and x["total_sig_cpgs"] >= min_nb_cpg_same_direction
@@ -208,6 +209,19 @@ def main():
     df["asm"] = df.apply(
         lambda x: find_asm(
             x,
+            "corrected_wilcoxon_pvalue",
+            max_p_value,
+            min_nb_cpg_same_direction,
+            min_nb_consecutive_cpg_same_direction,
+            min_asm_region_effect,
+        ),
+        axis=1,
+    )
+
+    df["asm_not_corrected"] = df.apply(
+        lambda x: find_asm(
+            x,
+            "wilcoxon_pvalue",
             max_p_value,
             min_nb_cpg_same_direction,
             min_nb_consecutive_cpg_same_direction,
@@ -233,6 +247,7 @@ def main():
                 "total_sig_cpgs",
                 "consecutive_sig_cpgs",
                 "asm",
+                "asm_not_corrected",
             ]
         ],
         f"{samples_dataset}.asm_flagged",

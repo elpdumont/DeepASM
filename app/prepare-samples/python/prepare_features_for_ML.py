@@ -443,11 +443,12 @@ def generate_feature_arrays(
     # Approximate ASM calculation
     approx_asm = find_asm(
         {
-            "corrected_wilcoxon_pvalue": wilcoxon_p_value,
+            "wilcoxon_pvalue": wilcoxon_p_value,
             "read_asm_effect": reads_asm_effect,
             "consecutive_sig_cpgs": consecutive_sig_cpgs,
             "total_sig_cpgs": total_sig_cpgs,
         },
+        "wilcoxon_pvalue",
         max_p_value,
         min_nb_cpg_same_direction,
         min_nb_consecutive_cpg_same_direction,
