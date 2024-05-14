@@ -454,7 +454,7 @@ def generate_feature_arrays(
         min_nb_consecutive_cpg_same_direction,
         min_asm_region_effect,
     )
-
+    reads_sorted_by_fm_for_2d = []
     if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
         if sort_reads_randomly:
             # Randomly sample profiles if more are available than the minimum required
