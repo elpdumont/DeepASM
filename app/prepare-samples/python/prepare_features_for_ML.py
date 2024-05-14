@@ -38,7 +38,6 @@ vars_to_remove = config["VARS_TO_REMOVE"]
 dic_vars_to_keep = config["VARS_TO_KEEP"]
 vars_to_keep = list(dic_vars_to_keep.keys())
 
-categorical_vars = config["CATEGORICAL_VARS"]
 categorical_vars_ohe = config["CAT_VARS_OHE"]
 
 # Genomic variables
@@ -228,25 +227,25 @@ def expand_array_elements(df, column_name):
         )
 
 
-def compute_asm_effect_and_wilcoxon_pvalue(row):
+def compute_asm_effect_and_wilcoxon_pvalue(high_fm_reads, low_fm_reads):
     # Obtain the fractional methylation of reads based on their tag ref or alt
-    ref_values = [item["ref"] for item in row if item["ref"] is not None]
-    alt_values = [item["alt"] for item in row if item["alt"] is not None]
+    high_fm_reads_cpg_meth = [item["cpg_meth"] for item in high_fm_reads]
+    low_fm_reads_cpg_meth = [item["cpg_meth"] for item in low_fm_reads]
     # Ensure there are enough samples to compute the test
-    if len(ref_values) == 0 or len(alt_values) == 0:
-        raise ValueError(
-            "Ref and/or Alt values are empty after filtering None. Cannot perform statistical test."
-        )
     try:
-        result = stats.mannwhitneyu(ref_values, alt_values, alternative="two-sided")
+        result = stats.mannwhitneyu(
+            high_fm_reads_cpg_meth, low_fm_reads_cpg_meth, alternative="two-sided"
+        )
         p_value = np.round(result.pvalue, 5)
     # If the ref and alt datasets are equal or one is included in the other one:
     except ValueError:
         p_value = 1
     read_asm_effect = np.round(
-        sum(alt_values) / len(alt_values) - sum(ref_values) / len(ref_values), 5
+        sum(high_fm_reads_cpg_meth) / len(high_fm_reads_cpg_meth)
+        - sum(low_fm_reads_cpg_meth) / len(low_fm_reads_cpg_meth),
+        5,
     )
-    return {"read_asm_effect": read_asm_effect, "wilcoxon_pvalue": p_value}
+    return read_asm_effect, p_value
 
 
 def max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
@@ -322,30 +321,18 @@ def find_asm(
     return 0
 
 
-def generate_feature_arrays(
-    row,
-    min_nb_reads_in_sequence,
-    min_fraction_of_nb_cpg_in_read,
-    sort_reads_randomly,
-    nb_cpg_for_padding,
+def sort_reads_by_fm(
+    reads, nb_half_reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
 ):
-    reads = row["reads"]
-    nb_half_reads = min_nb_reads_in_sequence // 2
-    nb_cpg_found = int(row["nb_cpg_found"])
-    # print(f"nb_cpg_found: {nb_cpg_found}")
-    # print(f"{int(np.round(math.ceil(min_fraction_of_nb_cpg_in_read * nb_cpg_found)))}")
-    # Obtain the reads that have enough CpGs
     reads_w_enough_cpgs = [
         read_info
         for read_info in reads
         if len(read_info["cpg_pos"])
         >= int(math.ceil(min_fraction_of_nb_cpg_in_read * nb_cpg_found))
     ]
-    # Return None if we do not have enough reads
     if len(reads_w_enough_cpgs) < min_nb_reads_in_sequence:
         # print("Returning None")
-        return pd.Series([None, None])
-    # Ensure the data type of each dictionary is correct
+        return None
     for read in reads_w_enough_cpgs:
         # Convert 'fm' to float
         read["fm"] = float(read["fm"])
@@ -357,6 +344,39 @@ def generate_feature_arrays(
     reads_sorted_by_fm = sorted(
         reads_w_enough_cpgs, key=lambda d: d["fm"], reverse=True
     )
+    return reads_sorted_by_fm
+
+
+def divide_sorted_reads_in_two(reads_sorted_by_fm):
+    middle_index = len(reads_sorted_by_fm) // 2
+    if len(reads_sorted_by_fm) % 2 != 0:
+        middle_index += 1
+    high_fm = reads_sorted_by_fm[:middle_index]
+    low_fm = reads_sorted_by_fm[middle_index:]
+    return low_fm, high_fm
+
+
+def generate_feature_arrays(
+    row,
+    min_nb_reads_in_sequence,
+    min_fraction_of_nb_cpg_in_read,
+    sort_reads_randomly,
+    nb_cpg_for_padding,
+):
+    reads = row["reads"]
+    nb_half_reads = min_nb_reads_in_sequence // 2
+    nb_cpg_found = int(row["nb_cpg_found"])
+    reads_sorted_by_fm = sort_reads_by_fm(
+        reads, nb_half_reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
+    )
+    if reads_sorted_by_fm is None:
+        return pd.Series([None, None])
+
+    low_fm_reads, high_fm_reads = divide_sorted_reads_in_two(reads_sorted_by_fm)
+    reads_asm_effect, wilcoxon_p_value = compute_asm_effect_and_wilcoxon_pvalue(
+        high_fm_reads, low_fm_reads
+    )
+
     # Pick reads at random if variable is set to true and there are more reads than what we need
     if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
         if sort_reads_randomly:

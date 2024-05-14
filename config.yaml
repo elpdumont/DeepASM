@@ -94,27 +94,6 @@ VARS_TO_KEEP:
   region_inf: INTEGER
   region_sup: INTEGER
 
-VARS_TO_NORMALIZE:
-  - region_nb_cpg
-  - nb_cpg_found
-  - nb_reads
-  - encode_ChiP_V2
-  - tf_motifs
-  - cpg_cov_kd
-  - read_fm_kd
-  - cpg_fm_kd
-  - cpg_dist_kd
-  - std_read_fm
-  - mean_read_fm
-  - std_cpg_fm
-  - mean_cpg_fm
-  - std_cpg_cov
-  - mean_cpg_cov
-  - std_cpg_dist
-  - mean_cpg_dist
-
-CATEGORICAL_VARS:
-  - chr
 
 CAT_VARS_OHE:
   - chr
