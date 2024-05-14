@@ -261,7 +261,7 @@ dic_model = {
         "model": "TransformerModel",
         "weight_name": "class_weight",
         "grid": {
-            "d_model": [8, 16, 32, 64],  # Dimensionality of the model
+            "d_model": [8, 16, 32],  # Dimensionality of the model
             "nhead": [2, 4, 8],  # Number of heads in the multi-head attention models
             "num_layers": [
                 2,
@@ -271,6 +271,7 @@ dic_model = {
                 32,
             ],  # Number of sub-encoder-layers in the transformer
             "dim_feedforward": [
+                16,
                 32,
                 64,
                 128,
@@ -293,7 +294,7 @@ dic_model = {
         "weight_name": "class_weight",
         "grid": {
             "input_size": [1],
-            "hidden_size": [4, 8, 16, 32, 64, 128],
+            "hidden_size": [8, 16, 32, 64, 128],
             "output_size": [1],
             "dropout_rate": [dropout_rate],
             "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],

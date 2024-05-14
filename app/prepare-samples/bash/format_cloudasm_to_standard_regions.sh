@@ -172,9 +172,11 @@ bq query \
         c.*,
         p.asm,
         CASE
+            WHEN p.asm IS NULL then NULL
             WHEN p.asm = 1 AND p.wilcoxon_pvalue < ${MAX_P_VALUE} THEN 1
-            ELSE 0
-        END AS asm_not_corrected
+            WHEN p.asm = 0 THEN 0
+            ELSE NULL
+        END AS asm_not_corrected,
         p.wilcoxon_pvalue,
         p.corrected_wilcoxon_pvalue,
         p.total_sig_cpgs,

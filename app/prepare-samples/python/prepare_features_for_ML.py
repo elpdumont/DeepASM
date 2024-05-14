@@ -9,6 +9,7 @@ import sys
 # Python packages for data, stats
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import yaml
 from gcp import create_df_from_json_for_index_file, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
@@ -46,6 +47,14 @@ min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
 min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
 sort_reads_randomly = config["GENOMICS"]["SORT_READS_RANDOMLY"]
 nb_cpg_for_padding = config["GENOMICS"]["NB_CPG_FOR_PADDING"]
+
+# ASM variables
+max_p_value = config["ASM"]["MAX_P_VALUE"]
+min_nb_cpg_same_direction = config["ASM"]["MIN_NB_CPG_SAME_DIRECTION"]
+min_nb_consecutive_cpg_same_direction = config["ASM"][
+    "MIN_NB_CONSECUTIVE_CPG_SAME_DIRECTION"
+]
+min_asm_region_effect = config["ASM"]["MIN_ASM_REGION_EFFECT"]
 
 # Feature prep (Kernel functions)
 kernel_fm_nb_values = config["FEATURE_PREP"]["KERNEL_FM_NB_VALUES"]
@@ -217,6 +226,100 @@ def expand_array_elements(df, column_name):
         df[new_column_name] = df[column_name].apply(
             lambda x, i=i: x[i] if i < len(x) else None
         )
+
+
+def compute_asm_effect_and_wilcoxon_pvalue(row):
+    # Obtain the fractional methylation of reads based on their tag ref or alt
+    ref_values = [item["ref"] for item in row if item["ref"] is not None]
+    alt_values = [item["alt"] for item in row if item["alt"] is not None]
+    # Ensure there are enough samples to compute the test
+    if len(ref_values) == 0 or len(alt_values) == 0:
+        raise ValueError(
+            "Ref and/or Alt values are empty after filtering None. Cannot perform statistical test."
+        )
+    try:
+        result = stats.mannwhitneyu(ref_values, alt_values, alternative="two-sided")
+        p_value = np.round(result.pvalue, 5)
+    # If the ref and alt datasets are equal or one is included in the other one:
+    except ValueError:
+        p_value = 1
+    read_asm_effect = np.round(
+        sum(alt_values) / len(alt_values) - sum(ref_values) / len(ref_values), 5
+    )
+    return {"read_asm_effect": read_asm_effect, "wilcoxon_pvalue": p_value}
+
+
+def max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
+    # Step 1: Create a dictionary to find indices quickly
+    position_dict = {value: index for index, value in enumerate(all_cpg_pos)}
+    # Step 2: Determine the maximum consecutive count
+    max_consecutive = 0
+    current_consecutive = 1
+    for i in range(1, len(qualifying_cpg_pos)):
+        # Check if current element and previous element are consecutive in all_cpg_pos
+        if (
+            position_dict[qualifying_cpg_pos[i]]
+            == position_dict[qualifying_cpg_pos[i - 1]] + 1
+        ):
+            current_consecutive += 1
+        else:
+            max_consecutive = max(max_consecutive, current_consecutive)
+            current_consecutive = 1
+    # Update max_consecutive one last time in case the longest run ends at the last element
+    max_consecutive = max(max_consecutive, current_consecutive)
+    return max_consecutive
+
+
+def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
+    """
+    Count the number of elements that have a p-value below a given threshold and
+    an effect sign that matches the sign of a specified effect value. Also counts consecutive
+    elements meeting these criteria based on position continuity.
+
+    Parameters:
+    - cpg_data (list of dicts or numpy structured array): Array of records with 'pos', 'fisher_pvalue', and 'effect'.
+    - pvalue_threshold (float): The threshold below which the Fisher p-value must fall.
+    - read_asm_effect (float): The specified effect value, whose sign will determine the sign of the effect to filter by.
+
+    Returns:
+    - dict: A dictionary with 'total_count' of elements matching criteria and 'consecutive_count' of consecutive elements.
+    """
+    # Determine the sign of the effect from read_asm_effect
+    effect_sign = "positive" if read_asm_effect > 0 else "negative"
+    # Filter based on p-value and effect sign
+    qualifying_cpg_pos = [
+        d["pos"]
+        for d in cpg_data
+        if d["fisher_pvalue"] < pvalue_threshold
+        and (
+            (effect_sign == "positive" and d["effect"] > 0)
+            or (effect_sign == "negative" and d["effect"] < 0)
+        )
+    ]
+    all_cpg_pos = [d["pos"] for d in cpg_data]
+    total_sig_cpgs = len(qualifying_cpg_pos)
+    consecutive_sig_cpgs = max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos)
+    return {
+        "total_sig_cpgs": total_sig_cpgs,
+        "consecutive_sig_cpgs": consecutive_sig_cpgs,
+    }
+
+
+def find_asm(
+    x,
+    max_p_value,
+    min_nb_cpg_same_direction,
+    min_nb_consecutive_cpg_same_direction,
+    min_asm_region_effect,
+):
+    if (
+        x["corrected_wilcoxon_pvalue"] <= max_p_value
+        and abs(x["read_asm_effect"]) >= min_asm_region_effect
+        and x["consecutive_sig_cpgs"] >= min_nb_consecutive_cpg_same_direction
+        and x["total_sig_cpgs"] >= min_nb_cpg_same_direction
+    ):
+        return 1
+    return 0
 
 
 def generate_feature_arrays(
