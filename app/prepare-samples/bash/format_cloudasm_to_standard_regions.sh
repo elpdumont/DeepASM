@@ -30,6 +30,18 @@ echo "Exporting the 3 tables used for ASM calculation and for forming all region
 for TABLE in "${CLOUDASM_TABLES[@]}"; do
     echo "Exporting table ${TABLE}"
     bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.${TABLE}" gs://"${BUCKET}"/"${DATA_PATH}"/before_cloudasm/"${TABLE}"/"${TABLE}"_*.json
+
+    # USE THE CODE BELOW TO IMPORT THESE TABLES FROM THE BUCKET
+    # bq query \
+    # --use_legacy_sql=false \
+    # --destination_table "${SAMPLES_DATASET}".${TABLE} \
+    # --replace=true \
+    # --clustering_fields=sample,chr \
+    # --range_partitioning=clustering_index,0,4000,1 \
+    # "
+    # SELECT * FROM ${SAMPLES_DATASET}.${TABLE}_tmp
+    # "
+
 done
 
 echo "Keep the CpGs with a min and max coverage (defined in config file) for quality insurance"
@@ -72,11 +84,17 @@ echo "For each region, group cpg, reads in a nested structure"
 
 "${script_folder}"/bash/form_regions_with_arrays.sh
 
+bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.regions_w_arrays" gs://"${BUCKET}"/"${DATA_PATH}"/before_cloudasm/regions_w_arrays/regions_w_arrays_*.json
+
+
 # Construct the query to count rows in the table
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_w_arrays")
 echo "Across ${NB_SAMPLES} samples, we have ${nb_regions} regions"
 
 "${script_folder}"/bash/form_regions_with_snps.sh
+
+bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.regions_and_snps" gs://"${BUCKET}"/"${DATA_PATH}"/before_cloudasm/regions_and_snps/regions_and_snps_*.json
+
 
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.regions_and_snps")
 nb_regions_unique=$(execute_query "SELECT COUNT(*) AS unique_row_count FROM ( SELECT sample, chr, region_inf, region_sup, clustering_index FROM ${PROJECT}.${SAMPLES_DATASET}.regions_and_snps GROUP BY sample, chr, region_inf, region_sup, clustering_index)")
@@ -99,6 +117,33 @@ echo "Evaluated ${nb_regions} regions, of which only ${nb_regions_w_asm} have AS
 echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
 
 
+# bq query \
+#     --use_legacy_sql=false \
+#     --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_flagged \
+#     --replace=true \
+#     --clustering_fields=sample,chr \
+#     --range_partitioning=clustering_index,0,4000,1 \
+#     "
+#     WITH ASM AS (
+#         SELECT
+#             sample,
+#             chr,
+#             clustering_index,
+#             region_inf,
+#             region_sup,
+#             CASE
+#                 WHEN AVG(asm) > 0 THEN 1 --we require finding at least one asm
+#                 ELSE 0
+#             END AS asm
+#         FROM ${SAMPLES_DATASET}.asm_flagged
+#         GROUP BY sample, chr, clustering_index, region_inf, region_sup
+#     )
+#     SELECT c.*, p.asm FROM ${SAMPLES_DATASET}.regions_w_arrays c
+#     LEFT JOIN ASM p
+#     ON c.sample = p.sample AND c.chr = p.chr AND c.clustering_index = p.clustering_index AND c.region_inf = p.region_inf AND c.region_sup = p.region_sup
+#     "
+
+echo "Eliminate regions where ASM is ambiguous (2 SNPs, different result), partitioning the data, and adding the results to the main table."
 bq query \
     --use_legacy_sql=false \
     --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_flagged \
@@ -113,12 +158,15 @@ bq query \
             clustering_index,
             region_inf,
             region_sup,
-            CASE
-                WHEN AVG(asm) > 0 THEN 1 --we require finding at least one asm
-                ELSE 0
-            END AS asm
+            ANY_VALUE(wilcoxon_pvalue) AS wilcoxon_pvalue,
+            ANY_VALUE(corrected_wilcoxon_pvalue) AS corrected_wilcoxon_pvalue,
+            ANY_VALUE(total_sig_cpgs) AS total_sig_cpgs,
+            ANY_VALUE(consecutive_sig_cpgs) AS consecutive_sig_cpgs,
+            ANY_VALUE(read_asm_effect) AS read_asm_effect,
+            ANY_VALUE(asm) AS asm
         FROM ${SAMPLES_DATASET}.asm_flagged
         GROUP BY sample, chr, clustering_index, region_inf, region_sup
+        HAVING COUNT(*) = 1
     )
     SELECT c.*, p.asm FROM ${SAMPLES_DATASET}.regions_w_arrays c
     LEFT JOIN ASM p
@@ -133,7 +181,7 @@ echo "We have ${nb_regions} regions. We evaluated ${nb_regions_evaluated} region
 echo "Exporting the data to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_flagged" gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/all_regions/unique_regions_w_asm_flagged_*.json
 
-nb_files=$(gsutil ls gs://${BUCKET}/${DATA_PATH}/all_regions/* | wc -l)
+nb_files=$(gsutil ls gs://${BUCKET}/${DATA_PATH}/after_cloudasm/all_regions/* | wc -l)
 echo "There are ${nb_files} that cover all the regions with an ASM flag when ASM could be evaluated"
 
 
@@ -152,7 +200,7 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DAT
 #---------------------------------------------
 echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
 NB_FILES_PER_TASK="50"
-NB_FILES_TO_PROCESS=$(gsutil ls gs://"${BUCKET}"/"${DATA_PATH}"/all_regions/* | wc -l | awk '{print $1}')
+NB_FILES_TO_PROCESS=$(gsutil ls gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/all_regions/* | wc -l | awk '{print $1}')
 TASK_COUNT=$(( (${NB_FILES_TO_PROCESS} + ${NB_FILES_PER_TASK} - 1) / ${NB_FILES_PER_TASK} ))
 sed -i '' "s#NB_FILES_PER_TASK_PH#${NB_FILES_PER_TASK}#g" "batch-jobs/prepare_features_for_ML.json"
 sed -i '' "s#TASK_COUNT_PH#${TASK_COUNT}#g" "batch-jobs/prepare_features_for_ML.json"

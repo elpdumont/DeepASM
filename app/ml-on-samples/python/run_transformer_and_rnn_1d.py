@@ -261,7 +261,7 @@ dic_model = {
         "model": "TransformerModel",
         "weight_name": "class_weight",
         "grid": {
-            "d_model": [8, 16, 32, 64, 128],  # Dimensionality of the model
+            "d_model": [8, 16, 32, 64],  # Dimensionality of the model
             "nhead": [2, 4, 8],  # Number of heads in the multi-head attention models
             "num_layers": [
                 2,
