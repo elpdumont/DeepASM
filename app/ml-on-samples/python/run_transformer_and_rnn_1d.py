@@ -293,7 +293,7 @@ dic_model = {
         "weight_name": "class_weight",
         "grid": {
             "input_size": [1],
-            "hidden_size": [8, 16, 32, 64, 128],
+            "hidden_size": [4, 8, 16, 32, 64, 128],
             "output_size": [1],
             "dropout_rate": [dropout_rate],
             "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],

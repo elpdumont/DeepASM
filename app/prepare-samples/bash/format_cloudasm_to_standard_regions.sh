@@ -168,7 +168,19 @@ bq query \
         GROUP BY sample, chr, clustering_index, region_inf, region_sup
         HAVING COUNT(*) = 1
     )
-    SELECT c.*, p.asm FROM ${SAMPLES_DATASET}.regions_w_arrays c
+    SELECT
+        c.*,
+        p.asm,
+        CASE
+            WHEN p.asm = 1 AND p.wilcoxon_pvalue < ${MAX_P_VALUE} THEN 1
+            ELSE 0
+        END AS asm_not_corrected
+        p.wilcoxon_pvalue,
+        p.corrected_wilcoxon_pvalue,
+        p.total_sig_cpgs,
+        p.consecutive_sig_cpgs,
+        p.read_asm_effect
+    FROM ${SAMPLES_DATASET}.regions_w_arrays c
     LEFT JOIN ASM p
     ON c.sample = p.sample AND c.chr = p.chr AND c.clustering_index = p.clustering_index AND c.region_inf = p.region_inf AND c.region_sup = p.region_sup
     "
@@ -176,7 +188,9 @@ bq query \
 nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged")
 nb_regions_evaluated=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged WHERE asm IS NOT NULL")
 nb_regions_w_asm=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged WHERE asm = 1")
-echo "We have ${nb_regions} regions. We evaluated ${nb_regions_evaluated} regions for ASM. Among these, there are ${nb_regions_w_asm} regions where we found ASM"
+nb_regions_w_asm_not_corrected=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${SAMPLES_DATASET}.unique_regions_w_asm_flagged WHERE asm_not_corrected = 1")
+
+echo "We have ${nb_regions} regions. We evaluated ${nb_regions_evaluated} regions for ASM. Among these, there are ${nb_regions_w_asm} regions where we found ASM. If we do not correct the wilcoxon p-value, then we find ${nb_regions_w_asm_not_corrected} regions with ASM."
 
 echo "Exporting the data to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_flagged" gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/all_regions/unique_regions_w_asm_flagged_*.json
@@ -185,17 +199,17 @@ nb_files=$(gsutil ls gs://${BUCKET}/${DATA_PATH}/after_cloudasm/all_regions/* | 
 echo "There are ${nb_files} that cover all the regions with an ASM flag when ASM could be evaluated"
 
 
-bq query \
-    --use_legacy_sql=false \
-    --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_0_or_1 \
-    --replace=true \
-    "
-    SELECT * FROM ${SAMPLES_DATASET}.unique_regions_w_asm_flagged
-    WHERE asm IS NOT NULL
-    "
+# bq query \
+#     --use_legacy_sql=false \
+#     --destination_table "${SAMPLES_DATASET}".unique_regions_w_asm_0_or_1 \
+#     --replace=true \
+#     "
+#     SELECT * FROM ${SAMPLES_DATASET}.unique_regions_w_asm_flagged
+#     WHERE asm IS NOT NULL
+#     "
 
-echo "Exporting the data to the bucket with ASM being 0 or 1"
-bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_0_or_1" gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/regions_with_known_asm/unique_regions_w_asm_0_or_1_*.json
+# echo "Exporting the data to the bucket with ASM being 0 or 1"
+# bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_0_or_1" gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/regions_with_known_asm/unique_regions_w_asm_0_or_1_*.json
 
 #---------------------------------------------
 echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
