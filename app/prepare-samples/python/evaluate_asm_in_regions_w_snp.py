@@ -80,24 +80,30 @@ def compute_asm_effect_and_wilcoxon_pvalue(row):
     return {"read_asm_effect": read_asm_effect, "wilcoxon_pvalue": p_value}
 
 
-def max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
-    # Step 1: Create a dictionary to find indices quickly
-    position_dict = {value: index for index, value in enumerate(all_cpg_pos)}
-    # Step 2: Determine the maximum consecutive count
+def find_max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
+    qualifying_lookup = {value: i for i, value in enumerate(qualifying_cpg_pos)}
+    # To track the maximum length of consecutive elements
     max_consecutive = 0
-    current_consecutive = 1
-    for i in range(1, len(qualifying_cpg_pos)):
-        # Check if current element and previous element are consecutive in all_cpg_pos
-        if (
-            position_dict[qualifying_cpg_pos[i]]
-            == position_dict[qualifying_cpg_pos[i - 1]] + 1
-        ):
-            current_consecutive += 1
+    current_streak = 0
+    # Iterate over all_cpg_pos to count consecutive qualifying elements
+    for pos in all_cpg_pos:
+        if pos in qualifying_lookup:
+            if current_streak == 0:  # Starting a new consecutive sequence
+                current_streak = 1
+            else:
+                # Check if this is truly consecutive in terms of qualifying_cpg_pos
+                last_pos = all_cpg_pos.index(pos) - 1
+                if last_pos >= 0 and all_cpg_pos[last_pos] in qualifying_lookup:
+                    current_streak += 1
+                else:
+                    current_streak = 1
         else:
-            max_consecutive = max(max_consecutive, current_consecutive)
-            current_consecutive = 1
-    # Update max_consecutive one last time in case the longest run ends at the last element
-    max_consecutive = max(max_consecutive, current_consecutive)
+            if current_streak > max_consecutive:
+                max_consecutive = current_streak
+            current_streak = 0
+    # Final check to update max_consecutive at the end of the loop
+    if current_streak > max_consecutive:
+        max_consecutive = current_streak
     return max_consecutive
 
 
@@ -129,7 +135,9 @@ def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
     ]
     all_cpg_pos = [d["pos"] for d in cpg_data]
     total_sig_cpgs = len(qualifying_cpg_pos)
-    consecutive_sig_cpgs = max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos)
+    consecutive_sig_cpgs = find_max_consecutive_positions(
+        qualifying_cpg_pos, all_cpg_pos
+    )
     return {
         "total_sig_cpgs": total_sig_cpgs,
         "consecutive_sig_cpgs": consecutive_sig_cpgs,

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import yaml
+from evaluate_asm_in_regions_w_snp import find_asm, find_max_consecutive_positions
 from gcp import create_df_from_json_for_index_file, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from sklearn.neighbors import KernelDensity
@@ -63,9 +64,15 @@ kernel_cov_nb_step = config["FEATURE_PREP"]["KERNEL_COV_NB_STEP"]
 kernel_cov_bandwidth = config["FEATURE_PREP"]["KERNEL_COV_BANDWIDTH"]
 kernel_type = config["FEATURE_PREP"]["KERNEL_TYPE"]
 
+
+# Retrieve Job-defined env vars
+BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
+ml_dataset = os.getenv("ML_DATASET")
+nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
+samples_dataset = os.getenv("SAMPLES_DATASET")
+
 # Define the path to the JSON credentials file
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
-
 # Check if the JSON credentials file exists
 if os.path.exists(credentials_path):
     # Set the GOOGLE_APPLICATION_CREDENTIALS environment variable to the path of the JSON key file
@@ -73,17 +80,12 @@ if os.path.exists(credentials_path):
     # Assuming 'project' is already defined somewhere in your script
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
     samples_dataset = "samples_250bp"
+    nb_files_per_task = 1
+    BATCH_TASK_INDEX = 0
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
-
-
-# Retrieve Job-defined env vars
-BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
-ml_dataset = os.getenv("ML_DATASET")
-nb_files_per_task = int(os.getenv("NB_FILES_PER_TASK", 0))
-samples_dataset = os.getenv("SAMPLES_DATASET")
 
 
 def create_schema_fields(variables_dict):
@@ -227,17 +229,22 @@ def expand_array_elements(df, column_name):
         )
 
 
-def compute_asm_effect_and_wilcoxon_pvalue(high_fm_reads, low_fm_reads):
+def compute_asm_over_reads_and_wilcoxon_pvalue(high_fm_reads, low_fm_reads):
     # Obtain the fractional methylation of reads based on their tag ref or alt
-    high_fm_reads_cpg_meth = [item["cpg_meth"] for item in high_fm_reads]
-    low_fm_reads_cpg_meth = [item["cpg_meth"] for item in low_fm_reads]
+    high_fm_reads_cpg_meth_list = [item["cpg_meth"] for item in high_fm_reads]
+    high_fm_reads_cpg_meth = [
+        element for sublist in high_fm_reads_cpg_meth_list for element in sublist
+    ]
+    low_fm_reads_cpg_meth_list = [item["cpg_meth"] for item in low_fm_reads]
+    low_fm_reads_cpg_meth = [
+        element for sublist in low_fm_reads_cpg_meth_list for element in sublist
+    ]
     # Ensure there are enough samples to compute the test
     try:
         result = stats.mannwhitneyu(
             high_fm_reads_cpg_meth, low_fm_reads_cpg_meth, alternative="two-sided"
         )
         p_value = np.round(result.pvalue, 5)
-    # If the ref and alt datasets are equal or one is included in the other one:
     except ValueError:
         p_value = 1
     read_asm_effect = np.round(
@@ -248,28 +255,7 @@ def compute_asm_effect_and_wilcoxon_pvalue(high_fm_reads, low_fm_reads):
     return read_asm_effect, p_value
 
 
-def max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos):
-    # Step 1: Create a dictionary to find indices quickly
-    position_dict = {value: index for index, value in enumerate(all_cpg_pos)}
-    # Step 2: Determine the maximum consecutive count
-    max_consecutive = 0
-    current_consecutive = 1
-    for i in range(1, len(qualifying_cpg_pos)):
-        # Check if current element and previous element are consecutive in all_cpg_pos
-        if (
-            position_dict[qualifying_cpg_pos[i]]
-            == position_dict[qualifying_cpg_pos[i - 1]] + 1
-        ):
-            current_consecutive += 1
-        else:
-            max_consecutive = max(max_consecutive, current_consecutive)
-            current_consecutive = 1
-    # Update max_consecutive one last time in case the longest run ends at the last element
-    max_consecutive = max(max_consecutive, current_consecutive)
-    return max_consecutive
-
-
-def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
+def count_elements_and_consecutive(cpg_fisher_dic, max_p_value, read_asm_effect):
     """
     Count the number of elements that have a p-value below a given threshold and
     an effect sign that matches the sign of a specified effect value. Also counts consecutive
@@ -287,43 +273,26 @@ def count_elements_and_consecutive(cpg_data, pvalue_threshold, read_asm_effect):
     effect_sign = "positive" if read_asm_effect > 0 else "negative"
     # Filter based on p-value and effect sign
     qualifying_cpg_pos = [
-        d["pos"]
-        for d in cpg_data
-        if d["fisher_pvalue"] < pvalue_threshold
+        cpg_pos
+        for cpg_pos, d in cpg_fisher_dic.items()
+        if d["fisher_pvalue"] < max_p_value
         and (
             (effect_sign == "positive" and d["effect"] > 0)
             or (effect_sign == "negative" and d["effect"] < 0)
         )
     ]
-    all_cpg_pos = [d["pos"] for d in cpg_data]
+    all_cpg_pos = list(cpg_fisher_dic.keys())
     total_sig_cpgs = len(qualifying_cpg_pos)
-    consecutive_sig_cpgs = max_consecutive_positions(qualifying_cpg_pos, all_cpg_pos)
-    return {
-        "total_sig_cpgs": total_sig_cpgs,
-        "consecutive_sig_cpgs": consecutive_sig_cpgs,
-    }
+    consecutive_sig_cpgs = find_max_consecutive_positions(
+        qualifying_cpg_pos, all_cpg_pos
+    )
+    return (
+        total_sig_cpgs,
+        consecutive_sig_cpgs,
+    )
 
 
-def find_asm(
-    x,
-    max_p_value,
-    min_nb_cpg_same_direction,
-    min_nb_consecutive_cpg_same_direction,
-    min_asm_region_effect,
-):
-    if (
-        x["corrected_wilcoxon_pvalue"] <= max_p_value
-        and abs(x["read_asm_effect"]) >= min_asm_region_effect
-        and x["consecutive_sig_cpgs"] >= min_nb_consecutive_cpg_same_direction
-        and x["total_sig_cpgs"] >= min_nb_cpg_same_direction
-    ):
-        return 1
-    return 0
-
-
-def sort_reads_by_fm(
-    reads, nb_half_reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
-):
+def sort_reads_by_fm(reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read):
     reads_w_enough_cpgs = [
         read_info
         for read_info in reads
@@ -356,65 +325,159 @@ def divide_sorted_reads_in_two(reads_sorted_by_fm):
     return low_fm, high_fm
 
 
+def create_cpg_meth_based_on_read_group(low_fm_reads, high_fm_reads, cpg_unique_pos):
+    # Define cpg_dic such that each cpg_pos directly maps to a dictionary with "low_fm" and "high_fm" keys
+    cpg_dic = {cpg_pos: {"low_fm": [], "high_fm": []} for cpg_pos in cpg_unique_pos}
+    read_dic = {"low_fm": low_fm_reads, "high_fm": high_fm_reads}
+    for read_group in read_dic.keys():
+        read_list = read_dic[read_group]
+        meth_count = 0
+        for read in read_list:
+            meth_count += 1
+            for cpg_pos, cpg_meth in zip(read["cpg_pos"], read["cpg_meth"]):
+                cpg_dic[cpg_pos][read_group] += [cpg_meth + 1]
+            for unique_cpg in cpg_unique_pos:
+                if len(cpg_dic[unique_cpg]) < meth_count:
+                    cpg_dic[unique_cpg][read_group] += [0]
+    return cpg_dic
+
+
+def create_cpg_directional_fm_list(cpg_dic):
+    cpg_directional_fm_dic = {}
+    # Calculate the required metric for each cpg_pos
+    for cpg_pos in cpg_dic:
+        high_fm = cpg_dic[cpg_pos]["high_fm"]
+        low_fm = cpg_dic[cpg_pos]["low_fm"]
+        high_meth = high_fm.count(2)
+        high_cov = high_fm.count(1) + high_meth
+        low_meth = low_fm.count(2)
+        low_cov = low_fm.count(1) + low_meth
+        # Avoid division by zero
+        if high_cov > 0 and low_cov > 0:
+            high_ratio = high_meth / high_cov
+            low_ratio = low_meth / low_cov
+            cpg_directional_fm_dic[cpg_pos] = np.round(high_ratio - low_ratio, 4)
+        else:
+            cpg_directional_fm_dic[cpg_pos] = 0  # Default effect if no coverage
+    return list(cpg_directional_fm_dic.values())
+
+
+def compute_cpg_fisher_pvalue(cpg_dic):
+    results_dic = {}
+    for cpg_pos, groups in cpg_dic.items():
+        # Calculate low_meth, low_cov, high_meth, and high_cov
+        low_meth = groups["low_fm"].count(2)
+        low_cov = groups["low_fm"].count(1) + low_meth
+        high_meth = groups["high_fm"].count(2)
+        high_cov = groups["high_fm"].count(1) + high_meth
+        # Prepare the contingency table for Fisher's exact test
+        contingency_table = [
+            [high_meth, high_cov - high_meth],
+            [low_meth, low_cov - low_meth],
+        ]
+        # Calculate Fisher's exact test p-value
+        _, fisher_pvalue = stats.fisher_exact(contingency_table, "two-sided")
+        # Calculate the effect
+        if low_cov == 0 or high_cov == 0:  # Avoid division by zero
+            effect = None
+        else:
+            effect = round((high_meth / high_cov) - (low_meth / low_cov), 3)
+        # Store in results dictionary
+        results_dic[cpg_pos] = {"fisher_pvalue": fisher_pvalue, "effect": effect}
+    return results_dic
+
+
 def generate_feature_arrays(
     row,
     min_nb_reads_in_sequence,
     min_fraction_of_nb_cpg_in_read,
     sort_reads_randomly,
     nb_cpg_for_padding,
+    max_p_value,
+    min_nb_cpg_same_direction,
+    min_nb_consecutive_cpg_same_direction,
+    min_asm_region_effect,
 ):
+    # Returns cpg_directional_fm, X, read_asm_effect, wilcoxon_p_value for reads
     reads = row["reads"]
-    nb_half_reads = min_nb_reads_in_sequence // 2
+    # middle_index = len(reads) // 2
+    # nb_half_reads = min_nb_reads_in_sequence // 2
     nb_cpg_found = int(row["nb_cpg_found"])
     reads_sorted_by_fm = sort_reads_by_fm(
-        reads, nb_half_reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
+        reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
     )
     if reads_sorted_by_fm is None:
-        return pd.Series([None, None])
+        return pd.Series([None, None, None, None])
 
     low_fm_reads, high_fm_reads = divide_sorted_reads_in_two(reads_sorted_by_fm)
-    reads_asm_effect, wilcoxon_p_value = compute_asm_effect_and_wilcoxon_pvalue(
+    reads_asm_effect, wilcoxon_p_value = compute_asm_over_reads_and_wilcoxon_pvalue(
         high_fm_reads, low_fm_reads
     )
 
     # Pick reads at random if variable is set to true and there are more reads than what we need
-    if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
-        if sort_reads_randomly:
-            # Randomly sample profiles if more are available than the minimum required
-            reads_sorted_by_fm = random.sample(
-                reads_sorted_by_fm, min_nb_reads_in_sequence
-            )
-        else:
-            reads_sorted_by_fm = (
-                reads_sorted_by_fm[:nb_half_reads] + reads_sorted_by_fm[-nb_half_reads:]
-            )
+    # if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
+    #     if sort_reads_randomly:
+    #         # Randomly sample profiles if more are available than the minimum required
+    #         reads_sorted_by_fm = random.sample(
+    #             reads_sorted_by_fm, min_nb_reads_in_sequence
+    #         )
+    #     else:
+    #         reads_sorted_by_fm = (
+    #             reads_sorted_by_fm[:nb_half_reads] + reads_sorted_by_fm[-nb_half_reads:]
+    #         )
     # Find the list of unique CpG positions
     cpg_unique_pos = sorted(
         set(pos for read in reads_sorted_by_fm for pos in read["cpg_pos"])
     )
-    # Create a dictionary of all CpGs positions (sorted by position) with their methylation status (0 if no information, 1 for unmethylated CpG, 2 for methylated CpG)
-    cpg_dic = {cpg_pos: [] for cpg_pos in cpg_unique_pos}
+    # Create a dictionary of all CpGs positions (sorted by position) with their methylation status (0 if no information, 1 for unmethylated CpG, 2 for methylated CpG). And split into the 2 read regions
+    cpg_dic = create_cpg_meth_based_on_read_group(
+        low_fm_reads, high_fm_reads, cpg_unique_pos
+    )
+    cpg_directional_fm_list = create_cpg_directional_fm_list(cpg_dic)
+    # Computing Fisher Test on each CpG
+    cpg_fisher_dic = compute_cpg_fisher_pvalue(cpg_dic)
+    total_sig_cpgs, consecutive_sig_cpgs = count_elements_and_consecutive(
+        cpg_fisher_dic, max_p_value, reads_asm_effect
+    )
+
+    # Approximate ASM calculation
+    approx_asm = find_asm(
+        {
+            "corrected_wilcoxon_pvalue": wilcoxon_p_value,
+            "read_asm_effect": reads_asm_effect,
+            "consecutive_sig_cpgs": consecutive_sig_cpgs,
+            "total_sig_cpgs": total_sig_cpgs,
+        },
+        max_p_value,
+        min_nb_cpg_same_direction,
+        min_nb_consecutive_cpg_same_direction,
+        min_asm_region_effect,
+    )
+
+    if len(reads_sorted_by_fm) > min_nb_reads_in_sequence:
+        if sort_reads_randomly:
+            # Randomly sample profiles if more are available than the minimum required
+            reads_sorted_by_fm_for_2d = random.sample(
+                reads_sorted_by_fm, min_nb_reads_in_sequence
+            )
+        else:
+            half_of_required_reads = min_nb_reads_in_sequence // 2
+            reads_sorted_by_fm_for_2d = (
+                reads_sorted_by_fm[:half_of_required_reads]
+                + reads_sorted_by_fm[-half_of_required_reads:]
+            )
+    cpg_dic_for_2d = {cpg_pos: [] for cpg_pos in cpg_unique_pos}
     meth_count = 0
-    for read in reads_sorted_by_fm:
+    for read in reads_sorted_by_fm_for_2d:
         meth_count += 1
         for cpg_pos, cpg_meth in zip(read["cpg_pos"], read["cpg_meth"]):
-            cpg_dic[cpg_pos] += [cpg_meth + 1]
+            cpg_dic_for_2d[cpg_pos] += [cpg_meth + 1]
         for unique_cpg in cpg_unique_pos:
-            if len(cpg_dic[unique_cpg]) < meth_count:
-                cpg_dic[unique_cpg] += [0]
-    # print(f"CpG DIC: {cpg_dic}")
-    # Compute directional fractional methylation
-    cpg_directional_fm = [
-        np.round(
-            (sum(1 for i in range(nb_half_reads) if x[i] == 2)) / nb_half_reads
-            - (sum(1 for i in range(nb_half_reads, len(x)) if x[i] == 2))
-            / nb_half_reads,
-            3,
-        )
-        for x in cpg_dic.values()
-    ]
+            if len(cpg_dic_for_2d[unique_cpg]) < meth_count:
+                cpg_dic_for_2d[unique_cpg] += [0]
+
     # Add padding to the cpg_dic
-    cpgs_w_padding = [cpg_methyl for cpg_methyl in cpg_dic.values()]
+    cpgs_w_padding = [cpg_methyl for cpg_methyl in cpg_dic_for_2d.values()]
     # First scenario: remove extra CpGs from the trailing end
     while len(cpgs_w_padding) > nb_cpg_for_padding:
         cpgs_w_padding.pop(0)
@@ -426,7 +489,16 @@ def generate_feature_arrays(
         if len(cpgs_w_padding) < nb_cpg_for_padding:
             cpgs_w_padding += [[0] * min_nb_reads_in_sequence]
     # Return resultats
-    return pd.Series([cpg_directional_fm, cpgs_w_padding])
+    return pd.Series(
+        [
+            approx_asm,
+            reads_asm_effect,
+            total_sig_cpgs,
+            consecutive_sig_cpgs,
+            cpg_directional_fm_list,
+            cpgs_w_padding,
+        ]
+    )
 
 
 # Define main script
@@ -436,10 +508,10 @@ def main():
     # logging.info(f"Config file : {config}")
 
     # Store the JSON file into a dataframe
-    df, file_name = create_df_from_json_for_index_file(
+    df, _ = create_df_from_json_for_index_file(
         storage_client,
         bucket,
-        samples_dataset + "/all_regions/",
+        samples_dataset + "/datasets/after_cloudasm/all_regions/",
         BATCH_TASK_INDEX,
         nb_files_per_task,
     )
@@ -504,6 +576,10 @@ def main():
             min_fraction_of_nb_cpg_in_read,
             sort_reads_randomly,
             nb_cpg_for_padding,
+            max_p_value,
+            min_nb_cpg_same_direction,
+            min_nb_consecutive_cpg_same_direction,
+            min_asm_region_effect,
         ),
         axis=1,
         result_type="expand",
