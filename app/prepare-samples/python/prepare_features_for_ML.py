@@ -567,6 +567,10 @@ def main():
 
     df[
         [
+            "approx_asm",
+            "reads_asm_effect",
+            "total_sig_cpgs",
+            "consecutive_sig_cpgs",
             "cpg_directional_fm",
             "cpgs_w_padding",
         ]
