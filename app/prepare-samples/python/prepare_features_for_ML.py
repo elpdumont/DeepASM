@@ -407,7 +407,7 @@ def generate_feature_arrays(
         reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
     )
     if reads_sorted_by_fm is None:
-        return pd.Series([None, None, None, None])
+        return pd.Series([None, None, None, None, None, None])
 
     low_fm_reads, high_fm_reads = divide_sorted_reads_in_two(reads_sorted_by_fm)
     reads_asm_effect, wilcoxon_p_value = compute_asm_over_reads_and_wilcoxon_pvalue(
