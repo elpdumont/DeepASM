@@ -41,7 +41,7 @@ HMM:
   MODEL_TYPE: Variational Gaussian
   N_MODEL_LOOP: 10
   COVARIANCE: tied
-  N_ITERATIONS: 200
+  N_ITERATIONS: 100
   ALGORITHM: viterbi
   VAR_NAME: cpg_directional_fm
   MODEL_NAME: hmm_model_2af650b_8states
