@@ -73,7 +73,7 @@ if os.path.exists(credentials_path):
     samples_dataset = "samples_250bp"
     BATCH_TASK_INDEX = 0
     model_path = "samples_250bp/models"
-    ml_dataset = "ml_250bp_3"
+    ml_dataset = "ml_250bp_4"
     short_sha = "test"
 
 # Initialize the Google Cloud Storage client
@@ -234,7 +234,7 @@ def evaluate_model(model, dataloader, criterion, device):
     report = classification_report(all_targets, all_preds, output_dict=True, digits=4)
     confusion = confusion_matrix(all_targets, all_preds)
     # Return the report as a dictionary for further analysis if needed
-    return report["0"]["f1-score"] + report["1"]["f1-score"], report, confusion
+    return report["0.0"]["f1-score"] + report["1.0"]["f1-score"], report, confusion
 
 
 def train_seq_model(
@@ -367,7 +367,6 @@ def main():
                 cpg_directional_fm IS NOT NULL AND
                 {label_var} IS NOT NULL AND
                 sample IN ({quoted_samples})
-            LIMIT 10000
             """
         df = bq_client.query(query).to_dataframe()
         dic_data[dataset]["labels"] = df[label_var].astype(int)
@@ -526,7 +525,7 @@ def main():
 
     # Change keys for bigquery
     report["class_0"], report["class_1"] = report["0"], report["1"]
-    del report["0"], report["1"]
+    del report["0.0"], report["1.0"]
 
     dic_results = {
         **{
