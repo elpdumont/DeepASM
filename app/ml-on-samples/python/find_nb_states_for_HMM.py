@@ -135,9 +135,12 @@ def main():
     quoted_samples = ",".join(
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]
     )
+    logging.info(f"Preparing a query with these samples: {quoted_samples}")
     query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL ORDER BY sample, chr, region_inf"
     # Execute the query and store in dic
+    logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()
+    logging.info("Converting the sequence from str to floats...")
     df["cpg_directional_fm"] = df["cpg_directional_fm"].apply(
         lambda x: ast.literal_eval(x.strip('"'))
     )

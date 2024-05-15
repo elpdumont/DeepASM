@@ -18,19 +18,20 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 12000,
-          "memoryMib": 30000
+          "cpuMilli": 47000,
+          "memoryMib": 180000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
-      "taskCount": TASK_COUNT_PH
+      "taskCount": TASK_COUNT_PH,
+      "parallelism": 2
     }
   ],
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-64"
+        "policy": { "machineType": "n1-standard-96"
       }}
     ]
   },
