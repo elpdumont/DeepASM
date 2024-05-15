@@ -24,6 +24,10 @@ bq_client = bigquery.Client()
 # Create a handler for Google Cloud Logging.
 logging.basicConfig(level=logging.INFO)
 
+# Required to avoid bugs.
+os.environ["OPENBLAS_NUM_THREADS"] = "64"
+
+
 # Import all other variables from the config file
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
