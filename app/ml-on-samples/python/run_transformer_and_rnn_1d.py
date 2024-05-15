@@ -351,7 +351,10 @@ def save_1d_model_to_bucket(
 
 def main():
     logging.info(f"Using device: {device}")
-    dic_data = {dataset: {} for dataset in dataset_types}
+    dic_data = {
+        **{dataset: {} for dataset in dataset_types},
+        **{"TRAINING_AND_VALIDATION": {}},
+    }
     max_sequence_length = 0
     for dataset in dataset_types:
         logging.info(f"Processing {dataset} dataset...")
