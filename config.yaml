@@ -47,6 +47,7 @@ HMM:
   MODEL_NAME: hmm_model_2af650b_8states
 
 ML:
+  LABEL_NAME: asm_not_corrected
   BATCH_SIZE: 1024
   PADDING_VALUE: 0
   DROPOUT_RATE: 0.5

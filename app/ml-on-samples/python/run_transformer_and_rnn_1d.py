@@ -43,11 +43,16 @@ bucket = config["GCP"]["BUCKET"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
 # ML variables
+label_var = config["ML"]["LABEL_NAME"]
 n_random_search = config["ML"]["N_RANDOM_SEARCH_1D"]
 batch_size = config["ML"]["BATCH_SIZE"]
 dropout_rate = config["ML"]["DROPOUT_RATE"]
 n_epochs = config["ML"]["N_EPOCHS"]
 padding_value = config["ML"]["PADDING_VALUE"]
+
+# Obtain sample list
+samples_dic = config["SAMPLES"]
+dataset_types = list(samples_dic.keys())
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
@@ -229,7 +234,7 @@ def evaluate_model(model, dataloader, criterion, device):
     report = classification_report(all_targets, all_preds, output_dict=True, digits=4)
     confusion = confusion_matrix(all_targets, all_preds)
     # Return the report as a dictionary for further analysis if needed
-    return report["0.0"]["f1-score"] + report["1.0"]["f1-score"], report, confusion
+    return report["0"]["f1-score"] + report["1"]["f1-score"], report, confusion
 
 
 def train_seq_model(
@@ -346,17 +351,23 @@ def save_1d_model_to_bucket(
 
 def main():
     logging.info(f"Using device: {device}")
-    dic_data = {dataset: {} for dataset in datasets}
+    dic_data = {dataset: {} for dataset in dataset_types}
     max_sequence_length = 0
-    for dataset in ["TRAINING", "VALIDATION", "TESTING"]:
+    for dataset in dataset_types:
         logging.info(f"Processing {dataset} dataset...")
+        quoted_samples = ",".join([f"'{sample}'" for sample in samples_dic[dataset]])
+        logging.info(f"Importing the samples: {quoted_samples}")
         query = f"""
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpgs_w_padding)
-            FROM {project}.{ml_dataset}.{dataset}
-            WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
+            FROM {project}.{ml_dataset}.features_wo_hmm
+            WHERE
+                cpg_directional_fm IS NOT NULL AND
+                {label_var} IS NOT NULL AND
+                sample IN ({quoted_samples})
+            LIMIT 10000
             """
         df = bq_client.query(query).to_dataframe()
-        dic_data[dataset]["labels"] = df["asm"]
+        dic_data[dataset]["labels"] = df[label_var].astype(int)
         dic_data[dataset]["region_info"] = df[
             ["asm", "sample", "chr", "region_inf", "nb_cpg_found", "nb_reads"]
         ]
@@ -511,8 +522,8 @@ def main():
     }
 
     # Change keys for bigquery
-    report["class_0"], report["class_1"] = report["0.0"], report["1.0"]
-    del report["0.0"], report["1.0"]
+    report["class_0"], report["class_1"] = report["0"], report["1"]
+    del report["0"], report["1"]
 
     dic_results = {
         **{

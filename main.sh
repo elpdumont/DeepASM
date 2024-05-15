@@ -114,6 +114,28 @@ echo "The percentage difference in the number of rows is ${percentageDifference}
 
 
 
+
+#---------------------------------------------
+# Find the number of states that works best
+NB_STATES="10"
+sed -i '' "s#TASK_COUNT_PH#${NB_STATES}#g" "batch-jobs/find_nb_states_for_HMM.json"
+
+gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}-4" \
+	--location "${REGION}" \
+	--config batch-jobs/find_nb_states_for_HMM.json
+
+
+#---------------------------------------------
+echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
+TOTAL_TASKS="120"
+sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
+
+gcloud batch jobs submit "compute-hmm-${SHORT_SHA}-2" \
+	--location "${REGION}" \
+	--config batch-jobs/derive_features_from_HMM.json
+
+
+
 #---------------------------------------------------------------
 # Run HMM and split the dataset into train, validation, and test.
 
