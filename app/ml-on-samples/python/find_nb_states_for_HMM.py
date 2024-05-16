@@ -131,6 +131,7 @@ def fit_hmm(
 
 
 def main():
+    logging.info(f"Config file: {config}")
     dataset_for_hmm = "TRAINING"
     quoted_samples = ",".join(
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]

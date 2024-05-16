@@ -505,6 +505,8 @@ def generate_feature_arrays(
 # Define main script
 def main():
 
+    logging.info(f"Config file: {config}")
+
     logging.info(f"Importing: {nb_files_per_task} files...")
     # logging.info(f"Config file : {config}")
 

@@ -196,7 +196,7 @@ def extract_features(hidden_states_sequences):
 
 
 def main():
-
+    logging.info(f"Config file: {config}")
     logging.info(f"Batch task index: {BATCH_TASK_INDEX}")
 
     logging.info("Download model")

@@ -350,6 +350,7 @@ def save_1d_model_to_bucket(
 
 
 def main():
+    logging.info(f"Config file: {config}")
     logging.info(f"Using device: {device}")
     dic_data = {
         **{dataset: {} for dataset in dataset_types},
