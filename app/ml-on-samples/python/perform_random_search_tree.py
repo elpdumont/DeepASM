@@ -35,7 +35,6 @@ bucket = config["GCP"]["BUCKET"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
 # ML variables
-ml_mode = config["ML"]["ML_MODE"]
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_random_search = config["ML"]["ml_mode"]["N_RANDOM_SEARCH_TREE"]
 
@@ -45,6 +44,7 @@ model_path = os.getenv("MODEL_PATH")
 ml_dataset = os.getenv("ML_DATASET")
 short_sha = os.getenv("SHORT_SHA")
 home_directory = os.path.expanduser("~")
+ml_mode = os.getenv("ML_MODE")
 
 # Define the path to the JSON credentials file
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"

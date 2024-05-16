@@ -3,6 +3,9 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
+ML_MODE="TESTING" # "TESTING OR PRODUCTION"
+export ML_MODE
+
 # Import environmental variables
 source scripts/import_env_variables.sh
 
@@ -57,10 +60,15 @@ echo "Exporting the dataset with features (excluding HMM) to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}.features_wo_hmm" gs://"${BUCKET}"/"${DATA_PATH}"/features_wo_hmm/features_wo_hmm_*.json
 
 
+#---------------------------------------------
+# PICK ML MODE (TESTING OR PRODUCTION)
+
 
 
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
+
+sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "batch-jobs/run_transformer_and_rnn_1d.json"
 
 gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 	--location "${REGION}" \
@@ -106,6 +114,9 @@ gcloud batch jobs submit "${JOB_NAME}" \
 #-----------------------------------------------------------
 
 # ML: PERFORM RANDOM SEARCH FOR TREE MODELS
+
+sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "batch-jobs/perform_random_search_tree.json"
+
 
 gcloud batch jobs submit "tree-search-${SHORT_SHA}" \
 	--location "${REGION}" \
