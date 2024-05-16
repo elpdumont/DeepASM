@@ -132,7 +132,7 @@ def create_df_from_json_for_index_file(
     all_data = []
     file_names = []
     for blob in filtered_blobs[start_index:end_index]:
-        logging.info(f"Processing file: {blob.name}")
+        # logging.info(f"Processing file: {blob.name}")
 
         # Download the file as bytes and decode it to a string
         file_contents = blob.download_as_bytes().decode("utf-8")

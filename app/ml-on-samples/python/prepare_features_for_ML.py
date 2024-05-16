@@ -416,7 +416,11 @@ def generate_feature_arrays(
     # nb_half_reads = min_nb_reads_in_sequence // 2
     nb_cpg_found = int(row["nb_cpg_found"])
     reads_sorted_by_fm = sort_reads_by_fm(
-        reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read, min_nb_reads_in_sequence
+        reads,
+        nb_cpg_found,
+        min_fraction_of_nb_cpg_in_read,
+        min_nb_reads_in_sequence,
+        keep_only_extreme_reads,
     )
     if reads_sorted_by_fm is None:
         return pd.Series([None, None, None, None, None, None])

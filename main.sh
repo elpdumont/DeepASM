@@ -20,7 +20,7 @@ us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
 docker run -it \
 -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
 -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
-us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"9f17e4a" \
+us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"3704991" \
 /bin/bash
 
 
