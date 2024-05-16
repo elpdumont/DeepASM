@@ -210,49 +210,6 @@ echo "There are ${nb_files} that cover all the regions with an ASM flag when ASM
 # echo "Exporting the data to the bucket with ASM being 0 or 1"
 # bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${SAMPLES_DATASET}.unique_regions_w_asm_0_or_1" gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/regions_with_known_asm/unique_regions_w_asm_0_or_1_*.json
 
-#---------------------------------------------
-echo "Preparing the features for all the regions (even if they do not have ASM flagged)"
-NB_FILES_PER_TASK="50"
-NB_FILES_TO_PROCESS=$(gsutil ls gs://"${BUCKET}"/"${DATA_PATH}"/after_cloudasm/all_regions/* | wc -l | awk '{print $1}')
-TASK_COUNT=$(( (${NB_FILES_TO_PROCESS} + ${NB_FILES_PER_TASK} - 1) / ${NB_FILES_PER_TASK} ))
-sed -i '' "s#NB_FILES_PER_TASK_PH#${NB_FILES_PER_TASK}#g" "batch-jobs/prepare_features_for_ML.json"
-sed -i '' "s#TASK_COUNT_PH#${TASK_COUNT}#g" "batch-jobs/prepare_features_for_ML.json"
-
-
-gcloud batch jobs submit "prepare-features-for-ml-${SHORT_SHA}" \
-	--location "${REGION}" \
-	--config batch-jobs/prepare_features_for_ML.json
-
-nb_regions=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm")
-nb_regions_w_data=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm WHERE cpgs_w_padding IS NOT NULL ")
-nb_regions_w_data_and_asm_flagged=$(execute_query "SELECT COUNT(*) FROM ${PROJECT}.${ML_DATASET}.features_wo_hmm WHERE cpgs_w_padding IS NOT NULL AND asm IS NOT NULL")
-echo "Features were prepared for ${nb_regions} regions. Among these, we could extract features for ${nb_regions_w_data} regions. Among these, we have ${nb_regions_w_data_and_asm_flagged} regions with features and ASM."
-
-echo "Exporting the dataset with features (excluding HMM) to the bucket"
-bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}.features_wo_hmm" gs://"${BUCKET}"/"${DATA_PATH}"/features_wo_hmm/features_wo_hmm_*.json
-
-
-#---------------------------------------------
-# Find the number of states that works best
-NB_STATES="10"
-sed -i '' "s#TASK_COUNT_PH#${NB_STATES}#g" "batch-jobs/find_nb_states_for_HMM.json"
-
-gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}" \
-	--location "${REGION}" \
-	--config batch-jobs/find_nb_states_for_HMM.json
-
-
-#---------------------------------------------
-echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
-TOTAL_TASKS="120"
-sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
-
-gcloud batch jobs submit "compute-hmm-${SHORT_SHA}-2" \
-	--location "${REGION}" \
-	--config batch-jobs/derive_features_from_HMM.json
-
-
-
 
 
 

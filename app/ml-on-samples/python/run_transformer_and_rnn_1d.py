@@ -43,12 +43,14 @@ bucket = config["GCP"]["BUCKET"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
 # ML variables
-label_var = config["ML"]["LABEL_NAME"]
-n_random_search = config["ML"]["N_RANDOM_SEARCH_1D"]
-batch_size = config["ML"]["BATCH_SIZE"]
-dropout_rate = config["ML"]["DROPOUT_RATE"]
-n_epochs = config["ML"]["N_EPOCHS"]
-padding_value = config["ML"]["PADDING_VALUE"]
+ml_mode = config["ML"]["ML_MODE"]
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+label_var = config["ML"][ml_mode]["LABEL_NAME"]
+batch_size = config["ML"][ml_mode]["BATCH_SIZE"]
+padding_value = config["ML"][ml_mode]["PADDING_VALUE"]
+dropout_rate = config["ML"][ml_mode]["DROPOUT_RATE"]
+n_epochs = config["ML"][ml_mode]["N_EPOCHS"]
+n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_1D"]
 
 # Obtain sample list
 samples_dic = config["SAMPLES"]
@@ -350,6 +352,8 @@ def save_1d_model_to_bucket(
 
 
 def main():
+    logging.info(f"ML MODE: {ml_mode}")
+    logging.info(f"ML dataset: {ml_dataset}")
     logging.info(f"Config file: {config}")
     logging.info(f"Using device: {device}")
     dic_data = {
@@ -369,7 +373,11 @@ def main():
                 {label_var} IS NOT NULL AND
                 sample IN ({quoted_samples})
             """
+        if ml_mode == "TESTING":
+            query += f"LIMIT {ml_nb_datapoints_for_testing}"
+
         df = bq_client.query(query).to_dataframe()
+        logging.info(f"Number of rows in DF: {len(df):,}")
         dic_data[dataset]["labels"] = df[label_var].astype(int)
         dic_data[dataset]["region_info"] = df[
             ["asm", "sample", "chr", "region_inf", "nb_cpg_found", "nb_reads"]
@@ -469,7 +477,9 @@ def main():
         sumf1, report, confusion = evaluate_model(
             model_w_params, dic_data["VALIDATION"]["dataloader"], criterion, device
         )
-        logging.info(f"Sum of F1s: {sumf1}")
+        logging.info(
+            f"Sum of F1s: {sumf1}\nDictionary {idx+1}: {params} for model {model_name}"
+        )
         # save results
         results.append({"parameters": params, "sumf1": sumf1})
 
@@ -490,7 +500,7 @@ def main():
         lr=best_hyperparameters["learning_rate"],
         weight_decay=best_hyperparameters["weight_decay"],
     )
-
+    logging.info("Training final model on training + validation")
     train_seq_model(
         best_model,
         n_epochs,
@@ -500,7 +510,7 @@ def main():
         device,
     )
 
-    # Save model
+    logging.info("Saving best model")
     save_1d_model_to_bucket(
         home_directory,
         model_name,
@@ -525,7 +535,7 @@ def main():
     }
 
     # Change keys for bigquery
-    report["class_0"], report["class_1"] = report["0"], report["1"]
+    report["class_0"], report["class_1"] = report["0.0"], report["1.0"]
     del report["0.0"], report["1.0"]
 
     dic_results = {

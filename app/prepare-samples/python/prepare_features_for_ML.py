@@ -44,6 +44,7 @@ categorical_vars_ohe = config["CAT_VARS_OHE"]
 # Genomic variables
 genomic_length = config["GENOMICS"]["GENOMIC_LENGTH"]
 min_nb_reads_in_sequence = config["GENOMICS"]["MIN_NB_READS_IN_SEQUENCE"]
+keep_only_extreme_reads = config["GENOMICS"]["KEEP_ONLY_EXTREME_READS"]
 min_fraction_of_nb_cpg_in_read = config["GENOMICS"]["MIN_FRACTION_OF_NB_CPG_IN_READ"]
 sort_reads_randomly = config["GENOMICS"]["SORT_READS_RANDOMLY"]
 nb_cpg_for_padding = config["GENOMICS"]["NB_CPG_FOR_PADDING"]
@@ -292,7 +293,13 @@ def count_elements_and_consecutive(cpg_fisher_dic, max_p_value, read_asm_effect)
     )
 
 
-def sort_reads_by_fm(reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read):
+def sort_reads_by_fm(
+    reads,
+    nb_cpg_found,
+    min_fraction_of_nb_cpg_in_read,
+    min_nb_reads_in_sequence,
+    keep_only_extreme_reads,
+):
     reads_w_enough_cpgs = [
         read_info
         for read_info in reads
@@ -300,7 +307,6 @@ def sort_reads_by_fm(reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read):
         >= int(math.ceil(min_fraction_of_nb_cpg_in_read * nb_cpg_found))
     ]
     if len(reads_w_enough_cpgs) < min_nb_reads_in_sequence:
-        # print("Returning None")
         return None
     for read in reads_w_enough_cpgs:
         # Convert 'fm' to float
@@ -313,6 +319,12 @@ def sort_reads_by_fm(reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read):
     reads_sorted_by_fm = sorted(
         reads_w_enough_cpgs, key=lambda d: d["fm"], reverse=True
     )
+    if keep_only_extreme_reads:
+        half_of_required_reads = min_nb_reads_in_sequence // 2
+        reads_sorted_by_fm = (
+            reads_sorted_by_fm[:half_of_required_reads]
+            + reads_sorted_by_fm[-half_of_required_reads:]
+        )
     return reads_sorted_by_fm
 
 
@@ -404,7 +416,7 @@ def generate_feature_arrays(
     # nb_half_reads = min_nb_reads_in_sequence // 2
     nb_cpg_found = int(row["nb_cpg_found"])
     reads_sorted_by_fm = sort_reads_by_fm(
-        reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read
+        reads, nb_cpg_found, min_fraction_of_nb_cpg_in_read, min_nb_reads_in_sequence
     )
     if reads_sorted_by_fm is None:
         return pd.Series([None, None, None, None, None, None])
@@ -505,6 +517,7 @@ def generate_feature_arrays(
 # Define main script
 def main():
 
+    logging.info(f"Keep only extreme ring: {keep_only_extreme_reads}")
     logging.info(f"Config file: {config}")
 
     logging.info(f"Importing: {nb_files_per_task} files...")

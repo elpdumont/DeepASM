@@ -35,7 +35,9 @@ bucket = config["GCP"]["BUCKET"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
 # ML variables
-n_random_search = config["ML"]["N_RANDOM_SEARCH_TREE"]
+ml_mode = config["ML"]["ML_MODE"]
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+n_random_search = config["ML"]["ml_mode"]["N_RANDOM_SEARCH_TREE"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
@@ -141,6 +143,8 @@ def main():
             FROM {project}.{ml_dataset}.{dataset}
             WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
             """
+        if ml_mode == "TESTING":
+            query += f"LIMIT {ml_nb_datapoints_for_testing}"
         df = bq_client.query(query).to_dataframe()
         dic_data[dataset]["labels"] = df[["asm"]]
         dic_data[dataset]["region_info"] = df[
