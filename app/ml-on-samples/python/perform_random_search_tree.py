@@ -56,6 +56,7 @@ if os.path.exists(credentials_path):
     # Assuming 'project' is already defined somewhere in your script
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
     samples_dataset = "samples_250bp"
+    ml_mode = "TESTING"
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project)

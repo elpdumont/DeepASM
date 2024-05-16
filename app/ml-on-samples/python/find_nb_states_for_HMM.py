@@ -59,6 +59,8 @@ model_path = os.getenv("MODEL_PATH")
 short_sha = os.getenv("SHORT_SHA")
 n_states = int(os.getenv("BATCH_TASK_INDEX", 0)) + 2
 home_directory = os.path.expanduser("~")
+# ml_mode = os.getenv("ML_MODE")
+
 
 # Initialize client
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
@@ -67,6 +69,7 @@ if os.path.exists(credentials_path):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
     # Assuming 'project' is already defined somewhere in your script
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
+    # ml_mode = "TESTING"
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
@@ -138,6 +141,8 @@ def main():
     )
     logging.info(f"Preparing a query with these samples: {quoted_samples}")
     query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL ORDER BY sample, chr, region_inf"
+    # if ml_mode == "TESTING":
+    #     query += f"LIMIT {ml_nb_datapoints_for_testing}"
     # Execute the query and store in dic
     logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()

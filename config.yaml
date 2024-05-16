@@ -47,7 +47,7 @@ HMM:
   MODEL_NAME: hmm_model_2af650b_8states
 
 ML:
-  NB_DATA_POINTS_TESTING: 100000
+  NB_DATA_POINTS_TESTING: 200000
   TESTING:
     HMM_N_MODEL_LOOP: 2
     LABEL_NAME: asm_not_corrected
