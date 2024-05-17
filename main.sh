@@ -3,7 +3,7 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-ML_MODE="TESTING" # "TESTING OR PRODUCTION"
+ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
 export ML_MODE
 
 # Import environmental variables
@@ -65,7 +65,7 @@ gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 #---------------------------------------------
 # Train HMM model
 
-gcloud batch jobs submit "train-hmm-${SHORT_SHA}-2" \
+gcloud batch jobs submit "train-hmm-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/train_HMM.json
 

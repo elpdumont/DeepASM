@@ -556,6 +556,7 @@ def main():
             "n_random_search": n_random_search,
             "sum_f1": sumf1,
             "hyper_parameters": str(best_hyperparameters),
+            "results": str(results),
         },
         **confusion_dict,
         **report,
