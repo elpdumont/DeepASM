@@ -200,7 +200,8 @@ def main():
     )
     logging.info("Creating a unique sequence for training the HMM")
     all_obs = np.concatenate(df["cpg_directional_fm"].tolist())
-    logging.info(f"Number of CpGs to be used in training: {len(all_obs):,}")
+    nb_cpgs_in_training = len(all_obs)
+    logging.info(f"Number of CpGs to be used in training: {len(nb_cpgs_in_training):,}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
 
     # pool = multiprocessing.Pool(processes=n_model_loop)
@@ -223,7 +224,7 @@ def main():
         )
         logging.info(f"Score of iteration {i}: {score}")
         if best_ll is None or score > best_ll:
-            logging.info(f"Found new a best score!")
+            logging.info("Found new a best score!")
             best_ll = score
             best_model = h
 
@@ -236,9 +237,11 @@ def main():
             "covariance": [covariance],
             "short_sha": [short_sha],
             "n_model_loop": [n_model_loop],
+            "n_cpgs": [nb_cpgs_in_training],
+            "n_iterations": [n_iterations],
             # "aic": [aic],
             # "bic": [bic],
-            "ll": [best_ll],
+            "log_loss": [best_ll],
             "ml_mode": [ml_mode],
         }
     )
