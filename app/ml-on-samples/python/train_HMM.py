@@ -179,7 +179,9 @@ def main():
     )
     logging.info(f"Preparing a query with these samples: {quoted_samples}")
     list_rand_int = generate_random_integers(hmm_n_clusters)
-    quoted_list_rand = ", ".join(f"'{value}'" for value in list_rand_int)
+    quoted_list_rand = ", ".join(
+        map(str, list_rand_int)
+    )  # Convert integers to string for query
     query = f"""
         SELECT {hmm_var}
         FROM {project}.{ml_dataset}.features_wo_hmm
