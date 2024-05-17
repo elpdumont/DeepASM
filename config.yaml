@@ -47,7 +47,6 @@ ML:
     N_STATES: 5
     MODEL_TYPE: VariationalGaussianHMM
     COVARIANCE: tied
-    N_ITERATIONS: 100
     ALGORITHM: viterbi
     VAR_NAME: cpg_directional_fm
   TESTING:

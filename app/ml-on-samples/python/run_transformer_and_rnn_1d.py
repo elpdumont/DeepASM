@@ -245,7 +245,7 @@ def evaluate_model(model, dataloader, criterion, device):
 
 
 def train_seq_model(
-    model, num_epochs, training_data_dataloader, optimizer, criterion, device
+    model, num_epochs, training_data_dataloader, optimizer, criterion, device, log_str
 ):
     for epoch in range(num_epochs):
         total_loss = 0
@@ -263,7 +263,9 @@ def train_seq_model(
             num_batches += 1
         average_loss = total_loss / num_batches
         if (epoch + 1) % 10 == 0:
-            logging.info(f"Epoch {epoch+1}, Average loss: {average_loss:.4f}")
+            logging.info(
+                f"Epoch {epoch+1}, Average loss: {average_loss:.4f}, for {log_str}"
+            )
     logging.info("End of model training")
     return None
 
@@ -479,6 +481,7 @@ def main():
             optimizer,
             criterion,
             device,
+            f"Dictionary {idx+1}: {params} for model {model_name}",
         )
         logging.info("Evaluate model on f_1 score")
         sumf1, report, confusion = evaluate_model(

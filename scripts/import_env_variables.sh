@@ -163,6 +163,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#NB_SAMPLES_PH#${NB_SAMPLES}#g" "${file}"
     sed -i '' "s#SHORT_SHA_PH#${SHORT_SHA}#g" "${file}"
     sed -i '' "s#MODEL_PATH_PH#${MODEL_PATH}#g" "${file}"
+    sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "${file}"
 done
 
 
