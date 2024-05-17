@@ -26,7 +26,7 @@ bq_client = bigquery.Client()
 logging.basicConfig(level=logging.INFO)
 
 # Required to avoid bugs.
-os.environ["OPENBLAS_NUM_THREADS"] = "64"
+os.environ["OPENBLAS_NUM_THREADS"] = "16"
 
 
 # Import all other variables from the config file
