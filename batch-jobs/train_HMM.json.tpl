@@ -19,8 +19,8 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": 96000,
-          "memoryMib": 360000
+          "cpuMilli": 30000,
+          "memoryMib": 200000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
@@ -31,7 +31,7 @@
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-standard-96"
+        "policy": { "machineType": "n1-highmem-32"
       }}
     ]
   },

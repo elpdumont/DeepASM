@@ -52,7 +52,7 @@ ml_mode = os.getenv("ML_MODE")
 # ML/HMM variables
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_states = config["ML"]["HMM"]["N_STATES"]
-model_type = config["ML"]["HMM"]["MODEL_TYPE"]
+model_type_str = config["ML"]["HMM"]["MODEL_TYPE"]
 covariance = config["ML"]["HMM"]["COVARIANCE"]
 n_iterations = config["ML"]["HMM"]["N_ITERATIONS"]
 algorithm = config["ML"]["HMM"]["ALGORITHM"]
@@ -68,7 +68,7 @@ dic_model = {
     "VariationalGaussianHMM": VariationalGaussianHMM,
     "GaussianHMM": GaussianHMM,
 }
-model_type = dic_model[model_type]
+model_type = dic_model[model_type_str]
 
 # Initialize client
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
@@ -183,7 +183,7 @@ def main():
     )
     logging.info("Creating a unique sequence for training the HMM")
     all_obs = np.concatenate(df["cpg_directional_fm"].tolist())
-    logging.info(f"Number of CpGs to be used in training: {len(all_obs)}")
+    logging.info(f"Number of CpGs to be used in training: {len(all_obs):,}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
 
     # pool = multiprocessing.Pool(processes=n_model_loop)
@@ -212,7 +212,9 @@ def main():
     # Store values in DF
     df = pd.DataFrame(
         {
+            "model_name": [model_type_str],
             "n_states": [n_states],
+            "covariance": [covariance],
             "short_sha": [short_sha],
             "n_model_loop": [n_model_loop],
             # "aic": [aic],
