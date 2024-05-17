@@ -65,7 +65,7 @@ gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 #---------------------------------------------
 # Train HMM model
 
-gcloud batch jobs submit "train-hmm-${SHORT_SHA}" \
+gcloud batch jobs submit "train-hmm-${SHORT_SHA}-2" \
 	--location "${REGION}" \
 	--config batch-jobs/train_HMM.json
 

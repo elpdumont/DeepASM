@@ -90,10 +90,8 @@ def generate_random_integers(n_clusters):
     # Generate a random seed
     seed = random.randint(0, 10000)
     random.seed(seed)
-
     # Generate a list of N random integers between 0 and 3601
     random_integers = [random.randint(0, 3601) for _ in range(n_clusters)]
-
     return random_integers
 
 
