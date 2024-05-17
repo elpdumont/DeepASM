@@ -211,16 +211,16 @@ def main():
             best_ll = score
             best_model = h
 
-    aic, bic, ll = best_model.aic(reshaped_data), best_model.bic(reshaped_data), best_ll
+    # aic, bic, ll = best_model.aic(reshaped_data), best_model.bic(reshaped_data), best_ll
     # Store values in DF
     df = pd.DataFrame(
         {
             "n_states": [n_states],
             "short_sha": [short_sha],
             "n_model_loop": [n_model_loop],
-            "aic": [aic],
-            "bic": [bic],
-            "ll": [ll],
+            # "aic": [aic],
+            # "bic": [bic],
+            "ll": [best_ll],
             "ml_mode": [ml_mode],
         }
     )
