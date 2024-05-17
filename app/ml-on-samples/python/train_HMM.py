@@ -184,7 +184,7 @@ def main():
     logging.info(f"Number of CpGs to be used in training: {len(all_obs)}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
 
-    pool = multiprocessing.Pool()
+    pool = multiprocessing.Pool(processes=n_model_loop)
     results = []
     for rs_seed in random_seeds:
         results.append(

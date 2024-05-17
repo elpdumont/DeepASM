@@ -54,10 +54,6 @@ echo "Exporting the dataset with features (excluding HMM) to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}.features_wo_hmm" gs://"${BUCKET}"/"${DATA_PATH}"/features_wo_hmm/features_wo_hmm_*.json
 
 
-#---------------------------------------------
-# PICK ML MODE (TESTING OR PRODUCTION)
-
-
 
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
