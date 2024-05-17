@@ -222,7 +222,7 @@ def main():
             lengths,
             rs,
         )
-        logging.info(f"Score of iteration {i}: {score}")
+        logging.info(f"Score of iteration {i}: {score:,}")
         if best_ll is None or score > best_ll:
             logging.info("Found new a best score!")
             best_ll = score
@@ -241,7 +241,7 @@ def main():
             "n_iterations": [n_iterations],
             # "aic": [aic],
             # "bic": [bic],
-            "log_loss": [best_ll],
+            "log_loss": [np.round(best_ll)],
             "ml_mode": [ml_mode],
         }
     )
