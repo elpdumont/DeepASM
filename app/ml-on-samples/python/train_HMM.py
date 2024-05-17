@@ -5,6 +5,7 @@ import logging
 
 # import multiprocessing
 import os
+import random
 import sys
 
 import numpy as np
@@ -59,6 +60,7 @@ algorithm = config["ML"]["HMM"]["ALGORITHM"]
 hmm_var = config["ML"]["HMM"]["VAR_NAME"]
 n_model_loop = config["ML"][ml_mode]["HMM_N_MODEL_LOOP"]
 n_iterations = config["ML"][ml_mode]["N_HMM_ITERATIONS"]
+hmm_n_clusters = config["ML"][ml_mode]["HMM_N_CLUSTERS"]
 
 # Initialize random state
 base_seed = 546  # Example value, adjust as needed
@@ -83,6 +85,17 @@ if os.path.exists(credentials_path):
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
 bq_client = bigquery.Client()
+
+
+def generate_random_integers(n_clusters):
+    # Generate a random seed
+    seed = random.randint(0, 10000)
+    random.seed(seed)
+
+    # Generate a list of N random integers between 0 and 3601
+    random_integers = [random.randint(0, 3601) for _ in range(n_clusters)]
+
+    return random_integers
 
 
 def prepare_data_for_hmm(sequence):
@@ -159,27 +172,23 @@ def fit_hmm(
 
 
 def main():
+    logging.info(f"ML MODE: {ml_mode}")
     logging.info(f"Config file: {config}")
     dataset_for_hmm = "TRAINING"
     quoted_samples = ",".join(
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]
     )
     logging.info(f"Preparing a query with these samples: {quoted_samples}")
+    list_rand_int = generate_random_integers(hmm_n_clusters)
+    quoted_list_rand = ", ".join(f"'{value}'" for value in list_rand_int)
     query = f"""
         SELECT {hmm_var}
         FROM {project}.{ml_dataset}.features_wo_hmm
         WHERE
             sample IN ({quoted_samples}) AND
-            {hmm_var} IS NOT NULL
-            ORDER BY sample, chr, region_inf
+            {hmm_var} IS NOT NULL AND
+            clustering_index in ({quoted_list_rand})
             """
-    if ml_mode == "TESTING":
-        logging.info(
-            f"Testing mode. Selecting the first {ml_nb_datapoints_for_testing:,} rows for training..."
-        )
-        query += f"LIMIT {ml_nb_datapoints_for_testing}"
-    else:
-        query += f"LIMIT {limit_nb_regions}"
     logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()
     # logging.info("Randomizing the dataset...")
