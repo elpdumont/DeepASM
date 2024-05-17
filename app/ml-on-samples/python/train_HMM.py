@@ -48,7 +48,6 @@ short_sha = os.getenv("SHORT_SHA")
 home_directory = os.path.expanduser("~")
 ml_mode = os.getenv("ML_MODE")
 
-
 # ML/HMM variables
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_states = config["ML"]["HMM"]["N_STATES"]
@@ -57,7 +56,7 @@ covariance = config["ML"]["HMM"]["COVARIANCE"]
 n_iterations = config["ML"]["HMM"]["N_ITERATIONS"]
 algorithm = config["ML"]["HMM"]["ALGORITHM"]
 hmm_var = config["ML"]["HMM"]["VAR_NAME"]
-n_model_loop = config["ML"][ml_mode]["HMM"]["HMM_N_MODEL_LOOP"]
+n_model_loop = config["ML"][ml_mode]["HMM_N_MODEL_LOOP"]
 
 # Initialize random state
 base_seed = 546  # Example value, adjust as needed

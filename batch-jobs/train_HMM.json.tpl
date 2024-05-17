@@ -24,7 +24,7 @@
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
-      "taskCount": 1,
+      "taskCount": 1
     }
   ],
   "allocationPolicy": {
