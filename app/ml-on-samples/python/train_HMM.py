@@ -221,7 +221,9 @@ def main():
             lengths,
             rs,
         )
+        logging.info(f"Score of iteration {i}: {score}")
         if best_ll is None or score > best_ll:
+            logging.info(f"Found new a best score!")
             best_ll = score
             best_model = h
 
