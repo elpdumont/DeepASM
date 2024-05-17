@@ -144,7 +144,7 @@ def fit_hmm(
     )
     rs = check_random_state(rs_seed)
     h = model_type(
-        n_states=n_states,
+        n_components=n_states,
         n_iter=n_iterations,
         covariance_type=covariance,
         algorithm=algorithm,
