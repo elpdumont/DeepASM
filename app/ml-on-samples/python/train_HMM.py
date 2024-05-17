@@ -62,6 +62,11 @@ n_model_loop = config["ML"][ml_mode]["HMM_N_MODEL_LOOP"]
 base_seed = 546  # Example value, adjust as needed
 random_seeds = [base_seed + i for i in range(n_model_loop)]
 
+dic_model = {
+    "VariationalGaussianHMM": VariationalGaussianHMM,
+    "GaussianHMM": GaussianHMM,
+}
+model_type = dic_model[model_type]
 
 # Initialize client
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"

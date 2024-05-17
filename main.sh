@@ -13,21 +13,12 @@ source scripts/import_env_variables.sh
 deploy/deploy.sh
 
 
-
-
-
-
-docker run -it \
--v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
--e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
-us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
-/bin/bash
-
-docker run -it \
--v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
--e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
-us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:"3704991" \
-/bin/bash
+# TO RUN THE DOCKER LOCALLY
+# docker run -it \
+# -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
+# -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
+# us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
+# /bin/bash
 
 
 echo "Preparing standard genomic regions using the reference genome"
@@ -78,7 +69,7 @@ gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json
 
 #---------------------------------------------
-# Find the number of states that works best
+# Train HMM model
 sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "batch-jobs/train_HMM.json"
 
 
