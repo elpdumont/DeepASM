@@ -157,7 +157,14 @@ def main():
         [f"'{sample}'" for sample in samples_dic[dataset_for_hmm]]
     )
     logging.info(f"Preparing a query with these samples: {quoted_samples}")
-    query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL ORDER BY sample, chr, region_inf"
+    query = f"""
+        SELECT {hmm_var}
+        FROM {project}.{ml_dataset}.features_wo_hmm
+        WHERE
+            sample IN ({quoted_samples}) AND
+            {hmm_var} IS NOT NULL
+            ORDER BY sample, chr, region_inf
+            """
     if ml_mode == "TESTING":
         query += f"LIMIT {ml_nb_datapoints_for_testing}"
     # Execute the query and store in dic

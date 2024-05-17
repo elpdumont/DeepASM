@@ -6,7 +6,8 @@
           "variables": {
             "ML_DATASET": "ML_DATASET_PH",
             "MODEL_PATH": "MODEL_PATH_PH",
-            "SHORT_SHA": "SHORT_SHA_PH"
+            "SHORT_SHA": "SHORT_SHA_PH",
+            "ML_MODE": "ML_MODE_PH"
             }
         },
         "runnables": [

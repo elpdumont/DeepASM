@@ -3,15 +3,15 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-# Create container images on GCP (for Python and bash)
-deploy/deploy.sh
-
-
 ML_MODE="TESTING" # "TESTING OR PRODUCTION"
 export ML_MODE
 
 # Import environmental variables
 source scripts/import_env_variables.sh
+
+# Create container images on GCP (for Python and bash)
+deploy/deploy.sh
+
 
 
 
@@ -79,13 +79,12 @@ gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 
 #---------------------------------------------
 # Find the number of states that works best
-sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "batch-jobs/find_nb_states_for_HMM.json"
-NB_STATES="10"
-sed -i '' "s#TASK_COUNT_PH#${NB_STATES}#g" "batch-jobs/find_nb_states_for_HMM.json"
+sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "batch-jobs/train_HMM.json"
 
-gcloud batch jobs submit "nb-states-hmm-${SHORT_SHA}-4" \
+
+gcloud batch jobs submit "train-hmm-${SHORT_SHA}" \
 	--location "${REGION}" \
-	--config batch-jobs/find_nb_states_for_HMM.json
+	--config batch-jobs/train_HMM.json
 
 
 #---------------------------------------------
