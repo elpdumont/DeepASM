@@ -208,7 +208,7 @@ def main():
     best_model = None
     # for rs_seed in random_seeds:
     for i in range(n_model_loop):
-        print(f"Iteration: {i}")
+        logging.info(f"Iteration: {i}")
         # results.append(
         # pool.apply_async(
         score, h = fit_hmm(
