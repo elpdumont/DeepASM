@@ -53,7 +53,6 @@ ml_mode = os.getenv("ML_MODE")
 # ML/HMM variables
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_states = config["ML"]["HMM"]["N_STATES"]
-limit_nb_regions = config["ML"]["HMM"]["LIMIT_NB_REGIONS"]
 model_type_str = config["ML"]["HMM"]["MODEL_TYPE"]
 covariance = config["ML"]["HMM"]["COVARIANCE"]
 algorithm = config["ML"]["HMM"]["ALGORITHM"]
