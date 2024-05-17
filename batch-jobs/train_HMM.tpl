@@ -13,19 +13,18 @@
           {
             "container": {
               "imageUri": "PYTHON_IMAGE_PH",
-              "commands": ["python", "find_nb_states_for_HMM.py"]
+              "commands": ["python", "train_HMM.py"]
             }
           }
         ],
         "computeResource": {
-          "cpuMilli": 47000,
-          "memoryMib": 180000
+          "cpuMilli": 96000,
+          "memoryMib": 360000
         },
         "maxRetryCount": 0,
         "maxRunDuration": "500000s"
       },
-      "taskCount": TASK_COUNT_PH,
-      "parallelism": 2
+      "taskCount": 1,
     }
   ],
   "allocationPolicy": {

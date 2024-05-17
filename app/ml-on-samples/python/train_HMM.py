@@ -12,6 +12,7 @@ import yaml
 from gcp import upload_blob, upload_dataframe_to_bq
 from google.cloud import bigquery, storage
 from hmmlearn.hmm import GaussianHMM
+from hmmlearn.vhmm import VariationalGaussianHMM
 
 # from hmmlearn.vhmm import VariationalGaussianHMM
 from joblib import dump
@@ -40,26 +41,27 @@ bucket = config["GCP"]["BUCKET"]
 samples_dic = config["SAMPLES"]
 dataset_types = list(samples_dic.keys())
 
-# HMM variables
-model_type = config["HMM"]["MODEL_TYPE"]
-n_model_loop = config["HMM"]["N_MODEL_LOOP"]
-covariance = config["HMM"]["COVARIANCE"]
-n_iterations = config["HMM"]["N_ITERATIONS"]
-algorithm = config["HMM"]["ALGORITHM"]
-hmm_var = config["HMM"]["VAR_NAME"]
-
-# Initialize random state
-base_seed = 546  # Example value, adjust as needed
-random_seeds = [base_seed + i for i in range(n_model_loop)]
-
-
 # Retrieve Job-defined env vars
 ml_dataset = os.getenv("ML_DATASET")
 model_path = os.getenv("MODEL_PATH")
 short_sha = os.getenv("SHORT_SHA")
-n_states = int(os.getenv("BATCH_TASK_INDEX", 0)) + 2
 home_directory = os.path.expanduser("~")
-# ml_mode = os.getenv("ML_MODE")
+ml_mode = os.getenv("ML_MODE")
+
+
+# ML/HMM variables
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+n_states = config["ML"]["HMM"]["N_STATES"]
+model_type = config["ML"]["HMM"]["MODEL_TYPE"]
+covariance = config["ML"]["HMM"]["COVARIANCE"]
+n_iterations = config["ML"]["HMM"]["N_ITERATIONS"]
+algorithm = config["ML"]["HMM"]["ALGORITHM"]
+hmm_var = config["ML"]["HMM"]["VAR_NAME"]
+n_model_loop = config["ML"][ml_mode]["HMM"]["HMM_N_MODEL_LOOP"]
+
+# Initialize random state
+base_seed = 546  # Example value, adjust as needed
+random_seeds = [base_seed + i for i in range(n_model_loop)]
 
 
 # Initialize client
@@ -105,9 +107,18 @@ def prepare_data_for_hmm(sequence):
     return sequence, lengths
 
 
-def save_HMM_model_to_bucket(directory, model, short_sha, bucket, model_path, n_states):
+def save_HMM_model_to_bucket(
+    directory, model, short_sha, bucket, model_path, n_states, ml_mode
+):
     file_name = (
-        directory + "/hmm_model_" + short_sha + "_" + str(n_states) + "states.joblib"
+        directory
+        + "/hmm_model_"
+        + short_sha
+        + "_"
+        + str(n_states)
+        + "states_"
+        + ml_mode
+        + ".joblib"
     )
     dump(model, file_name)
     upload_blob(storage_client, bucket, file_name, model_path)
@@ -115,14 +126,21 @@ def save_HMM_model_to_bucket(directory, model, short_sha, bucket, model_path, n_
 
 
 def fit_hmm(
-    n_states, n_iterations, covariance, algorithm, reshaped_data, lengths, rs_seed
+    model_type,
+    n_states,
+    n_iter,
+    covariance,
+    algorithm,
+    reshaped_data,
+    lengths,
+    rs_seed,
 ):
     logging.info(
         f"Number of states: {n_states} and random seed for generation: {rs_seed}"
     )
     rs = check_random_state(rs_seed)
-    h = GaussianHMM(
-        n_states,
+    h = model_type(
+        n_states=n_states,
         n_iter=n_iterations,
         covariance_type=covariance,
         algorithm=algorithm,
@@ -141,8 +159,8 @@ def main():
     )
     logging.info(f"Preparing a query with these samples: {quoted_samples}")
     query = f"SELECT {hmm_var} FROM {project}.{ml_dataset}.features_wo_hmm WHERE sample IN ({quoted_samples}) AND {hmm_var} IS NOT NULL ORDER BY sample, chr, region_inf"
-    # if ml_mode == "TESTING":
-    #     query += f"LIMIT {ml_nb_datapoints_for_testing}"
+    if ml_mode == "TESTING":
+        query += f"LIMIT {ml_nb_datapoints_for_testing}"
     # Execute the query and store in dic
     logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()
@@ -162,6 +180,7 @@ def main():
             pool.apply_async(
                 fit_hmm,
                 args=(
+                    model_type,
                     n_states,
                     n_iterations,
                     covariance,
@@ -191,13 +210,14 @@ def main():
             "aic": [aic],
             "bic": [bic],
             "ll": [ll],
+            "ml_mode": [ml_mode],
         }
     )
     logging.info("Upload results to BQ")
     upload_dataframe_to_bq(bq_client, df, f"{ml_dataset}.hmm_results")
     logging.info("Save model to bucket")
     save_HMM_model_to_bucket(
-        home_directory, best_model, short_sha, bucket, model_path, n_states
+        home_directory, best_model, short_sha, bucket, model_path, n_states, ml_mode
     )
     logging.info(f"END OF SCRIPT for {n_states} states")
 

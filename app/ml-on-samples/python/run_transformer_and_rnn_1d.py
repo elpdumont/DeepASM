@@ -42,15 +42,6 @@ bucket = config["GCP"]["BUCKET"]
 # samples_dic = config["SAMPLES"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
-# ML variables
-ml_mode = config["ML"]["ML_MODE"]
-ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
-label_var = config["ML"][ml_mode]["LABEL_NAME"]
-batch_size = config["ML"][ml_mode]["BATCH_SIZE"]
-padding_value = config["ML"][ml_mode]["PADDING_VALUE"]
-dropout_rate = config["ML"][ml_mode]["DROPOUT_RATE"]
-n_epochs = config["ML"][ml_mode]["N_EPOCHS"]
-n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_1D"]
 
 # Obtain sample list
 samples_dic = config["SAMPLES"]
@@ -61,6 +52,7 @@ BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 model_path = os.getenv("MODEL_PATH")
 ml_dataset = os.getenv("ML_DATASET")
 short_sha = os.getenv("SHORT_SHA")
+ml_mode = os.getenv("ML_MODE")
 home_directory = os.path.expanduser("~")
 
 # Define the path to the JSON credentials file
@@ -77,6 +69,17 @@ if os.path.exists(credentials_path):
     model_path = "samples_250bp/models"
     ml_dataset = "ml_250bp_4"
     short_sha = "test"
+    ml_mode = "TESTING"
+
+# ML variables
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+label_var = config["ML"]["LABEL_NAME"]
+batch_size = config["ML"]["BATCH_SIZE"]
+padding_value = config["ML"]["PADDING_VALUE"]
+dropout_rate = config["ML"]["DROPOUT_RATE"]
+n_epochs = config["ML"][ml_mode]["N_EPOCHS"]
+n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_1D"]
+
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project)

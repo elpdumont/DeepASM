@@ -34,9 +34,6 @@ bucket = config["GCP"]["BUCKET"]
 # samples_dic = config["SAMPLES"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
 
-# ML variables
-ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
-n_random_search = config["ML"]["ml_mode"]["N_RANDOM_SEARCH_TREE"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
@@ -57,6 +54,11 @@ if os.path.exists(credentials_path):
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
     samples_dataset = "samples_250bp"
     ml_mode = "TESTING"
+
+# ML variables
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_TREE"]
+
 
 # Initialize the Google Cloud Storage client
 bq_client = bigquery.Client(project=project)
