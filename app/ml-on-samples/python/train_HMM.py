@@ -54,10 +54,10 @@ ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_states = config["ML"]["HMM"]["N_STATES"]
 model_type_str = config["ML"]["HMM"]["MODEL_TYPE"]
 covariance = config["ML"]["HMM"]["COVARIANCE"]
-n_iterations = config["ML"]["HMM"]["N_ITERATIONS"]
 algorithm = config["ML"]["HMM"]["ALGORITHM"]
 hmm_var = config["ML"]["HMM"]["VAR_NAME"]
 n_model_loop = config["ML"][ml_mode]["HMM_N_MODEL_LOOP"]
+n_iterations = config["ML"][ml_mode]["N_HMM_ITERATIONS"]
 
 # Initialize random state
 base_seed = 546  # Example value, adjust as needed
@@ -173,10 +173,17 @@ def main():
             ORDER BY sample, chr, region_inf
             """
     if ml_mode == "TESTING":
+        logging.info(
+            f"Testing mode. Selecting the first {ml_nb_datapoints_for_testing}:, rows for training..."
+        )
+        # df = df.head(ml_nb_datapoints_for_testing)
         query += f"LIMIT {ml_nb_datapoints_for_testing}"
-    # Execute the query and store in dic
     logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()
+    # logging.info("Randomizing the dataset...")
+    # df = df.sample(frac=1, random_state=base_seed).reset_index(drop=True)
+    logging.info(f"Number of rows in the DF: {len(df):,}")
+
     logging.info("Converting the sequence from str to floats...")
     df["cpg_directional_fm"] = df["cpg_directional_fm"].apply(
         lambda x: ast.literal_eval(x.strip('"'))

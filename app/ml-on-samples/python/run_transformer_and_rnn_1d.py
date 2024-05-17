@@ -377,6 +377,7 @@ def main():
                 sample IN ({quoted_samples})
             """
         if ml_mode == "TESTING":
+            logging.info("In testing mode. Adding a limit to the import.")
             query += f"LIMIT {ml_nb_datapoints_for_testing}"
 
         df = bq_client.query(query).to_dataframe()
