@@ -201,7 +201,7 @@ def main():
     logging.info("Creating a unique sequence for training the HMM")
     all_obs = np.concatenate(df["cpg_directional_fm"].tolist())
     nb_cpgs_in_training = len(all_obs)
-    logging.info(f"Number of CpGs to be used in training: {len(nb_cpgs_in_training):,}")
+    logging.info(f"Number of CpGs to be used in training: {nb_cpgs_in_training:,}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
 
     # pool = multiprocessing.Pool(processes=n_model_loop)
