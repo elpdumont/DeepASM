@@ -174,7 +174,7 @@ def main():
             """
     if ml_mode == "TESTING":
         logging.info(
-            f"Testing mode. Selecting the first {ml_nb_datapoints_for_testing}:, rows for training..."
+            f"Testing mode. Selecting the first {ml_nb_datapoints_for_testing:,} rows for training..."
         )
         # df = df.head(ml_nb_datapoints_for_testing)
         query += f"LIMIT {ml_nb_datapoints_for_testing}"

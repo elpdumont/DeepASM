@@ -153,6 +153,7 @@ class RNNModel(nn.Module):
         self,
         input_size,
         hidden_size,
+        num_layers,
         output_size,
         max_sequence_length,
         dropout_rate,
@@ -166,6 +167,7 @@ class RNNModel(nn.Module):
         self.rnn = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
+            num_layers=num_layers,
             batch_first=True,
             dropout=dropout_rate,
             device=device,
@@ -305,6 +307,7 @@ dic_model = {
         "grid": {
             "input_size": [1],
             "hidden_size": [8, 16, 32, 64, 128],
+            "num_layers": [2, 4, 8, 16, 32, 64],
             "output_size": [1],
             "dropout_rate": [dropout_rate],
             "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],
