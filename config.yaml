@@ -49,6 +49,7 @@ ML:
     COVARIANCE: tied
     ALGORITHM: viterbi
     VAR_NAME: cpg_directional_fm
+    LIMIT_NB_REGIONS: 1000000
   TESTING:
     N_EPOCHS: 20
     N_HMM_ITERATIONS: 50

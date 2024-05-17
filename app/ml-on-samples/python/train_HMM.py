@@ -52,6 +52,7 @@ ml_mode = os.getenv("ML_MODE")
 # ML/HMM variables
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 n_states = config["ML"]["HMM"]["N_STATES"]
+limit_nb_regions = config["ML"]["HMM"]["LIMIT_NB_REGIONS"]
 model_type_str = config["ML"]["HMM"]["MODEL_TYPE"]
 covariance = config["ML"]["HMM"]["COVARIANCE"]
 algorithm = config["ML"]["HMM"]["ALGORITHM"]
@@ -176,8 +177,9 @@ def main():
         logging.info(
             f"Testing mode. Selecting the first {ml_nb_datapoints_for_testing:,} rows for training..."
         )
-        # df = df.head(ml_nb_datapoints_for_testing)
         query += f"LIMIT {ml_nb_datapoints_for_testing}"
+    else:
+        query += f"LIMIT {limit_nb_regions}"
     logging.info("Importing dataset...")
     df = bq_client.query(query).to_dataframe()
     # logging.info("Randomizing the dataset...")
