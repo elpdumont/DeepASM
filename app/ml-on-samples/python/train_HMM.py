@@ -2,7 +2,8 @@
 import ast
 import json
 import logging
-import multiprocessing
+
+# import multiprocessing
 import os
 import sys
 
@@ -60,7 +61,8 @@ n_model_loop = config["ML"][ml_mode]["HMM_N_MODEL_LOOP"]
 
 # Initialize random state
 base_seed = 546  # Example value, adjust as needed
-random_seeds = [base_seed + i for i in range(n_model_loop)]
+rs = check_random_state(base_seed)
+# andom_seeds = [base_seed + i for i in range(n_model_loop)]
 
 dic_model = {
     "VariationalGaussianHMM": VariationalGaussianHMM,
@@ -137,12 +139,12 @@ def fit_hmm(
     algorithm,
     reshaped_data,
     lengths,
-    rs_seed,
+    rs,
 ):
-    logging.info(
-        f"Number of states: {n_states} and random seed for generation: {rs_seed}"
-    )
-    rs = check_random_state(rs_seed)
+    # logging.info(
+    #     f"Number of states: {n_states} and random seed for generation: {rs_seed}"
+    # )
+    # rs = check_random_state(rs_seed)
     h = model_type(
         n_components=n_states,
         n_iter=n_iterations,
@@ -184,29 +186,24 @@ def main():
     logging.info(f"Number of CpGs to be used in training: {len(all_obs)}")
     reshaped_data, lengths = prepare_data_for_hmm(all_obs)
 
-    pool = multiprocessing.Pool(processes=n_model_loop)
-    results = []
-    for rs_seed in random_seeds:
-        results.append(
-            pool.apply_async(
-                fit_hmm,
-                args=(
-                    model_type,
-                    n_states,
-                    n_iterations,
-                    covariance,
-                    algorithm,
-                    reshaped_data,
-                    lengths,
-                    rs_seed,
-                ),
-            )
-        )
-
+    # pool = multiprocessing.Pool(processes=n_model_loop)
     best_ll = None
     best_model = None
-    for result in results:
-        score, h = result.get()
+    # for rs_seed in random_seeds:
+    for i in range(n_model_loop):
+        print(f"Iteration: {i}")
+        # results.append(
+        # pool.apply_async(
+        score, h = fit_hmm(
+            model_type,
+            n_states,
+            n_iterations,
+            covariance,
+            algorithm,
+            reshaped_data,
+            lengths,
+            rs,
+        )
         if best_ll is None or score > best_ll:
             best_ll = score
             best_model = h
