@@ -544,6 +544,7 @@ def main():
     dic_results = {
         **{
             "model": model_name,
+            "ml_mode": ml_mode,
             "short_sha": short_sha,
             "n_random_search": n_random_search,
             "sum_f1": sumf1,
