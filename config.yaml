@@ -44,9 +44,9 @@ ML:
   PADDING_VALUE: 0
   DROPOUT_RATE: 0.5
   HMM:
-    N_STATES: 3
+    N_STATES: 5
     MODEL_TYPE: VariationalGaussianHMM
-    COVARIANCE: full
+    COVARIANCE: tied
     ALGORITHM: viterbi
     VAR_NAME: cpg_directional_fm
   TESTING:
