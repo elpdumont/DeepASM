@@ -64,6 +64,7 @@ hmm_n_clusters = config["ML"][ml_mode]["HMM_N_CLUSTERS"]
 # Initialize random state
 base_seed = 546  # Example value, adjust as needed
 rs = check_random_state(base_seed)
+random.seed(base_seed)
 # andom_seeds = [base_seed + i for i in range(n_model_loop)]
 
 dic_model = {
@@ -87,9 +88,6 @@ bq_client = bigquery.Client()
 
 
 def generate_random_integers(n_clusters):
-    # Generate a random seed
-    seed = random.randint(0, 10000)
-    random.seed(seed)
     # Generate a list of N random integers between 0 and 3601
     random_integers = [random.randint(0, 3601) for _ in range(n_clusters)]
     return random_integers
