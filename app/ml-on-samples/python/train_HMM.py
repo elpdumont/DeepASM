@@ -125,15 +125,29 @@ def prepare_data_for_hmm(sequence):
 
 
 def save_HMM_model_to_bucket(
-    directory, model, short_sha, bucket, model_path, n_states, ml_mode
+    directory,
+    model_name,
+    ml_dataset,
+    model,
+    short_sha,
+    bucket,
+    model_path,
+    n_states,
+    covariance,
+    ml_mode,
 ):
     file_name = (
         directory
-        + "/hmm_model_"
-        + short_sha
+        + model_name
         + "_"
         + str(n_states)
         + "states_"
+        + str(covariance)
+        + "_"
+        + short_sha
+        + "_"
+        + ml_dataset
+        + "_"
         + ml_mode
         + ".joblib"
     )
@@ -249,7 +263,16 @@ def main():
     upload_dataframe_to_bq(bq_client, df, f"{ml_dataset}.hmm_results")
     logging.info("Save model to bucket")
     save_HMM_model_to_bucket(
-        home_directory, best_model, short_sha, bucket, model_path, n_states, ml_mode
+        home_directory,
+        model_name,
+        ml_dataset,
+        best_model,
+        short_sha,
+        bucket,
+        model_path,
+        n_states,
+        covariance,
+        ml_mode,
     )
     logging.info(f"END OF SCRIPT for {n_states} states")
 
