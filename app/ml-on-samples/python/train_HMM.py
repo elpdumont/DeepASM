@@ -138,6 +138,7 @@ def save_HMM_model_to_bucket(
 ):
     file_name = (
         directory
+        + "/"
         + model_name
         + "_"
         + str(n_states)
