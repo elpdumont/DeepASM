@@ -58,14 +58,14 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
 
-gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-1" \
+gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-2" \
 	--location "${REGION}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json
 
 #---------------------------------------------
 # Train HMM model
 
-gcloud batch jobs submit "train-hmm-${SHORT_SHA}-1" \
+gcloud batch jobs submit "train-hmm-${SHORT_SHA}-3" \
 	--location "${REGION}" \
 	--config batch-jobs/train_HMM.json
 

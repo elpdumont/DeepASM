@@ -189,9 +189,9 @@ class RNNModel(nn.Module):
         )  # Increase feature dimension from (batch, seq_len) to (batch, seq_len, features)
         output, _ = self.rnn(x)
         # Applying dropout to the output of the LSTM
-        output = self.dropout(
-            output[:, -1, :]
-        )  # Applying dropout to the last output of the sequence
+        # output = self.dropout(
+        #     output[:, -1, :]
+        # )  # Applying dropout to the last output of the sequence
         # Pass the last output to the fully connected layer
         logits = self.fc(output)
         return logits.view(-1)  # Flatten the output to shape (batch,)
