@@ -95,7 +95,7 @@ class TransformerModel(nn.Module):
         self,
         d_model,
         nhead,
-        dim_feedforward,
+        dim_feedforward_multiplicator,
         max_sequence_length,
         num_layers,
         dropout,
@@ -109,9 +109,10 @@ class TransformerModel(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
-            dim_feedforward=dim_feedforward,
+            dim_feedforward=dim_feedforward_multiplicator * d_model,
             dropout=dropout,  # Adding dropout to the encoder layer
             layer_norm_eps=1e-6,  # Using a smaller epsilon for layer normalization for more precise calculations
+            batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers
@@ -275,21 +276,16 @@ dic_model = {
         "model": "TransformerModel",
         "weight_name": "class_weight",
         "grid": {
-            "d_model": [16, 32, 64, 128],  # Dimensionality of the model
-            "nhead": [2, 4, 8],  # Number of heads in the multi-head attention models
+            "d_model": [8, 16, 32],  # Dimensionality of the model
+            "nhead": [2, 4],  # Number of heads in the multi-head attention models
             "num_layers": [
                 2,
                 4,
-                8,
-                16,
-                32,
+                6,
             ],  # Number of sub-encoder-layers in the transformer
-            "dim_feedforward": [
-                16,
-                32,
-                64,
-                128,
-                256,
+            "dim_feedforward_multiplicator": [
+                2,
+                4,
             ],  # Size of the feedforward model in nn.TransformerEncoder
             # Learning rate for the optimizer
             "dropout": [dropout_rate],
@@ -405,7 +401,6 @@ def main():
         if ml_mode == "TESTING":
             logging.info("In testing mode. Adding a limit to the import.")
             query += f"LIMIT {ml_nb_datapoints_for_testing}"
-
         df = bq_client.query(query).to_dataframe()
         logging.info(f"Number of rows in DF: {len(df):,}")
         dic_data[dataset]["labels"] = df[label_var].astype(int)
@@ -449,8 +444,10 @@ def main():
             batch_first=True,
             padding_value=padding_value,
         )
+        logging.info(f"Shape of the Tensor for the data: {padded_sequences.shape}")
         # Convert labels to a tensor
         labels = torch.tensor(labels, dtype=torch.float32)
+        logging.info(f"Shape of the Tensor for the labels: {labels.shape}")
         # Create DataLoader for batch processing
         data = TensorDataset(padded_sequences, labels)
         dic_data[dataset]["dataloader"] = DataLoader(
