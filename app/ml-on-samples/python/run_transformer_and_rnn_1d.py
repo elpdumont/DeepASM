@@ -295,12 +295,13 @@ dic_model = {
             "dropout": [dropout_rate],
             "learning_rate": [
                 0.0001,
+                0.0005,
                 0.001,
+                0.005,
                 0.01,
-                0.1,
             ],
             "num_epochs": [n_epochs],
-            "weight_decay": [0.001],  # Number of training epochs
+            "weight_decay": [1e-5, 1e-4, 1e-3, 1e-3],  # Number of training epochs
         },
     },
     1: {
@@ -308,19 +309,20 @@ dic_model = {
         "weight_name": "class_weight",
         "grid": {
             "input_size": [1],
-            "hidden_size": [8, 16, 32, 64, 128],
-            "num_layers": [2, 4, 8, 16, 32, 64],
+            "hidden_size": [16, 32, 64, 128, 256],
+            "num_layers": [1, 2, 4, 8, 16, 32],
             "output_size": [1],
             "dropout_rate": [dropout_rate],
-            "subsample": [0.2, 0.4, 0.6, 0.8, 1.0],
+            "subsample": [0.2, 0.3, 0.4, 0.5, 0.6],
             "learning_rate": [
-                0.0001,
                 0.001,
+                0.005,
                 0.01,
+                0.05,
                 0.1,
             ],
             "num_epochs": [n_epochs],
-            "weight_decay": [0.001],
+            "weight_decay": [1e-5, 1e-4, 1e-3, 1e-3],
         },
     },
 }
@@ -518,6 +520,7 @@ def main():
         optimizer,
         criterion,
         device,
+        f"Best hyperparameters: {best_hyperparameters} for model {model_name}",
     )
 
     logging.info("Saving best model")
