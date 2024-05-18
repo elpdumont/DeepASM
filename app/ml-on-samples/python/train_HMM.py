@@ -136,9 +136,23 @@ def save_HMM_model_to_bucket(
     covariance,
     ml_mode,
 ):
+    # Ensure the directory ends with a slash
+    if not directory.endswith("/"):
+        directory += "/"
+
+    # Logging statements
+    logging.info(f"Directory: {directory}")
+    logging.info(f"Model Name: {model_name}")
+    logging.info(f"ML Dataset: {ml_dataset}")
+    logging.info(f"Short SHA: {short_sha}")
+    logging.info(f"Bucket: {bucket}")
+    logging.info(f"Model Path: {model_path}")
+    logging.info(f"N States: {n_states}")
+    logging.info(f"Covariance: {covariance}")
+    logging.info(f"ML Mode: {ml_mode}")
+
     file_name = (
         directory
-        + "/"
         + model_name
         + "_"
         + str(n_states)
