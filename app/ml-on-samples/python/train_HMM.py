@@ -264,7 +264,7 @@ def main():
     logging.info("Save model to bucket")
     save_HMM_model_to_bucket(
         home_directory,
-        model_name,
+        model_type_str,
         ml_dataset,
         best_model,
         short_sha,
