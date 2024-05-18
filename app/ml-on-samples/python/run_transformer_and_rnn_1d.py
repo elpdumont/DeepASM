@@ -288,7 +288,7 @@ dic_model = {
                 4,
             ],  # Size of the feedforward model in nn.TransformerEncoder
             # Learning rate for the optimizer
-            "dropout": [dropout_rate],
+            "dropout": [0.3, 0.4, 0.5],
             "learning_rate": [
                 0.0001,
                 0.0005,
@@ -308,7 +308,7 @@ dic_model = {
             "hidden_size": [16, 32, 64, 128, 256],
             "num_layers": [1, 2, 4, 8, 16, 32],
             "output_size": [1],
-            "dropout_rate": [dropout_rate],
+            "dropout_rate": [0.3, 0.4, 0.5],
             "subsample": [0.2, 0.3, 0.4, 0.5, 0.6],
             "learning_rate": [
                 0.001,
