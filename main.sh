@@ -3,7 +3,7 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
+ML_MODE="TESTING" # "TESTING OR PRODUCTION"
 export ML_MODE
 
 # Import environmental variables

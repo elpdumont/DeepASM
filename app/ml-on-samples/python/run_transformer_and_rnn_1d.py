@@ -351,9 +351,17 @@ def compute_classes(dic_data, device):
 
 
 def save_1d_model_to_bucket(
-    directory, model_name, model, short_sha, bucket, model_path, storage_client
+    directory,
+    model_name,
+    model,
+    short_sha,
+    bucket,
+    model_path,
+    ml_dataset,
+    ml_mode,
+    storage_client,
 ):
-    file_name = directory + "/" + model_name + "_" + short_sha + ".pth"
+    file_name = directory + "/" + model_name + "_" + short_sha + "_" + ml_dataset + "_" + ml_mode ".pth"
     # Save model locally
     torch.save(model.state_dict(), file_name)
     # Save model in bucket
@@ -531,6 +539,8 @@ def main():
         short_sha,
         bucket,
         model_path,
+        ml_dataset,
+        ml_mode,
         storage_client,
     )
 
