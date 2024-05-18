@@ -361,7 +361,18 @@ def save_1d_model_to_bucket(
     ml_mode,
     storage_client,
 ):
-    file_name = directory + "/" + model_name + "_" + short_sha + "_" + ml_dataset + "_" + ml_mode ".pth"
+    file_name = (
+        directory
+        + "/"
+        + model_name
+        + "_"
+        + short_sha
+        + "_"
+        + ml_dataset
+        + "_"
+        + ml_mode
+        + ".pth"
+    )
     # Save model locally
     torch.save(model.state_dict(), file_name)
     # Save model in bucket
