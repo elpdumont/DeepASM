@@ -146,7 +146,7 @@ def main():
         logging.info(f"Processing {dataset} dataset...")
         query = f"""
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpg_directional_fm, cpgs_w_padding)
-            FROM {project}.{ml_dataset}.{dataset}_hmm_model_name_noext
+            FROM {project}.{ml_dataset}.{dataset}_{hmm_model_name_noext}
             WHERE cpg_directional_fm IS NOT NULL AND {label_name} IS NOT NULL
             """
         if ml_mode == "TESTING":

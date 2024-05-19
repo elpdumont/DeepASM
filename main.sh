@@ -3,12 +3,14 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
+export ML_MODE="TESTING" # "TESTING OR PRODUCTION"
 export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
 export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib"
 HMM_MODEL_NAME="${HMM_MODEL%.*}"
 
 # VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
+# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib
+# VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_70efde8_PRODUCTION.joblib
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -62,7 +64,7 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
 
-gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-1" \
+gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-2" \
 	--location "${REGION}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json
 
@@ -79,7 +81,7 @@ echo "Fitting an HMM model on the training set and infering the states-based fea
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
-gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-3" \
+gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
 	--location "${REGION}" \
 	--config batch-jobs/derive_features_from_HMM.json
 
@@ -105,7 +107,7 @@ gcloud batch jobs submit "${JOB_NAME}" \
 
 # ML: PERFORM RANDOM SEARCH FOR TREE MODELS
 
-gcloud batch jobs submit "tree-search-${SHORT_SHA}" \
+gcloud batch jobs submit "tree-search-${SHORT_SHA}"-1 \
 	--location "${REGION}" \
 	--config batch-jobs/perform_random_search_tree.json
 
