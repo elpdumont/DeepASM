@@ -134,7 +134,7 @@ class TransformerModel(nn.Module):
         x += self.position_embeddings(positions)
         x = x.permute(1, 0, 2)  # Reshape x to [seq_length, batch, features]
         x = self.transformer_encoder(x)
-        x = self.fc(x[-1, :, :])  # Take the last sequence output
+        x = self.fc(x[:, -1, :])  # Take the last sequence output for batch_first=True
         # return torch.sigmoid(x.view(-1))  # Flatten the output for compatibility with target
         return x.view(-1)
 

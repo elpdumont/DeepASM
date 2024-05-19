@@ -3,8 +3,8 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-export ML_MODE="TESTING" # "TESTING OR PRODUCTION"
-export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
+export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
+export ML_DATASET="ml_250bp_70efde8" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
 export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib"
 HMM_MODEL_NAME="${HMM_MODEL%.*}"
 
@@ -19,7 +19,7 @@ deploy/deploy.sh
 # docker run -it \
 # -v ~/.config/gcloud/application_default_credentials.json:/appuser/.config/gcloud/application_default_credentials.json:ro \
 # -e GOOGLE_APPLICATION_CREDENTIALS=/appuser/.config/gcloud/application_default_credentials.json \
-# us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/bash:"${SHORT_SHA}" \
+# us-east1-docker.pkg.dev/hmh-em-deepasm/docker-repo/python:2d0d8b3 \
 # /bin/bash
 
 

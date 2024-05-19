@@ -66,6 +66,15 @@ if os.path.exists(credentials_path):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
     # Assuming 'project' is already defined somewhere in your script
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
+    model_path = "samples_250bp/models"
+    ml_mode = "TESTING"
+    hmm_var = "cpg_directional_fm"
+    hmm_model_name = (
+        "VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib"
+    )
+    BATCH_TASK_INDEX = 0
+    TOTAL_TASKS = 120
+    ml_dataset = "ml_250bp_db7e6e4"
 
 # Initialize the Google Cloud Storage client
 storage_client = storage.Client()
@@ -262,7 +271,7 @@ def main():
             f"Exportind dataset to BQ and Bucket. Number of rows: {len(df_dataset)}"
         )
         upload_dataframe_to_bq(
-            bq_client, df_dataset, f"{ml_dataset}.{dataset_name}_hmm_model_name_noext"
+            bq_client, df_dataset, f"{ml_dataset}.{dataset_name}_{hmm_model_name_noext}"
         )
 
     logging.info(f"END OF SCRIPT for batch task index: {BATCH_TASK_INDEX}")
