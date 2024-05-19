@@ -34,7 +34,7 @@
   "allocationPolicy": {
     "instances": [
       {
-        "policy": { "machineType": "n1-highmem-64"
+        "policy": { "machineType": "n1-highmem-32"
       }}
     ]
   },
