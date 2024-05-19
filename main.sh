@@ -3,8 +3,9 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-ML_MODE="TESTING" # "TESTING OR PRODUCTION"
-export ML_MODE
+export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
+export M_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
+export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib"
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -58,7 +59,7 @@ bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
 
-gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-2" \
+gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-1" \
 	--location "${REGION}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json
 

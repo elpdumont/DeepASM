@@ -30,6 +30,7 @@ with open("config.yaml", "r") as file:
 # Accessing GCP configuration
 project = config["GCP"]["PROJECT"]
 bucket = config["GCP"]["BUCKET"]
+label_name = config["ML"]["LABEL_NAME"]
 
 # samples_dic = config["SAMPLES"]
 # all_samples = [item for sublist in samples_dic.values() for item in sublist]
@@ -42,6 +43,7 @@ ml_dataset = os.getenv("ML_DATASET")
 short_sha = os.getenv("SHORT_SHA")
 home_directory = os.path.expanduser("~")
 ml_mode = os.getenv("ML_MODE")
+hmm_model_name = os.getenv("HMM_MODEL")
 
 # Define the path to the JSON credentials file
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
@@ -100,10 +102,10 @@ random_seed = 42
 random.seed(random_seed)
 
 
-def compute_classes(dic_data):
+def compute_classes(dic_data, label_name):
     class_weight_dic = {"TRAINING": {}, "TRAINING_AND_VALIDATION": {}}
     for data in ["TRAINING", "TRAINING_AND_VALIDATION"]:
-        labels = dic_data[data]["labels"]["asm"]
+        labels = dic_data[data]["labels"][label_name]
         weights = np.round(
             compute_class_weight("balanced", classes=[0, 1], y=labels), 2
         )
@@ -138,24 +140,36 @@ def save_tree_model_to_bucket(
 
 def main():
     dic_data = {dataset: {} for dataset in datasets}
-
+    hmm_model_name_noext, _ = os.path.splitext(hmm_model_name)
+    logging.info(f"Model name: {hmm_model_name_noext}")
     for dataset in ["TRAINING", "VALIDATION", "TESTING"]:
         logging.info(f"Processing {dataset} dataset...")
         query = f"""
             SELECT * EXCEPT (region_sup, clustering_index, region_nb_cpg, cpg_directional_fm, cpgs_w_padding)
-            FROM {project}.{ml_dataset}.{dataset}
-            WHERE cpg_directional_fm IS NOT NULL AND asm IS NOT NULL
+            FROM {project}.{ml_dataset}.{dataset}_hmm_model_name_noext
+            WHERE cpg_directional_fm IS NOT NULL AND {label_name} IS NOT NULL
             """
         if ml_mode == "TESTING":
             query += f"LIMIT {ml_nb_datapoints_for_testing}"
         df = bq_client.query(query).to_dataframe()
-        dic_data[dataset]["labels"] = df[["asm"]]
+        dic_data[dataset]["labels"] = df[[label_name]]
         dic_data[dataset]["region_info"] = df[
-            ["asm", "sample", "chr", "region_inf", "nb_cpg_found", "nb_reads"]
+            [
+                "asm",
+                "asm_not_corrected",
+                "approx_asm",
+                "sample",
+                "chr",
+                "region_inf",
+                "nb_cpg_found",
+                "nb_reads",
+            ]
         ]
         dic_data[dataset]["tabular"] = df.drop(
             columns=[
                 "asm",
+                "asm_not_corrected",
+                "approx_asm",
                 "sample",
                 "chr",
                 "region_inf",
@@ -219,7 +233,7 @@ def main():
     # Save model
     save_tree_model_to_bucket(
         home_directory,
-        model_name,
+        model_name + hmm_model_name_noext,
         best_model,
         short_sha,
         bucket,
@@ -244,7 +258,7 @@ def main():
 
     dic_results = {
         **{
-            "model": model_name,
+            "model": model_name + hmm_model_name_noext,
             "ml_mode": ml_mode,
             "short_sha": short_sha,
             "n_random_search": n_random_search,

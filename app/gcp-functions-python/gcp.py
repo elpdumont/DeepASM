@@ -263,7 +263,14 @@ def upload_dataframe_to_bq(
 
 
 def fetch_chunk_from_bq_as_dataframe_w_hmmvar(
-    dataset_id, table_id, task_index, total_tasks, project_id, hmm_var
+    dataset_id,
+    table_id,
+    task_index,
+    total_tasks,
+    project_id,
+    hmm_var,
+    ml_mode,
+    ml_nb_datapoints_for_testing,
 ):
     client = bigquery.Client(project=project_id)
     # Construct SQL to divide the table into chunks
@@ -272,6 +279,10 @@ def fetch_chunk_from_bq_as_dataframe_w_hmmvar(
     FROM `{dataset_id}.{table_id}`
     WHERE {hmm_var} IS NOT NULL AND MOD(ABS(FARM_FINGERPRINT(CAST(clustering_index AS STRING))), {total_tasks}) = {task_index}
     """
+    if ml_mode == "TESTING":
+        logging.info("In testing mode. Adding a limit to the import.")
+        query += f"LIMIT {ml_nb_datapoints_for_testing}"
+
     # Start the query and wait for it to complete, then load it into a DataFrame
     query_job = client.query(query)
     dataframe = query_job.to_dataframe()

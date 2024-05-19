@@ -7,6 +7,7 @@
             "ML_DATASET": "ML_DATASET_PH",
             "MODEL_PATH": "MODEL_PATH_PH",
             "SHORT_SHA": "SHORT_SHA_PH",
+            "HMM_MODEL": "HMM_MODEL_PH",
             "TOTAL_TASKS": "TOTAL_TASK_PH"
             }
         },

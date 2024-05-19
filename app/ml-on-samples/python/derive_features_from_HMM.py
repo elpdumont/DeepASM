@@ -16,7 +16,7 @@ from gcp import (
     upload_dataframe_to_bq,
 )
 from google.cloud import bigquery, storage
-from hmmlearn.hmm import GaussianHMM
+from hmmlearn.hmm import GaussianHMM, VariationalGaussianHMM
 from scipy.stats import entropy
 
 # from sklearn.utils import check_random_state
@@ -45,16 +45,18 @@ samples_dic = config["SAMPLES"]
 dataset_types = list(samples_dic.keys())
 
 # HMM variables
-hmm_var = config["HMM"]["VAR_NAME"]
-model_name = config["HMM"]["MODEL_NAME"]
+hmm_var = config["ML"]["HMM"]["VAR_NAME"]
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 
 # Retrieve Job-defined env vars
 BATCH_TASK_INDEX = int(os.getenv("BATCH_TASK_INDEX", 0))
 TOTAL_TASKS = int(os.getenv("TOTAL_TASKS", 0))
 ml_dataset = os.getenv("ML_DATASET")
 model_path = os.getenv("MODEL_PATH")
+hmm_model_name = os.getenv("HMM_MODEL")
 short_sha = os.getenv("SHORT_SHA")
 home_directory = os.path.expanduser("~")
+ml_mode = os.getenv("ML_MODE")
 
 # Initialize client
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
@@ -198,20 +200,29 @@ def extract_features(hidden_states_sequences):
 def main():
     logging.info(f"Config file: {config}")
     logging.info(f"Batch task index: {BATCH_TASK_INDEX}")
+    hmm_model_name_noext, _ = os.path.splitext(hmm_model_name)
+    logging.info(f"Model name: {hmm_model_name_noext}")
 
     logging.info("Download model")
-    model_full_path = model_path + "/" + model_name + ".joblib"
+    model_full_path = model_path + "/" + hmm_model_name
     download_blob(
         storage_client,
         bucket,
         model_full_path,
-        home_directory + "/" + model_name + ".joblib",
+        home_directory + "/" + hmm_model_name,
     )
-    hmm_model = joblib.load(home_directory + "/" + model_name + ".joblib")
+    hmm_model = joblib.load(home_directory + "/" + hmm_model_name)
 
     logging.info("Downloading dataframe from BQ")
     df = fetch_chunk_from_bq_as_dataframe_w_hmmvar(
-        ml_dataset, "features_wo_hmm", BATCH_TASK_INDEX, TOTAL_TASKS, project, hmm_var
+        ml_dataset,
+        "features_wo_hmm",
+        BATCH_TASK_INDEX,
+        TOTAL_TASKS,
+        project,
+        hmm_var,
+        ml_mode,
+        ml_nb_datapoints_for_testing,
     )
 
     logging.info(f"Number of rows: {len(df)}")
@@ -249,7 +260,9 @@ def main():
         logging.info(
             f"Exportind dataset to BQ and Bucket. Number of rows: {len(df_dataset)}"
         )
-        upload_dataframe_to_bq(bq_client, df_dataset, f"{ml_dataset}.{dataset_name}")
+        upload_dataframe_to_bq(
+            bq_client, df_dataset, f"{ml_dataset}.{dataset_name}_hmm_model_name_noext"
+        )
 
     logging.info(f"END OF SCRIPT for batch task index: {BATCH_TASK_INDEX}")
 

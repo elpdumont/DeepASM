@@ -94,7 +94,7 @@ echo "List of samples: ${SAMPLE_LIST[*]}"
 export SAMPLES_DATASET="samples_${GENOMIC_LENGTH}bp"
 export MODEL_PATH="${SAMPLES_DATASET}/models"
 export DATA_PATH="${SAMPLES_DATASET}/datasets"
-export ML_DATASET="ml_${GENOMIC_LENGTH}bp_${SHORT_SHA}"
+#export ML_DATASET="ml_${GENOMIC_LENGTH}bp_${SHORT_SHA}"
 export REFG_DATASET="${REFERENCE_GENOME}_${GENOMIC_LENGTH}bp_refgenome"
 export PYTHON_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/python:${SHORT_SHA}"
 export BASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${ARTIFACT_REGISTRY_REPO}/bash:${SHORT_SHA}"
@@ -164,6 +164,7 @@ for file in batch-jobs/*.json; do
     sed -i '' "s#SHORT_SHA_PH#${SHORT_SHA}#g" "${file}"
     sed -i '' "s#MODEL_PATH_PH#${MODEL_PATH}#g" "${file}"
     sed -i '' "s#ML_MODE_PH#${ML_MODE}#g" "${file}"
+    sed -i '' "s#HMM_MODEL_PH#${HMM_MODEL}#g" "${file}"
 done
 
 
