@@ -183,7 +183,7 @@ def main():
             [dic_data["TRAINING"][data], dic_data["VALIDATION"][data]]
         )
 
-    class_weight_dic = compute_classes(dic_data)
+    class_weight_dic = compute_classes(dic_data, label_name)
 
     model_params = dic_model[BATCH_TASK_INDEX]
     model = model_params["model"]

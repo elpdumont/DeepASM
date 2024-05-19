@@ -3,14 +3,18 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-export ML_MODE="TESTING" # "TESTING OR PRODUCTION"
+export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
 export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
-export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib"
-HMM_MODEL_NAME="${HMM_MODEL%.*}"
+export HMM_MODEL="VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_db7e6e4_PRODUCTION.joblib"
+export HMM_MODEL_NAME="${HMM_MODEL%.*}"
 
-# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
+# Features extracted
 # VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib
+
+# TO BE EXTRACTED
+# ariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
 # VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_70efde8_PRODUCTION.joblib
+# VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_db7e6e4_PRODUCTION.joblib
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -87,27 +91,11 @@ gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
 
 
 
-#---------------------------------------------------------------
-# Run HMM and split the dataset into train, validation, and test.
-
-DATASET_NAMES=("TRAINING" "VALIDATION" "TESTING")
-
-for TABLE_NAME in "${DATASET_NAMES[@]}"; do
-	bq rm -f -t "${PROJECT_ID}:${ML_DATASET}.${TABLE_NAME}_${HMM_MODEL_NAME="${HMM_MODEL%.*}"}"
-done
-
-JOB_NAME="run-hmm-${SHORT_SHA}"
-
-gcloud batch jobs submit "${JOB_NAME}" \
-	--location "${REGION}" \
-	--config jobs/run_hmm.json
-
-
 #-----------------------------------------------------------
 
 # ML: PERFORM RANDOM SEARCH FOR TREE MODELS
 
-gcloud batch jobs submit "tree-search-${SHORT_SHA}"-1 \
+gcloud batch jobs submit "tree-search-${SHORT_SHA}-1" \
 	--location "${REGION}" \
 	--config batch-jobs/perform_random_search_tree.json
 
