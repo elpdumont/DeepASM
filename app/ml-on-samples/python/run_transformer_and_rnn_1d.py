@@ -55,6 +55,16 @@ short_sha = os.getenv("SHORT_SHA")
 ml_mode = os.getenv("ML_MODE")
 home_directory = os.path.expanduser("~")
 
+# ML variables
+ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
+label_var = config["ML"]["LABEL_NAME"]
+batch_size = config["ML"]["BATCH_SIZE"]
+padding_value = config["ML"]["PADDING_VALUE"]
+dropout_rate = config["ML"]["DROPOUT_RATE"]
+n_epochs = config["ML"][ml_mode]["N_EPOCHS"]
+n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_1D"]
+
+
 # Define the path to the JSON credentials file
 credentials_path = "/appuser/.config/gcloud/application_default_credentials.json"
 
@@ -67,18 +77,11 @@ if os.path.exists(credentials_path):
     samples_dataset = "samples_250bp"
     BATCH_TASK_INDEX = 0
     model_path = "samples_250bp/models"
-    ml_dataset = "ml_250bp_4"
+    ml_dataset = "ml_250bp_70efde8"
     short_sha = "test"
     ml_mode = "TESTING"
-
-# ML variables
-ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
-label_var = config["ML"]["LABEL_NAME"]
-batch_size = config["ML"]["BATCH_SIZE"]
-padding_value = config["ML"]["PADDING_VALUE"]
-dropout_rate = config["ML"]["DROPOUT_RATE"]
-n_epochs = config["ML"][ml_mode]["N_EPOCHS"]
-n_random_search = config["ML"][ml_mode]["N_RANDOM_SEARCH_1D"]
+    n_epochs = 10
+    ml_nb_datapoints_for_testing = 5000
 
 
 # Initialize the Google Cloud Storage client
@@ -104,49 +107,38 @@ class TransformerModel(nn.Module):
     ):
         self.d_model = d_model
         self.device = device
-        # self.max_sequence_length = max_sequence_length
         super(TransformerModel, self).__init__()
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward_multiplicator * d_model,
-            dropout=dropout,  # Adding dropout to the encoder layer
-            layer_norm_eps=1e-6,  # Using a smaller epsilon for layer normalization for more precise calculations
+            dropout=dropout,
+            layer_norm_eps=1e-6,
             batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers
         )
-        self.position_embeddings = nn.Embedding(
-            max_sequence_length, d_model
-        )  # Prepare position embeddings
+        self.position_embeddings = nn.Embedding(max_sequence_length, d_model)
         self.fc = nn.Linear(d_model, 1)
 
     def forward(self, x):
         x = x.to(self.device)
-        x = x.unsqueeze(-1).repeat(
-            1, 1, self.d_model
-        )  # Extend features to match d_model
+        x = x.unsqueeze(-1).repeat(1, 1, self.d_model)
         seq_length, N = x.shape[1], x.shape[0]
         positions = (
             torch.arange(0, seq_length, device=x.device).unsqueeze(0).repeat(N, 1)
         )
         x += self.position_embeddings(positions)
-        x = x.permute(1, 0, 2)  # Reshape x to [seq_length, batch, features]
         x = self.transformer_encoder(x)
         x = self.fc(x[:, -1, :])  # Take the last sequence output for batch_first=True
-        # return torch.sigmoid(x.view(-1))  # Flatten the output for compatibility with target
         return x.view(-1)
 
     def predict(self, x, threshold=0.5):
         x = x.to(self.device)
         logits = self.forward(x)
-        predictions = torch.sigmoid(
-            logits
-        )  # Apply sigmoid to convert logits to probabilities
-        return (
-            predictions > threshold
-        ).float()  # Threshold the probabilities to get binary predictions
+        predictions = torch.sigmoid(logits)
+        return (predictions > threshold).float()
 
 
 class RNNModel(nn.Module):
@@ -169,42 +161,28 @@ class RNNModel(nn.Module):
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
-            batch_first=True,
+            batch_first=True,  # Ensure batch_first=True
             dropout=dropout_rate,
-            device=device,
         )
         self.dropout = nn.Dropout(dropout_rate)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x.to(self.device)
-        # Check input length
+        x = x.to(self.device)
         if x.shape[1] != self.max_sequence_length:
             raise ValueError(
                 f"Expected sequence length {self.max_sequence_length}, but got {x.shape[1]}"
             )
-        # LSTM output shape: (batch_size, sequence_length, hidden_size)
-        x = x.unsqueeze(
-            -1
-        )  # Increase feature dimension from (batch, seq_len) to (batch, seq_len, features)
+        x = x.unsqueeze(-1)
         output, _ = self.rnn(x)
-        # Applying dropout to the output of the LSTM
-        # output = self.dropout(
-        #     output[:, -1, :]
-        # )  # Applying dropout to the last output of the sequence
-        # Pass the last output to the fully connected layer
-        logits = self.fc(output)
-        return logits.view(-1)  # Flatten the output to shape (batch,)
+        logits = self.fc(output[:, -1, :])  # Take the last output for batch_first=True
+        return logits.view(-1)
 
     def predict(self, x, threshold=0.5):
         x = x.to(self.device)
         logits = self.forward(x)
-        predictions = torch.sigmoid(
-            logits
-        )  # Apply sigmoid to convert logits to probabilities
-        return (
-            predictions > threshold
-        ).float()  # Threshold the probabilities to get binary predictions
+        predictions = torch.sigmoid(logits)
+        return (predictions > threshold).float()
 
 
 def create_model(model_number, **kwargs):

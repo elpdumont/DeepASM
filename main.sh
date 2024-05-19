@@ -77,7 +77,7 @@ echo "Fitting an HMM model on the training set and infering the states-based fea
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
-gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
+gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-2" \
 	--location "${REGION}" \
 	--config batch-jobs/derive_features_from_HMM.json
 
