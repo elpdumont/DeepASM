@@ -4,9 +4,11 @@ SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
 export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
-export ML_DATASET="ml_250bp_70efde8" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
-export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib"
+export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
+export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib"
 HMM_MODEL_NAME="${HMM_MODEL%.*}"
+
+# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -77,7 +79,7 @@ echo "Fitting an HMM model on the training set and infering the states-based fea
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
-gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-2" \
+gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-3" \
 	--location "${REGION}" \
 	--config batch-jobs/derive_features_from_HMM.json
 

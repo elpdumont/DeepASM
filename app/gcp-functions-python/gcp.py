@@ -271,13 +271,17 @@ def fetch_chunk_from_bq_as_dataframe_w_hmmvar(
     hmm_var,
     ml_mode,
     ml_nb_datapoints_for_testing,
+    label_var,
 ):
     client = bigquery.Client(project=project_id)
     # Construct SQL to divide the table into chunks
     query = f"""
     SELECT *
     FROM `{dataset_id}.{table_id}`
-    WHERE {hmm_var} IS NOT NULL AND MOD(ABS(FARM_FINGERPRINT(CAST(clustering_index AS STRING))), {total_tasks}) = {task_index}
+    WHERE
+        {hmm_var} IS NOT NULL AND
+        MOD(ABS(FARM_FINGERPRINT(CAST(clustering_index AS STRING))), {total_tasks}) = {task_index} AND
+        {label_var} IS NOT NULL
     """
     if ml_mode == "TESTING":
         logging.info("In testing mode. Adding a limit to the import.")

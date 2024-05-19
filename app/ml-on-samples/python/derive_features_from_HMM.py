@@ -47,6 +47,7 @@ dataset_types = list(samples_dic.keys())
 
 # HMM variables
 hmm_var = config["ML"]["HMM"]["VAR_NAME"]
+label_var = config["ML"]["LABEL_NAME"]
 ml_nb_datapoints_for_testing = config["ML"]["NB_DATA_POINTS_TESTING"]
 
 # Retrieve Job-defined env vars
@@ -233,6 +234,7 @@ def main():
         hmm_var,
         ml_mode,
         ml_nb_datapoints_for_testing,
+        label_var,
     )
 
     logging.info(f"Number of rows: {len(df)}")
