@@ -16,7 +16,8 @@ from gcp import (
     upload_dataframe_to_bq,
 )
 from google.cloud import bigquery, storage
-from hmmlearn.hmm import GaussianHMM, VariationalGaussianHMM
+from hmmlearn.hmm import GaussianHMM
+from hmmlearn.vhmm import VariationalGaussianHMM
 from scipy.stats import entropy
 
 # from sklearn.utils import check_random_state

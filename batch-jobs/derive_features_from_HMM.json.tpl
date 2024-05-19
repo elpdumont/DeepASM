@@ -8,7 +8,8 @@
             "MODEL_PATH": "MODEL_PATH_PH",
             "SHORT_SHA": "SHORT_SHA_PH",
             "HMM_MODEL": "HMM_MODEL_PH",
-            "TOTAL_TASKS": "TOTAL_TASK_PH"
+            "TOTAL_TASKS": "TOTAL_TASK_PH",
+            "ML_MODE": "ML_MODE_PH"
             }
         },
         "runnables": [

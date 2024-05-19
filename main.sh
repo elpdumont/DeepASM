@@ -3,9 +3,10 @@
 SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
-export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
-export M_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
+export ML_MODE="TESTING" # "TESTING OR PRODUCTION"
+export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
 export HMM_MODEL="VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib"
+HMM_MODEL_NAME="${HMM_MODEL%.*}"
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -76,7 +77,7 @@ echo "Fitting an HMM model on the training set and infering the states-based fea
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
-gcloud batch jobs submit "compute-hmm-${SHORT_SHA}-2" \
+gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
 	--location "${REGION}" \
 	--config batch-jobs/derive_features_from_HMM.json
 
@@ -88,7 +89,7 @@ gcloud batch jobs submit "compute-hmm-${SHORT_SHA}-2" \
 DATASET_NAMES=("TRAINING" "VALIDATION" "TESTING")
 
 for TABLE_NAME in "${DATASET_NAMES[@]}"; do
-	bq rm -f -t "${PROJECT_ID}:${ML_DATASET}.${TABLE_NAME}"
+	bq rm -f -t "${PROJECT_ID}:${ML_DATASET}.${TABLE_NAME}_${HMM_MODEL_NAME="${HMM_MODEL%.*}"}"
 done
 
 JOB_NAME="run-hmm-${SHORT_SHA}"

@@ -146,6 +146,8 @@ function execute_query() {
 # Copy the template to a new file that can be safely modified
 (cd batch-jobs && for file in *.json.tpl; do cp "${file}" "${file%.json.tpl}.json"; done)
 
+echo ${ML_DATASET}
+
 # Replace placeholders with actual values
 for file in batch-jobs/*.json; do
     echo "Processing file ${file}"
