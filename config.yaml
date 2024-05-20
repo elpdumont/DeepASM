@@ -96,12 +96,5 @@ VARS_TO_REMOVE:
   - cpg_fm_kd
   - cpg_dist_kd
 
-VARS_TO_KEEP:
-  sample: STRING
-  chr: INTEGER
-  asm_snp: INTEGER
-  region_inf: INTEGER
-  region_sup: INTEGER
-
 CAT_VARS_OHE:
   - chr

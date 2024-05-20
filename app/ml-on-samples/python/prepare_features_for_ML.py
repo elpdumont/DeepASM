@@ -36,9 +36,6 @@ bucket = config["GCP"]["BUCKET"]
 
 # Variables to handle
 vars_to_remove = config["VARS_TO_REMOVE"]
-dic_vars_to_keep = config["VARS_TO_KEEP"]
-vars_to_keep = list(dic_vars_to_keep.keys())
-
 categorical_vars_ohe = config["CAT_VARS_OHE"]
 
 # Genomic variables

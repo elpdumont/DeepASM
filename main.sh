@@ -12,7 +12,7 @@ export HMM_MODEL_NAME="${HMM_MODEL%.*}"
 # VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib
 
 # TO BE EXTRACTED
-# ariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
+# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
 # VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_70efde8_PRODUCTION.joblib
 # VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_db7e6e4_PRODUCTION.joblib
 
@@ -81,7 +81,7 @@ gcloud batch jobs submit "train-hmm-${SHORT_SHA}-3" \
 
 
 #---------------------------------------------
-echo "Fitting an HMM model on the training set and infering the states-based features for all datasets"
+# Derive features from HMM model
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
@@ -95,7 +95,7 @@ gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
 
 # ML: PERFORM RANDOM SEARCH FOR TREE MODELS
 
-gcloud batch jobs submit "tree-search-${SHORT_SHA}-1" \
+gcloud batch jobs submit "tree-search-${SHORT_SHA}-5" \
 	--location "${REGION}" \
 	--config batch-jobs/perform_random_search_tree.json
 
