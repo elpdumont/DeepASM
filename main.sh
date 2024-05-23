@@ -4,17 +4,8 @@ SHORT_SHA="$(git rev-parse --short HEAD)"
 echo "SHORT_SHA: ${SHORT_SHA}"
 
 export ML_MODE="PRODUCTION" # "TESTING OR PRODUCTION"
-export ML_DATASET="ml_250bp_db7e6e4" # "ml_250bp_db7e6e4" or "ml_250bp_70efde8"
 export HMM_MODEL="VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_db7e6e4_PRODUCTION.joblib"
 export HMM_MODEL_NAME="${HMM_MODEL%.*}"
-
-# Features extracted
-# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_70efde8_PRODUCTION.joblib
-
-# TO BE EXTRACTED
-# VariationalGaussianHMM_3states_full_80893cb_ml_250bp_db7e6e4_PRODUCTION.joblib
-# VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_70efde8_PRODUCTION.joblib
-# VariationalGaussianHMM_5states_tied_f5caf5e_ml_250bp_db7e6e4_PRODUCTION.joblib
 
 # Import environmental variables
 source scripts/import_env_variables.sh
@@ -64,32 +55,28 @@ echo "Exporting the dataset with features (excluding HMM) to the bucket"
 bq extract --destination_format=NEWLINE_DELIMITED_JSON "${PROJECT}:${ML_DATASET}.features_wo_hmm" gs://"${BUCKET}"/"${DATA_PATH}"/features_wo_hmm/features_wo_hmm_*.json
 
 
-
 #---------------------------------------------
 # FIT TRANSFORMER AND RNN
 
-gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}-2" \
+gcloud batch jobs submit "transformer-rnn-1d-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/run_transformer_and_rnn_1d.json
 
 #---------------------------------------------
 # Train HMM model
 
-gcloud batch jobs submit "train-hmm-${SHORT_SHA}-3" \
+gcloud batch jobs submit "train-hmm-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/train_HMM.json
-
 
 #---------------------------------------------
 # Derive features from HMM model
 TOTAL_TASKS="120"
 sed -i '' "s#TOTAL_TASK_PH#${TOTAL_TASKS}#g" "batch-jobs/derive_features_from_HMM.json"
 
-gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
+gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}" \
 	--location "${REGION}" \
 	--config batch-jobs/derive_features_from_HMM.json
-
-
 
 #-----------------------------------------------------------
 
@@ -98,5 +85,3 @@ gcloud batch jobs submit "derive-from-hmm-${SHORT_SHA}-1" \
 gcloud batch jobs submit "tree-search-${SHORT_SHA}-5" \
 	--location "${REGION}" \
 	--config batch-jobs/perform_random_search_tree.json
-
-
