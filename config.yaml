@@ -1,10 +1,10 @@
 GCP:
-  PROJECT: hmh-em-deepasm
-  REGION: us-east1
-  BUCKET: hmh_deepasm
-  ARTIFACT_REGISTRY_REPO: docker-repo
+  PROJECT: my-project-id
+  REGION: my-region-in-the-world
+  BUCKET: my-bucket
+  ARTIFACT_REGISTRY_REPO: my-docker-repo
   BQ_DATASET_EXPIRATION_SEC: 864000 # 10 days
-  CLOUDASM_DATASET: cloudasm_encode_2019
+  CLOUDASM_DATASET: my-dataset-with-cloudasm
 
 GENOMICS:
   REFERENCE_GENOME: hg19
